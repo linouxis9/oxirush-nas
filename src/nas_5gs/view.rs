@@ -234,9 +234,9 @@ impl Viewed for Nas5gsMessage {
             }
             // The types of 5GMM and of 5GSM have no number in common, and a
             // number that is of neither has no name.
-            "message-type" => match Nas5gmmMessageType::try_from(number).ok()? {
+            "message-type" => match Nas5gmmMessageType::from(number) {
                 Nas5gmmMessageType::Unknown(_) => {
-                    readable::to_value(&Nas5gsmMessageType::try_from(number).ok()?).ok()
+                    readable::to_value(&Nas5gsmMessageType::from(number)).ok()
                 }
                 named => readable::to_value(&named).ok(),
             }
@@ -436,12 +436,12 @@ fn sendable(message: Nas5gsMessage) -> Result<Nas5gsMessage> {
 
 /// The message types of 5GMM, in the order of their numbers.
 fn gmm_types() -> impl Iterator<Item = Nas5gmmMessageType> {
-    (0..=u8::MAX).filter_map(|octet| Nas5gmmMessageType::try_from(octet).ok())
+    Nas5gmmMessageType::ALL.iter().copied()
 }
 
 /// The message types of 5GSM, in the order of their numbers.
 fn gsm_types() -> impl Iterator<Item = Nas5gsmMessageType> {
-    (0..=u8::MAX).filter_map(|octet| Nas5gsmMessageType::try_from(octet).ok())
+    Nas5gsmMessageType::ALL.iter().copied()
 }
 
 /// The message types of 5GMM, then those of 5GSM, by their names.

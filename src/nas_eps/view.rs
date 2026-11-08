@@ -203,9 +203,9 @@ impl Viewed for NasEpsMessage {
             }
             // The types of EMM and of ESM have no number in common, and a
             // number that is of neither has no name.
-            "message-type" => match NasEmmMessageType::try_from(number).ok()? {
+            "message-type" => match NasEmmMessageType::from(number) {
                 NasEmmMessageType::Unknown(_) => {
-                    let named = NasEsmMessageType::try_from(number).ok()?;
+                    let named = NasEsmMessageType::from(number);
                     crate::common::readable::to_value(&named).ok()
                 }
                 named => crate::common::readable::to_value(&named).ok(),
@@ -383,12 +383,12 @@ impl NasEpsMessage {
 
 /// The message types of EMM, in the order of their numbers.
 fn emm_types() -> impl Iterator<Item = NasEmmMessageType> {
-    (0..=u8::MAX).filter_map(|octet| NasEmmMessageType::try_from(octet).ok())
+    NasEmmMessageType::ALL.iter().copied()
 }
 
 /// The message types of ESM, in the order of their numbers.
 fn esm_types() -> impl Iterator<Item = NasEsmMessageType> {
-    (0..=u8::MAX).filter_map(|octet| NasEsmMessageType::try_from(octet).ok())
+    NasEsmMessageType::ALL.iter().copied()
 }
 
 /// The message types of EMM, then those of ESM, by their names.

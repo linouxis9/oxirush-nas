@@ -978,4 +978,145 @@ macro_rules! nas_message_empty {
     };
 }
 
-pub(crate) use {nas_message, nas_message_empty, nas_message_impl_default};
+/// The messages of a sublayer, from the table of their types: each message
+/// type with its code and the struct of its message.
+///
+/// It writes the enum of the messages, each in a box, and the enum of their
+/// types, with `Unknown` for a code that the table does not have, `From`
+/// between a type and its code, `From` each struct to the enum, the type of
+/// a message, its struct, and the decoding of the struct of a type. The
+/// names of the JSON forms of both enums are their variants.
+///
+/// A type that several messages share follows the table: its code, the
+/// function that decodes one of its messages, and those messages.
+macro_rules! nas_messages {
+    (
+        $(#[$message_meta:meta])*
+        $vis:vis enum $message:ident;
+        $(#[$type_meta:meta])*
+        $type_vis:vis enum $kind:ident;
+        {
+            $($(#[$vmeta:meta])* $variant:ident = $code:literal => $body:ident),+ $(,)?
+        }
+        $(
+            $(#[$smeta:meta])*
+            $shared:ident = $scode:literal by $decoder:path {
+                $($(#[$svmeta:meta])* $svariant:ident => $sbody:ident),+ $(,)?
+            }
+        )*
+    ) => {
+        $(#[$message_meta])*
+        #[non_exhaustive]
+        #[derive(Debug, Clone, PartialEq)]
+        #[allow(clippy::large_enum_variant)]
+        $vis enum $message {
+            $($(#[$vmeta])* $variant(Box<$body>),)+
+            $($($(#[$svmeta])* $svariant(Box<$sbody>),)+)*
+        }
+
+        $(#[$type_meta])*
+        #[non_exhaustive]
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+        $type_vis enum $kind {
+            $($(#[$vmeta])* $variant,)+
+            $($(#[$smeta])* $shared,)*
+            /// A message type this codec does not define, with its code.
+            Unknown(u8),
+        }
+
+        impl $kind {
+            /// The types of the table, then those that several messages share.
+            #[cfg(feature = "serde")]
+            pub(crate) const ALL: &[Self] = &[$(Self::$variant,)+ $(Self::$shared,)*];
+        }
+
+        impl From<u8> for $kind {
+            fn from(code: u8) -> Self {
+                match code {
+                    $($code => Self::$variant,)+
+                    $($scode => Self::$shared,)*
+                    _ => Self::Unknown(code),
+                }
+            }
+        }
+
+        impl From<$kind> for u8 {
+            fn from(kind: $kind) -> u8 {
+                match kind {
+                    $($kind::$variant => $code,)+
+                    $($kind::$shared => $scode,)*
+                    $kind::Unknown(code) => code,
+                }
+            }
+        }
+
+        $(
+            impl From<$body> for $message {
+                fn from(message: $body) -> Self {
+                    Self::$variant(Box::new(message))
+                }
+            }
+        )+
+        $($(
+            impl From<$sbody> for $message {
+                fn from(message: $sbody) -> Self {
+                    Self::$svariant(Box::new(message))
+                }
+            }
+        )+)*
+
+        impl $message {
+            /// The type of the message.
+            pub fn message_type(&self) -> $kind {
+                match self {
+                    $(Self::$variant(_) => $kind::$variant,)+
+                    $($(Self::$svariant(_) => $kind::$shared,)+)*
+                }
+            }
+
+            /// The message struct of the variant.
+            pub(crate) fn body(&self) -> &dyn $crate::common::MessageBody {
+                match self {
+                    $(Self::$variant(message) => &**message,)+
+                    $($(Self::$svariant(message) => &**message,)+)*
+                }
+            }
+
+            /// The message struct of the variant, to change it.
+            #[cfg(feature = "serde")]
+            pub(crate) fn body_mut(&mut self) -> &mut dyn $crate::common::MessageBody {
+                match self {
+                    $(Self::$variant(message) => &mut **message,)+
+                    $($(Self::$svariant(message) => &mut **message,)+)*
+                }
+            }
+
+            /// The message of the type `kind` from the front of `buffer`,
+            /// decoded strictly or keeping the faults of its mandatory IEs.
+            pub(crate) fn decode_keeping(
+                kind: $kind,
+                buffer: &mut &[u8],
+                faults: $crate::common::Faults<'_, '_>,
+            ) -> $crate::common::Result<Self> {
+                match kind {
+                    $($kind::$variant => Ok(Self::$variant(Box::new(
+                        $crate::common::decode_keeping::<$body>(buffer, faults)?,
+                    ))),)+
+                    $($kind::$shared => $decoder(buffer, faults),)*
+                    $kind::Unknown(code) => Err($crate::common::NasError::UnknownMessageType(code)),
+                }
+            }
+        }
+
+        #[cfg(feature = "serde")]
+        $crate::common::readable::readable!(enum $message {
+            $($variant(Box<$body>),)+ $($($svariant(Box<$sbody>),)+)*
+        });
+        #[cfg(feature = "serde")]
+        $crate::common::readable::readable!(enum $kind { $($variant,)+ $($shared,)* Unknown(u8) });
+        #[cfg(feature = "serde")]
+        $crate::common::readable::serde_by_readable!($kind);
+    };
+}
+
+pub(crate) use {nas_message, nas_message_empty, nas_message_impl_default, nas_messages};

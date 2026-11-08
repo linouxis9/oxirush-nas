@@ -1280,9 +1280,7 @@ fn a_blank_view_is_what_from_view_fills() {
     // takes it for a message of the type.
     assert_eq!(detach["message-type"]["value"], tree!("detach-request"));
     for octet in 0..=u8::MAX {
-        let Ok(kind) = e::NasEmmMessageType::try_from(octet) else {
-            continue;
-        };
+        let kind = e::NasEmmMessageType::from(octet);
         if let Some(blank) = kind.blank_view() {
             let letters = |name: &str| -> String {
                 let letters = name.chars().filter(char::is_ascii_alphanumeric);

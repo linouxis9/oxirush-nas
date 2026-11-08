@@ -55,13 +55,13 @@ fn codes_5gs(message: &Nas5gsMessage) -> Vec<Value> {
             "extended-protocol-discriminator": header.extended_protocol_discriminator,
             "security-header-type": header.security_header_type as u8,
             "spare-half-octet": header.spare_half_octet,
-            "message-type": body.message_type().as_u8(),
+            "message-type": u8::from(body.message_type()),
         })],
         Nas5gsMessage::Gsm(header, _) => vec![json!({
             "extended-protocol-discriminator": header.extended_protocol_discriminator,
             "pdu-session-identity": header.pdu_session_identity,
             "procedure-transaction-identity": header.procedure_transaction_identity,
-            "message-type": header.message_type.as_u8(),
+            "message-type": u8::from(header.message_type),
         })],
         Nas5gsMessage::SecurityProtected(header, inner) => {
             let mut codes = vec![json!({
@@ -85,13 +85,13 @@ fn codes_eps(message: &NasEpsMessage) -> Vec<Value> {
         NasEpsMessage::Emm(header, _) => vec![json!({
             "protocol-discriminator": header.protocol_discriminator,
             "security-header-type": header.security_header_type as u8,
-            "message-type": header.message_type.as_u8(),
+            "message-type": u8::from(header.message_type),
         })],
         NasEpsMessage::Esm(header, _) => vec![json!({
             "protocol-discriminator": header.protocol_discriminator,
             "eps-bearer-identity": header.eps_bearer_identity,
             "procedure-transaction-identity": header.procedure_transaction_identity,
-            "message-type": header.message_type.as_u8(),
+            "message-type": u8::from(header.message_type),
         })],
         NasEpsMessage::SecurityProtected(header, inner) => {
             let mut codes = vec![json!({

@@ -31,23 +31,23 @@ fn every_supported_5gs_message_has_a_canonical_exact_byte_fixture() {
         assert_eq!(pdu.encode().unwrap(), wire, "{name}");
         match pdu {
             f::Nas5gsMessage::Gmm(header, _) => {
-                gmm.insert(header.message_type.as_u8());
+                gmm.insert(u8::from(header.message_type));
             }
             f::Nas5gsMessage::Gsm(header, _) => {
-                gsm.insert(header.message_type.as_u8());
+                gsm.insert(u8::from(header.message_type));
             }
             _ => panic!("plain fixture expected: {name}"),
         }
     }
     for byte in 0..=255 {
         if !matches!(
-            f::Nas5gmmMessageType::try_from(byte).unwrap(),
+            f::Nas5gmmMessageType::from(byte),
             f::Nas5gmmMessageType::Unknown(_)
         ) {
             assert!(gmm.contains(&byte), "missing 5GMM type {byte:02x}");
         }
         if !matches!(
-            f::Nas5gsmMessageType::try_from(byte).unwrap(),
+            f::Nas5gsmMessageType::from(byte),
             f::Nas5gsmMessageType::Unknown(_)
         ) {
             assert!(gsm.contains(&byte), "missing 5GSM type {byte:02x}");
@@ -76,23 +76,23 @@ fn every_supported_eps_message_has_a_canonical_exact_byte_fixture() {
         assert_eq!(pdu.encode().unwrap(), wire, "{name}");
         match pdu {
             e::NasEpsMessage::Emm(header, _) => {
-                emm.insert(header.message_type.as_u8());
+                emm.insert(u8::from(header.message_type));
             }
             e::NasEpsMessage::Esm(header, _) => {
-                esm.insert(header.message_type.as_u8());
+                esm.insert(u8::from(header.message_type));
             }
             _ => panic!("plain fixture expected: {name}"),
         }
     }
     for byte in 0..=255 {
         if !matches!(
-            e::NasEmmMessageType::try_from(byte).unwrap(),
+            e::NasEmmMessageType::from(byte),
             e::NasEmmMessageType::Unknown(_)
         ) {
             assert!(emm.contains(&byte), "missing EMM type {byte:02x}");
         }
         if !matches!(
-            e::NasEsmMessageType::try_from(byte).unwrap(),
+            e::NasEsmMessageType::from(byte),
             e::NasEsmMessageType::Unknown(_)
         ) {
             assert!(esm.contains(&byte), "missing ESM type {byte:02x}");
@@ -142,10 +142,10 @@ fn nas_containers_recursively_decode_to_the_permitted_message_families() {
         );
         match inner {
             f::Nas5gsMessage::Gmm(header, _) => {
-                assert_eq!(header.message_type.as_u8(), message_type)
+                assert_eq!(u8::from(header.message_type), message_type)
             }
             f::Nas5gsMessage::Gsm(header, _) => {
-                assert_eq!(header.message_type.as_u8(), message_type)
+                assert_eq!(u8::from(header.message_type), message_type)
             }
             _ => panic!("expected plain inner NAS"),
         }
@@ -165,7 +165,7 @@ fn nas_containers_recursively_decode_to_the_permitted_message_families() {
         let e::NasEpsMessage::Esm(header, _) = inner else {
             panic!("expected ESM container")
         };
-        assert_eq!(header.message_type.as_u8(), message_type);
+        assert_eq!(u8::from(header.message_type), message_type);
     }
     let mut f_nested = 0;
     for (_, wire) in rows(include_str!("fixtures/nas-5gs.tsv")) {

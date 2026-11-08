@@ -13,17 +13,15 @@ set -eu
 # whatever the locale: several IEs share an IEI.
 export LC_ALL=C
 
-# The message types of the `TryFrom<u8>` of `$2` in `$1`, as
-# `code name` lines, in hexadecimal.
+# The message types of the table of `$2` in `$1`, as `code name` lines, in
+# hexadecimal.
 types() {
-    awk -v impl="impl TryFrom<u8> for $2 " '
-        index($0, impl) == 1 { inside = 1; next }
+    awk -v kind="pub enum $2;" '
+        index($0, kind) { inside = 1; next }
         inside && /^}/ { inside = 0 }
-        inside && /=> (Ok\()?(Self|[A-Za-z0-9]+)::[A-Za-z0-9]+/ {
-            code = $1
-            name = $0
-            sub(/.*::/, "", name)
-            sub(/[^A-Za-z0-9].*/, "", name)
+        inside && /^ *[A-Za-z0-9]+ = (0x[0-9A-Fa-f]+|[0-9]+) (=>|by)/ {
+            name = $1
+            code = $3
             if (code ~ /^0x/) { code = substr(code, 3) } else { code = sprintf("%02x", code) }
             printf "%s %s\n", tolower(code), name
         }
@@ -51,18 +49,18 @@ dictionary() {
     echo "# The message types and IEs of the tables of src/nas_$system: written by fuzz/dict.sh."
     case $system in
     5gs)
-        types src/nas_5gs/message_types.rs Nas5gmmMessageType | while read -r code name; do
+        types src/nas_5gs/messages.rs Nas5gmmMessageType | while read -r code name; do
             printf '%s="\\x7e\\x00\\x%s"\n' "$name" "$code"
         done
-        types src/nas_5gs/message_types.rs Nas5gsmMessageType | while read -r code name; do
+        types src/nas_5gs/messages.rs Nas5gsmMessageType | while read -r code name; do
             printf '%s="\\x2e\\x05\\x01\\x%s"\n' "$name" "$code"
         done
         ;;
     eps)
-        types src/nas_eps/message_types.rs NasEmmMessageType | while read -r code name; do
+        types src/nas_eps/messages.rs NasEmmMessageType | while read -r code name; do
             printf '%s="\\x07\\x%s"\n' "$name" "$code"
         done
-        types src/nas_eps/message_types.rs NasEsmMessageType | while read -r code name; do
+        types src/nas_eps/messages.rs NasEsmMessageType | while read -r code name; do
             printf '%s="\\x52\\x01\\x%s"\n' "$name" "$code"
         done
         ;;

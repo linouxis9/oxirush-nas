@@ -1138,435 +1138,124 @@ nas_message! {
     }
 }
 
-/// EMM message bodies (TS 24.301 §8.2).
-#[non_exhaustive]
-#[derive(Debug, Clone, PartialEq)]
-#[allow(clippy::large_enum_variant)]
-pub enum NasEmmMessage {
-    /// Attach Accept (§8.2.1).
-    AttachAccept(Box<NasAttachAccept>),
-    /// Attach Complete (§8.2.2).
-    AttachComplete(Box<NasAttachComplete>),
-    /// Attach Reject (§8.2.3).
-    AttachReject(Box<NasAttachReject>),
-    /// Attach Request (§8.2.4).
-    AttachRequest(Box<NasAttachRequest>),
-    /// Authentication Failure (§8.2.5).
-    AuthenticationFailure(Box<NasAuthenticationFailure>),
-    /// Authentication Reject (§8.2.6).
-    AuthenticationReject(Box<NasAuthenticationReject>),
-    /// Authentication Request (§8.2.7).
-    AuthenticationRequest(Box<NasAuthenticationRequest>),
-    /// Authentication Response (§8.2.8).
-    AuthenticationResponse(Box<NasAuthenticationResponse>),
-    /// CS Service Notification (§8.2.9).
-    CsServiceNotification(Box<NasCsServiceNotification>),
-    /// Detach Accept (§8.2.10.1).
-    DetachAccept(Box<NasDetachAccept>),
-    /// Detach Request (UE originating) (§8.2.11.1).
-    DetachRequestUeOriginating(Box<NasDetachRequestUeOriginating>),
-    /// Detach Request (UE terminated) (§8.2.11.2).
-    DetachRequestUeTerminated(Box<NasDetachRequestUeTerminated>),
-    /// Downlink NAS Transport (§8.2.12).
-    DownlinkNasTransport(Box<NasDownlinkNasTransport>),
-    /// EMM Information (§8.2.13).
-    EmmInformation(Box<NasEmmInformation>),
-    /// EMM Status (§8.2.14).
-    EmmStatus(Box<NasEmmStatus>),
-    /// Extended Service Request (§8.2.15).
-    ExtendedServiceRequest(Box<NasExtendedServiceRequest>),
-    /// GUTI Reallocation Command (§8.2.16).
-    GutiReallocationCommand(Box<NasGutiReallocationCommand>),
-    /// GUTI Reallocation Complete (§8.2.17).
-    GutiReallocationComplete(Box<NasGutiReallocationComplete>),
-    /// Identity Request (§8.2.18).
-    IdentityRequest(Box<NasIdentityRequest>),
-    /// Identity Response (§8.2.19).
-    IdentityResponse(Box<NasIdentityResponse>),
-    /// Security Mode Command (§8.2.20).
-    SecurityModeCommand(Box<NasSecurityModeCommand>),
-    /// Security Mode Complete (§8.2.21).
-    SecurityModeComplete(Box<NasSecurityModeComplete>),
-    /// Security Mode Reject (§8.2.22).
-    SecurityModeReject(Box<NasSecurityModeReject>),
-    /// Service Reject (§8.2.24).
-    ServiceReject(Box<NasServiceReject>),
-    /// Tracking Area Update Accept (§8.2.26).
-    TrackingAreaUpdateAccept(Box<NasTrackingAreaUpdateAccept>),
-    /// Tracking Area Update Complete (§8.2.27).
-    TrackingAreaUpdateComplete(Box<NasTrackingAreaUpdateComplete>),
-    /// Tracking Area Update Reject (§8.2.28).
-    TrackingAreaUpdateReject(Box<NasTrackingAreaUpdateReject>),
-    /// Tracking Area Update Request (§8.2.29).
-    TrackingAreaUpdateRequest(Box<NasTrackingAreaUpdateRequest>),
-    /// Uplink NAS Transport (§8.2.30).
-    UplinkNasTransport(Box<NasUplinkNasTransport>),
-    /// Downlink Generic NAS Transport (§8.2.31).
-    DownlinkGenericNasTransport(Box<NasDownlinkGenericNasTransport>),
-    /// Uplink Generic NAS Transport (§8.2.32).
-    UplinkGenericNasTransport(Box<NasUplinkGenericNasTransport>),
-    /// Control Plane Service Request (§8.2.33).
-    ControlPlaneServiceRequest(Box<NasControlPlaneServiceRequest>),
-    /// Service Accept (§8.2.34).
-    ServiceAccept(Box<NasServiceAccept>),
-}
-
-#[cfg(feature = "serde")]
-crate::common::readable::readable!(
-    enum NasEmmMessage {
-        AttachAccept(Box<NasAttachAccept>),
-        AttachComplete(Box<NasAttachComplete>),
-        AttachReject(Box<NasAttachReject>),
-        AttachRequest(Box<NasAttachRequest>),
-        AuthenticationFailure(Box<NasAuthenticationFailure>),
-        AuthenticationReject(Box<NasAuthenticationReject>),
-        AuthenticationRequest(Box<NasAuthenticationRequest>),
-        AuthenticationResponse(Box<NasAuthenticationResponse>),
-        CsServiceNotification(Box<NasCsServiceNotification>),
-        DetachAccept(Box<NasDetachAccept>),
-        DetachRequestUeOriginating(Box<NasDetachRequestUeOriginating>),
-        DetachRequestUeTerminated(Box<NasDetachRequestUeTerminated>),
-        DownlinkNasTransport(Box<NasDownlinkNasTransport>),
-        EmmInformation(Box<NasEmmInformation>),
-        EmmStatus(Box<NasEmmStatus>),
-        ExtendedServiceRequest(Box<NasExtendedServiceRequest>),
-        GutiReallocationCommand(Box<NasGutiReallocationCommand>),
-        GutiReallocationComplete(Box<NasGutiReallocationComplete>),
-        IdentityRequest(Box<NasIdentityRequest>),
-        IdentityResponse(Box<NasIdentityResponse>),
-        SecurityModeCommand(Box<NasSecurityModeCommand>),
-        SecurityModeComplete(Box<NasSecurityModeComplete>),
-        SecurityModeReject(Box<NasSecurityModeReject>),
-        ServiceReject(Box<NasServiceReject>),
-        TrackingAreaUpdateAccept(Box<NasTrackingAreaUpdateAccept>),
-        TrackingAreaUpdateComplete(Box<NasTrackingAreaUpdateComplete>),
-        TrackingAreaUpdateReject(Box<NasTrackingAreaUpdateReject>),
-        TrackingAreaUpdateRequest(Box<NasTrackingAreaUpdateRequest>),
-        UplinkNasTransport(Box<NasUplinkNasTransport>),
-        DownlinkGenericNasTransport(Box<NasDownlinkGenericNasTransport>),
-        UplinkGenericNasTransport(Box<NasUplinkGenericNasTransport>),
-        ControlPlaneServiceRequest(Box<NasControlPlaneServiceRequest>),
-        ServiceAccept(Box<NasServiceAccept>),
+crate::common::nas_messages! {
+    /// EMM message bodies (TS 24.301 §8.2).
+    pub enum NasEmmMessage;
+    /// EMM message types (TS 24.301 Table 9.8.1).
+    pub enum NasEmmMessageType;
+    {
+        /// Attach Request (0x41).
+        AttachRequest = 65 => NasAttachRequest,
+        /// Attach Accept (0x42).
+        AttachAccept = 66 => NasAttachAccept,
+        /// Attach Complete (0x43).
+        AttachComplete = 67 => NasAttachComplete,
+        /// Attach Reject (0x44).
+        AttachReject = 68 => NasAttachReject,
+        /// Detach Accept (0x46).
+        DetachAccept = 70 => NasDetachAccept,
+        /// Tracking Area Update Request (0x48).
+        TrackingAreaUpdateRequest = 72 => NasTrackingAreaUpdateRequest,
+        /// Tracking Area Update Accept (0x49).
+        TrackingAreaUpdateAccept = 73 => NasTrackingAreaUpdateAccept,
+        /// Tracking Area Update Complete (0x4A).
+        TrackingAreaUpdateComplete = 74 => NasTrackingAreaUpdateComplete,
+        /// Tracking Area Update Reject (0x4B).
+        TrackingAreaUpdateReject = 75 => NasTrackingAreaUpdateReject,
+        /// Extended Service Request (0x4C).
+        ExtendedServiceRequest = 76 => NasExtendedServiceRequest,
+        /// Control Plane Service Request (0x4D).
+        ControlPlaneServiceRequest = 77 => NasControlPlaneServiceRequest,
+        /// Service Reject (0x4E).
+        ServiceReject = 78 => NasServiceReject,
+        /// Service Accept (0x4F).
+        ServiceAccept = 79 => NasServiceAccept,
+        /// GUTI Reallocation Command (0x50).
+        GutiReallocationCommand = 80 => NasGutiReallocationCommand,
+        /// GUTI Reallocation Complete (0x51).
+        GutiReallocationComplete = 81 => NasGutiReallocationComplete,
+        /// Authentication Request (0x52).
+        AuthenticationRequest = 82 => NasAuthenticationRequest,
+        /// Authentication Response (0x53).
+        AuthenticationResponse = 83 => NasAuthenticationResponse,
+        /// Authentication Reject (0x54).
+        AuthenticationReject = 84 => NasAuthenticationReject,
+        /// Identity Request (0x55).
+        IdentityRequest = 85 => NasIdentityRequest,
+        /// Identity Response (0x56).
+        IdentityResponse = 86 => NasIdentityResponse,
+        /// Authentication Failure (0x5C).
+        AuthenticationFailure = 92 => NasAuthenticationFailure,
+        /// Security Mode Command (0x5D).
+        SecurityModeCommand = 93 => NasSecurityModeCommand,
+        /// Security Mode Complete (0x5E).
+        SecurityModeComplete = 94 => NasSecurityModeComplete,
+        /// Security Mode Reject (0x5F).
+        SecurityModeReject = 95 => NasSecurityModeReject,
+        /// EMM Status (0x60).
+        EmmStatus = 96 => NasEmmStatus,
+        /// EMM Information (0x61).
+        EmmInformation = 97 => NasEmmInformation,
+        /// Downlink NAS Transport (0x62).
+        DownlinkNasTransport = 98 => NasDownlinkNasTransport,
+        /// Uplink NAS Transport (0x63).
+        UplinkNasTransport = 99 => NasUplinkNasTransport,
+        /// CS Service Notification (0x64).
+        CsServiceNotification = 100 => NasCsServiceNotification,
+        /// Downlink Generic NAS Transport (0x68).
+        DownlinkGenericNasTransport = 104 => NasDownlinkGenericNasTransport,
+        /// Uplink Generic NAS Transport (0x69).
+        UplinkGenericNasTransport = 105 => NasUplinkGenericNasTransport,
     }
-);
-
-impl From<NasAttachAccept> for NasEmmMessage {
-    fn from(message: NasAttachAccept) -> Self {
-        Self::AttachAccept(Box::new(message))
+    /// Detach Request (0x45).
+    DetachRequest = 69 by decode_detach_request {
+        /// Detach Request (UE originating) (§8.2.11.1).
+        DetachRequestUeOriginating => NasDetachRequestUeOriginating,
+        /// Detach Request (UE terminated) (§8.2.11.2).
+        DetachRequestUeTerminated => NasDetachRequestUeTerminated,
     }
 }
 
-impl From<NasAttachComplete> for NasEmmMessage {
-    fn from(message: NasAttachComplete) -> Self {
-        Self::AttachComplete(Box::new(message))
+/// A DETACH REQUEST of either direction, which share the message type. The UE
+/// form needs an LV EPS mobile identity of 4 to 11 octets holding an IMSI, an
+/// IMEI or a GUTI (Table 8.2.11.1.1, §9.9.3.12); when it only parses by
+/// reading IEs as unknown, the network form is preferred.
+fn decode_detach_request(
+    buffer: &mut &[u8],
+    _: crate::common::Faults<'_, '_>,
+) -> Result<NasEmmMessage> {
+    let mut ue_probe = *buffer;
+    let from_ue = NasDetachRequestUeOriginating::decode_from(&mut ue_probe)
+        .ok()
+        .filter(|_| !ue_probe.has_remaining());
+    if let Some(request) = &from_ue
+        && request.unknown_ies.is_empty()
+        && (4..=11).contains(&request.eps_mobile_identity.value.len())
+        && matches!(request.eps_mobile_identity.value[0] & 0x07, 1 | 3 | 6)
+    {
+        *buffer = ue_probe;
+        return Ok(NasEmmMessage::DetachRequestUeOriginating(Box::new(
+            request.clone(),
+        )));
+    }
+    let mut network_probe = *buffer;
+    match (
+        NasDetachRequestUeTerminated::decode_from(&mut network_probe),
+        from_ue,
+    ) {
+        (Ok(request), _) => {
+            *buffer = network_probe;
+            Ok(NasEmmMessage::DetachRequestUeTerminated(Box::new(request)))
+        }
+        (Err(_), Some(request)) => {
+            *buffer = ue_probe;
+            Ok(NasEmmMessage::DetachRequestUeOriginating(Box::new(request)))
+        }
+        (Err(error), None) => Err(error),
     }
 }
 
-impl From<NasAttachReject> for NasEmmMessage {
-    fn from(message: NasAttachReject) -> Self {
-        Self::AttachReject(Box::new(message))
-    }
-}
-
-impl From<NasAttachRequest> for NasEmmMessage {
-    fn from(message: NasAttachRequest) -> Self {
-        Self::AttachRequest(Box::new(message))
-    }
-}
-
-impl From<NasAuthenticationFailure> for NasEmmMessage {
-    fn from(message: NasAuthenticationFailure) -> Self {
-        Self::AuthenticationFailure(Box::new(message))
-    }
-}
-
-impl From<NasAuthenticationReject> for NasEmmMessage {
-    fn from(message: NasAuthenticationReject) -> Self {
-        Self::AuthenticationReject(Box::new(message))
-    }
-}
-
-impl From<NasAuthenticationRequest> for NasEmmMessage {
-    fn from(message: NasAuthenticationRequest) -> Self {
-        Self::AuthenticationRequest(Box::new(message))
-    }
-}
-
-impl From<NasAuthenticationResponse> for NasEmmMessage {
-    fn from(message: NasAuthenticationResponse) -> Self {
-        Self::AuthenticationResponse(Box::new(message))
-    }
-}
-
-impl From<NasCsServiceNotification> for NasEmmMessage {
-    fn from(message: NasCsServiceNotification) -> Self {
-        Self::CsServiceNotification(Box::new(message))
-    }
-}
-
-impl From<NasDetachAccept> for NasEmmMessage {
-    fn from(message: NasDetachAccept) -> Self {
-        Self::DetachAccept(Box::new(message))
-    }
-}
-
-impl From<NasDetachRequestUeOriginating> for NasEmmMessage {
-    fn from(message: NasDetachRequestUeOriginating) -> Self {
-        Self::DetachRequestUeOriginating(Box::new(message))
-    }
-}
-
-impl From<NasDetachRequestUeTerminated> for NasEmmMessage {
-    fn from(message: NasDetachRequestUeTerminated) -> Self {
-        Self::DetachRequestUeTerminated(Box::new(message))
-    }
-}
-
-impl From<NasDownlinkNasTransport> for NasEmmMessage {
-    fn from(message: NasDownlinkNasTransport) -> Self {
-        Self::DownlinkNasTransport(Box::new(message))
-    }
-}
-
-impl From<NasEmmInformation> for NasEmmMessage {
-    fn from(message: NasEmmInformation) -> Self {
-        Self::EmmInformation(Box::new(message))
-    }
-}
-
-impl From<NasEmmStatus> for NasEmmMessage {
-    fn from(message: NasEmmStatus) -> Self {
-        Self::EmmStatus(Box::new(message))
-    }
-}
-
-impl From<NasExtendedServiceRequest> for NasEmmMessage {
-    fn from(message: NasExtendedServiceRequest) -> Self {
-        Self::ExtendedServiceRequest(Box::new(message))
-    }
-}
-
-impl From<NasGutiReallocationCommand> for NasEmmMessage {
-    fn from(message: NasGutiReallocationCommand) -> Self {
-        Self::GutiReallocationCommand(Box::new(message))
-    }
-}
-
-impl From<NasGutiReallocationComplete> for NasEmmMessage {
-    fn from(message: NasGutiReallocationComplete) -> Self {
-        Self::GutiReallocationComplete(Box::new(message))
-    }
-}
-
-impl From<NasIdentityRequest> for NasEmmMessage {
-    fn from(message: NasIdentityRequest) -> Self {
-        Self::IdentityRequest(Box::new(message))
-    }
-}
-
-impl From<NasIdentityResponse> for NasEmmMessage {
-    fn from(message: NasIdentityResponse) -> Self {
-        Self::IdentityResponse(Box::new(message))
-    }
-}
-
-impl From<NasSecurityModeCommand> for NasEmmMessage {
-    fn from(message: NasSecurityModeCommand) -> Self {
-        Self::SecurityModeCommand(Box::new(message))
-    }
-}
-
-impl From<NasSecurityModeComplete> for NasEmmMessage {
-    fn from(message: NasSecurityModeComplete) -> Self {
-        Self::SecurityModeComplete(Box::new(message))
-    }
-}
-
-impl From<NasSecurityModeReject> for NasEmmMessage {
-    fn from(message: NasSecurityModeReject) -> Self {
-        Self::SecurityModeReject(Box::new(message))
-    }
-}
-
-impl From<NasServiceReject> for NasEmmMessage {
-    fn from(message: NasServiceReject) -> Self {
-        Self::ServiceReject(Box::new(message))
-    }
-}
-
-impl From<NasTrackingAreaUpdateAccept> for NasEmmMessage {
-    fn from(message: NasTrackingAreaUpdateAccept) -> Self {
-        Self::TrackingAreaUpdateAccept(Box::new(message))
-    }
-}
-
-impl From<NasTrackingAreaUpdateComplete> for NasEmmMessage {
-    fn from(message: NasTrackingAreaUpdateComplete) -> Self {
-        Self::TrackingAreaUpdateComplete(Box::new(message))
-    }
-}
-
-impl From<NasTrackingAreaUpdateReject> for NasEmmMessage {
-    fn from(message: NasTrackingAreaUpdateReject) -> Self {
-        Self::TrackingAreaUpdateReject(Box::new(message))
-    }
-}
-
-impl From<NasTrackingAreaUpdateRequest> for NasEmmMessage {
-    fn from(message: NasTrackingAreaUpdateRequest) -> Self {
-        Self::TrackingAreaUpdateRequest(Box::new(message))
-    }
-}
-
-impl From<NasUplinkNasTransport> for NasEmmMessage {
-    fn from(message: NasUplinkNasTransport) -> Self {
-        Self::UplinkNasTransport(Box::new(message))
-    }
-}
-
-impl From<NasDownlinkGenericNasTransport> for NasEmmMessage {
-    fn from(message: NasDownlinkGenericNasTransport) -> Self {
-        Self::DownlinkGenericNasTransport(Box::new(message))
-    }
-}
-
-impl From<NasUplinkGenericNasTransport> for NasEmmMessage {
-    fn from(message: NasUplinkGenericNasTransport) -> Self {
-        Self::UplinkGenericNasTransport(Box::new(message))
-    }
-}
-
-impl From<NasControlPlaneServiceRequest> for NasEmmMessage {
-    fn from(message: NasControlPlaneServiceRequest) -> Self {
-        Self::ControlPlaneServiceRequest(Box::new(message))
-    }
-}
-
-impl From<NasServiceAccept> for NasEmmMessage {
-    fn from(message: NasServiceAccept) -> Self {
-        Self::ServiceAccept(Box::new(message))
-    }
-}
 impl NasEmmMessage {
-    /// Message type of the body.
-    pub fn message_type(&self) -> NasEmmMessageType {
-        match self {
-            Self::AttachAccept(..) => NasEmmMessageType::AttachAccept,
-            Self::AttachComplete(..) => NasEmmMessageType::AttachComplete,
-            Self::AttachReject(..) => NasEmmMessageType::AttachReject,
-            Self::AttachRequest(..) => NasEmmMessageType::AttachRequest,
-            Self::AuthenticationFailure(..) => NasEmmMessageType::AuthenticationFailure,
-            Self::AuthenticationReject(..) => NasEmmMessageType::AuthenticationReject,
-            Self::AuthenticationRequest(..) => NasEmmMessageType::AuthenticationRequest,
-            Self::AuthenticationResponse(..) => NasEmmMessageType::AuthenticationResponse,
-            Self::CsServiceNotification(..) => NasEmmMessageType::CsServiceNotification,
-            Self::DetachAccept(..) => NasEmmMessageType::DetachAccept,
-            Self::DetachRequestUeOriginating(..) => NasEmmMessageType::DetachRequest,
-            Self::DetachRequestUeTerminated(..) => NasEmmMessageType::DetachRequest,
-            Self::DownlinkNasTransport(..) => NasEmmMessageType::DownlinkNasTransport,
-            Self::EmmInformation(..) => NasEmmMessageType::EmmInformation,
-            Self::EmmStatus(..) => NasEmmMessageType::EmmStatus,
-            Self::ExtendedServiceRequest(..) => NasEmmMessageType::ExtendedServiceRequest,
-            Self::GutiReallocationCommand(..) => NasEmmMessageType::GutiReallocationCommand,
-            Self::GutiReallocationComplete(..) => NasEmmMessageType::GutiReallocationComplete,
-            Self::IdentityRequest(..) => NasEmmMessageType::IdentityRequest,
-            Self::IdentityResponse(..) => NasEmmMessageType::IdentityResponse,
-            Self::SecurityModeCommand(..) => NasEmmMessageType::SecurityModeCommand,
-            Self::SecurityModeComplete(..) => NasEmmMessageType::SecurityModeComplete,
-            Self::SecurityModeReject(..) => NasEmmMessageType::SecurityModeReject,
-            Self::ServiceReject(..) => NasEmmMessageType::ServiceReject,
-            Self::TrackingAreaUpdateAccept(..) => NasEmmMessageType::TrackingAreaUpdateAccept,
-            Self::TrackingAreaUpdateComplete(..) => NasEmmMessageType::TrackingAreaUpdateComplete,
-            Self::TrackingAreaUpdateReject(..) => NasEmmMessageType::TrackingAreaUpdateReject,
-            Self::TrackingAreaUpdateRequest(..) => NasEmmMessageType::TrackingAreaUpdateRequest,
-            Self::UplinkNasTransport(..) => NasEmmMessageType::UplinkNasTransport,
-            Self::DownlinkGenericNasTransport(..) => NasEmmMessageType::DownlinkGenericNasTransport,
-            Self::UplinkGenericNasTransport(..) => NasEmmMessageType::UplinkGenericNasTransport,
-            Self::ControlPlaneServiceRequest(..) => NasEmmMessageType::ControlPlaneServiceRequest,
-            Self::ServiceAccept(..) => NasEmmMessageType::ServiceAccept,
-        }
-    }
-}
-impl NasEmmMessage {
-    /// The message struct of the variant.
-    pub(crate) fn body(&self) -> &dyn crate::common::MessageBody {
-        match self {
-            Self::AttachAccept(message) => &**message,
-            Self::AttachComplete(message) => &**message,
-            Self::AttachReject(message) => &**message,
-            Self::AttachRequest(message) => &**message,
-            Self::AuthenticationFailure(message) => &**message,
-            Self::AuthenticationReject(message) => &**message,
-            Self::AuthenticationRequest(message) => &**message,
-            Self::AuthenticationResponse(message) => &**message,
-            Self::CsServiceNotification(message) => &**message,
-            Self::DetachAccept(message) => &**message,
-            Self::DetachRequestUeOriginating(message) => &**message,
-            Self::DetachRequestUeTerminated(message) => &**message,
-            Self::DownlinkNasTransport(message) => &**message,
-            Self::EmmInformation(message) => &**message,
-            Self::EmmStatus(message) => &**message,
-            Self::ExtendedServiceRequest(message) => &**message,
-            Self::GutiReallocationCommand(message) => &**message,
-            Self::GutiReallocationComplete(message) => &**message,
-            Self::IdentityRequest(message) => &**message,
-            Self::IdentityResponse(message) => &**message,
-            Self::SecurityModeCommand(message) => &**message,
-            Self::SecurityModeComplete(message) => &**message,
-            Self::SecurityModeReject(message) => &**message,
-            Self::ServiceReject(message) => &**message,
-            Self::TrackingAreaUpdateAccept(message) => &**message,
-            Self::TrackingAreaUpdateComplete(message) => &**message,
-            Self::TrackingAreaUpdateReject(message) => &**message,
-            Self::TrackingAreaUpdateRequest(message) => &**message,
-            Self::UplinkNasTransport(message) => &**message,
-            Self::DownlinkGenericNasTransport(message) => &**message,
-            Self::UplinkGenericNasTransport(message) => &**message,
-            Self::ControlPlaneServiceRequest(message) => &**message,
-            Self::ServiceAccept(message) => &**message,
-        }
-    }
-
-    /// The message struct of the variant, to change it.
-    #[cfg(feature = "serde")]
-    pub(crate) fn body_mut(&mut self) -> &mut dyn crate::common::MessageBody {
-        match self {
-            Self::AttachAccept(message) => &mut **message,
-            Self::AttachComplete(message) => &mut **message,
-            Self::AttachReject(message) => &mut **message,
-            Self::AttachRequest(message) => &mut **message,
-            Self::AuthenticationFailure(message) => &mut **message,
-            Self::AuthenticationReject(message) => &mut **message,
-            Self::AuthenticationRequest(message) => &mut **message,
-            Self::AuthenticationResponse(message) => &mut **message,
-            Self::CsServiceNotification(message) => &mut **message,
-            Self::DetachAccept(message) => &mut **message,
-            Self::DetachRequestUeOriginating(message) => &mut **message,
-            Self::DetachRequestUeTerminated(message) => &mut **message,
-            Self::DownlinkNasTransport(message) => &mut **message,
-            Self::EmmInformation(message) => &mut **message,
-            Self::EmmStatus(message) => &mut **message,
-            Self::ExtendedServiceRequest(message) => &mut **message,
-            Self::GutiReallocationCommand(message) => &mut **message,
-            Self::GutiReallocationComplete(message) => &mut **message,
-            Self::IdentityRequest(message) => &mut **message,
-            Self::IdentityResponse(message) => &mut **message,
-            Self::SecurityModeCommand(message) => &mut **message,
-            Self::SecurityModeComplete(message) => &mut **message,
-            Self::SecurityModeReject(message) => &mut **message,
-            Self::ServiceReject(message) => &mut **message,
-            Self::TrackingAreaUpdateAccept(message) => &mut **message,
-            Self::TrackingAreaUpdateComplete(message) => &mut **message,
-            Self::TrackingAreaUpdateReject(message) => &mut **message,
-            Self::TrackingAreaUpdateRequest(message) => &mut **message,
-            Self::UplinkNasTransport(message) => &mut **message,
-            Self::DownlinkGenericNasTransport(message) => &mut **message,
-            Self::UplinkGenericNasTransport(message) => &mut **message,
-            Self::ControlPlaneServiceRequest(message) => &mut **message,
-            Self::ServiceAccept(message) => &mut **message,
-        }
-    }
-
     /// IEs the decoder did not recognize in the message body, and known IEs
     /// it ignored. An unknown IE encoded as "comprehension required" is
     /// flagged by [`UnknownIe::is_comprehension_required`](crate::UnknownIe::is_comprehension_required): the receiver
@@ -1589,557 +1278,70 @@ impl TryFrom<(NasEmmMessageType, &mut &[u8])> for NasEmmMessage {
     }
 }
 
-impl NasEmmMessage {
-    /// The message of the type `kind` from the front of `buffer`,
-    /// decoded strictly or keeping the faults of its mandatory IEs.
-    pub(crate) fn decode_keeping(
-        kind: NasEmmMessageType,
-        buffer: &mut &[u8],
-        faults: crate::common::Faults<'_, '_>,
-    ) -> Result<Self> {
-        match kind {
-            NasEmmMessageType::AttachAccept => Ok(Self::AttachAccept(Box::new(
-                crate::common::decode_keeping::<NasAttachAccept>(buffer, faults)?,
-            ))),
-            NasEmmMessageType::AttachComplete => Ok(Self::AttachComplete(Box::new(
-                crate::common::decode_keeping::<NasAttachComplete>(buffer, faults)?,
-            ))),
-            NasEmmMessageType::AttachReject => Ok(Self::AttachReject(Box::new(
-                crate::common::decode_keeping::<NasAttachReject>(buffer, faults)?,
-            ))),
-            NasEmmMessageType::AttachRequest => Ok(Self::AttachRequest(Box::new(
-                crate::common::decode_keeping::<NasAttachRequest>(buffer, faults)?,
-            ))),
-            NasEmmMessageType::AuthenticationFailure => Ok(Self::AuthenticationFailure(Box::new(
-                crate::common::decode_keeping::<NasAuthenticationFailure>(buffer, faults)?,
-            ))),
-            NasEmmMessageType::AuthenticationReject => Ok(Self::AuthenticationReject(Box::new(
-                crate::common::decode_keeping::<NasAuthenticationReject>(buffer, faults)?,
-            ))),
-            NasEmmMessageType::AuthenticationRequest => Ok(Self::AuthenticationRequest(Box::new(
-                crate::common::decode_keeping::<NasAuthenticationRequest>(buffer, faults)?,
-            ))),
-            NasEmmMessageType::AuthenticationResponse => {
-                Ok(Self::AuthenticationResponse(Box::new(
-                    crate::common::decode_keeping::<NasAuthenticationResponse>(buffer, faults)?,
-                )))
-            }
-            NasEmmMessageType::CsServiceNotification => Ok(Self::CsServiceNotification(Box::new(
-                crate::common::decode_keeping::<NasCsServiceNotification>(buffer, faults)?,
-            ))),
-            NasEmmMessageType::DetachAccept => Ok(Self::DetachAccept(Box::new(
-                crate::common::decode_keeping::<NasDetachAccept>(buffer, faults)?,
-            ))),
-            NasEmmMessageType::DownlinkNasTransport => Ok(Self::DownlinkNasTransport(Box::new(
-                crate::common::decode_keeping::<NasDownlinkNasTransport>(buffer, faults)?,
-            ))),
-            NasEmmMessageType::EmmInformation => Ok(Self::EmmInformation(Box::new(
-                crate::common::decode_keeping::<NasEmmInformation>(buffer, faults)?,
-            ))),
-            NasEmmMessageType::EmmStatus => {
-                Ok(Self::EmmStatus(Box::new(crate::common::decode_keeping::<
-                    NasEmmStatus,
-                >(buffer, faults)?)))
-            }
-            NasEmmMessageType::ExtendedServiceRequest => {
-                Ok(Self::ExtendedServiceRequest(Box::new(
-                    crate::common::decode_keeping::<NasExtendedServiceRequest>(buffer, faults)?,
-                )))
-            }
-            NasEmmMessageType::GutiReallocationCommand => {
-                Ok(Self::GutiReallocationCommand(Box::new(
-                    crate::common::decode_keeping::<NasGutiReallocationCommand>(buffer, faults)?,
-                )))
-            }
-            NasEmmMessageType::GutiReallocationComplete => {
-                Ok(Self::GutiReallocationComplete(Box::new(
-                    crate::common::decode_keeping::<NasGutiReallocationComplete>(buffer, faults)?,
-                )))
-            }
-            NasEmmMessageType::IdentityRequest => Ok(Self::IdentityRequest(Box::new(
-                crate::common::decode_keeping::<NasIdentityRequest>(buffer, faults)?,
-            ))),
-            NasEmmMessageType::IdentityResponse => Ok(Self::IdentityResponse(Box::new(
-                crate::common::decode_keeping::<NasIdentityResponse>(buffer, faults)?,
-            ))),
-            NasEmmMessageType::SecurityModeCommand => Ok(Self::SecurityModeCommand(Box::new(
-                crate::common::decode_keeping::<NasSecurityModeCommand>(buffer, faults)?,
-            ))),
-            NasEmmMessageType::SecurityModeComplete => Ok(Self::SecurityModeComplete(Box::new(
-                crate::common::decode_keeping::<NasSecurityModeComplete>(buffer, faults)?,
-            ))),
-            NasEmmMessageType::SecurityModeReject => Ok(Self::SecurityModeReject(Box::new(
-                crate::common::decode_keeping::<NasSecurityModeReject>(buffer, faults)?,
-            ))),
-            NasEmmMessageType::ServiceReject => Ok(Self::ServiceReject(Box::new(
-                crate::common::decode_keeping::<NasServiceReject>(buffer, faults)?,
-            ))),
-            NasEmmMessageType::TrackingAreaUpdateAccept => {
-                Ok(Self::TrackingAreaUpdateAccept(Box::new(
-                    crate::common::decode_keeping::<NasTrackingAreaUpdateAccept>(buffer, faults)?,
-                )))
-            }
-            NasEmmMessageType::TrackingAreaUpdateComplete => {
-                Ok(Self::TrackingAreaUpdateComplete(Box::new(
-                    crate::common::decode_keeping::<NasTrackingAreaUpdateComplete>(buffer, faults)?,
-                )))
-            }
-            NasEmmMessageType::TrackingAreaUpdateReject => {
-                Ok(Self::TrackingAreaUpdateReject(Box::new(
-                    crate::common::decode_keeping::<NasTrackingAreaUpdateReject>(buffer, faults)?,
-                )))
-            }
-            NasEmmMessageType::TrackingAreaUpdateRequest => {
-                Ok(Self::TrackingAreaUpdateRequest(Box::new(
-                    crate::common::decode_keeping::<NasTrackingAreaUpdateRequest>(buffer, faults)?,
-                )))
-            }
-            NasEmmMessageType::UplinkNasTransport => Ok(Self::UplinkNasTransport(Box::new(
-                crate::common::decode_keeping::<NasUplinkNasTransport>(buffer, faults)?,
-            ))),
-            NasEmmMessageType::DownlinkGenericNasTransport => Ok(
-                Self::DownlinkGenericNasTransport(Box::new(crate::common::decode_keeping::<
-                    NasDownlinkGenericNasTransport,
-                >(buffer, faults)?)),
-            ),
-            NasEmmMessageType::UplinkGenericNasTransport => {
-                Ok(Self::UplinkGenericNasTransport(Box::new(
-                    crate::common::decode_keeping::<NasUplinkGenericNasTransport>(buffer, faults)?,
-                )))
-            }
-            NasEmmMessageType::ControlPlaneServiceRequest => {
-                Ok(Self::ControlPlaneServiceRequest(Box::new(
-                    crate::common::decode_keeping::<NasControlPlaneServiceRequest>(buffer, faults)?,
-                )))
-            }
-            NasEmmMessageType::ServiceAccept => Ok(Self::ServiceAccept(Box::new(
-                crate::common::decode_keeping::<NasServiceAccept>(buffer, faults)?,
-            ))),
-            NasEmmMessageType::DetachRequest => {
-                // Both forms share the message type. The UE form needs an LV
-                // EPS mobile identity of 4 to 11 octets holding an IMSI, IMEI,
-                // or GUTI (Table 8.2.11.1.1, §9.9.3.12); when it only parses
-                // by reading IEs as unknown, the network form is preferred.
-                let mut ue_probe = *buffer;
-                let from_ue = NasDetachRequestUeOriginating::decode_from(&mut ue_probe)
-                    .ok()
-                    .filter(|_| !ue_probe.has_remaining());
-                if let Some(request) = &from_ue
-                    && request.unknown_ies.is_empty()
-                    && (4..=11).contains(&request.eps_mobile_identity.value.len())
-                    && matches!(request.eps_mobile_identity.value[0] & 0x07, 1 | 3 | 6)
-                {
-                    *buffer = ue_probe;
-                    return Ok(Self::DetachRequestUeOriginating(Box::new(request.clone())));
-                }
-                let mut network_probe = *buffer;
-                match (
-                    NasDetachRequestUeTerminated::decode_from(&mut network_probe),
-                    from_ue,
-                ) {
-                    (Ok(request), _) => {
-                        *buffer = network_probe;
-                        Ok(Self::DetachRequestUeTerminated(Box::new(request)))
-                    }
-                    (Err(_), Some(request)) => {
-                        *buffer = ue_probe;
-                        Ok(Self::DetachRequestUeOriginating(Box::new(request)))
-                    }
-                    (Err(error), None) => Err(error),
-                }
-            }
-            NasEmmMessageType::Unknown(value) => Err(NasError::UnknownMessageType(value)),
-        }
+crate::common::nas_messages! {
+    /// ESM message bodies (TS 24.301 §8.3).
+    pub enum NasEsmMessage;
+    /// ESM message types (TS 24.301 Table 9.8.2).
+    pub enum NasEsmMessageType;
+    {
+        /// Activate Default EPS Bearer Context Request (0xC1).
+        ActivateDefaultEpsBearerContextRequest = 193 => NasActivateDefaultEpsBearerContextRequest,
+        /// Activate Default EPS Bearer Context Accept (0xC2).
+        ActivateDefaultEpsBearerContextAccept = 194 => NasActivateDefaultEpsBearerContextAccept,
+        /// Activate Default EPS Bearer Context Reject (0xC3).
+        ActivateDefaultEpsBearerContextReject = 195 => NasActivateDefaultEpsBearerContextReject,
+        /// Activate Dedicated EPS Bearer Context Request (0xC5).
+        ActivateDedicatedEpsBearerContextRequest = 197 => NasActivateDedicatedEpsBearerContextRequest,
+        /// Activate Dedicated EPS Bearer Context Accept (0xC6).
+        ActivateDedicatedEpsBearerContextAccept = 198 => NasActivateDedicatedEpsBearerContextAccept,
+        /// Activate Dedicated EPS Bearer Context Reject (0xC7).
+        ActivateDedicatedEpsBearerContextReject = 199 => NasActivateDedicatedEpsBearerContextReject,
+        /// Modify EPS Bearer Context Request (0xC9).
+        ModifyEpsBearerContextRequest = 201 => NasModifyEpsBearerContextRequest,
+        /// Modify EPS Bearer Context Accept (0xCA).
+        ModifyEpsBearerContextAccept = 202 => NasModifyEpsBearerContextAccept,
+        /// Modify EPS Bearer Context Reject (0xCB).
+        ModifyEpsBearerContextReject = 203 => NasModifyEpsBearerContextReject,
+        /// Deactivate EPS Bearer Context Request (0xCD).
+        DeactivateEpsBearerContextRequest = 205 => NasDeactivateEpsBearerContextRequest,
+        /// Deactivate EPS Bearer Context Accept (0xCE).
+        DeactivateEpsBearerContextAccept = 206 => NasDeactivateEpsBearerContextAccept,
+        /// PDN Connectivity Request (0xD0).
+        PdnConnectivityRequest = 208 => NasPdnConnectivityRequest,
+        /// PDN Connectivity Reject (0xD1).
+        PdnConnectivityReject = 209 => NasPdnConnectivityReject,
+        /// PDN Disconnect Request (0xD2).
+        PdnDisconnectRequest = 210 => NasPdnDisconnectRequest,
+        /// PDN Disconnect Reject (0xD3).
+        PdnDisconnectReject = 211 => NasPdnDisconnectReject,
+        /// Bearer Resource Allocation Request (0xD4).
+        BearerResourceAllocationRequest = 212 => NasBearerResourceAllocationRequest,
+        /// Bearer Resource Allocation Reject (0xD5).
+        BearerResourceAllocationReject = 213 => NasBearerResourceAllocationReject,
+        /// Bearer Resource Modification Request (0xD6).
+        BearerResourceModificationRequest = 214 => NasBearerResourceModificationRequest,
+        /// Bearer Resource Modification Reject (0xD7).
+        BearerResourceModificationReject = 215 => NasBearerResourceModificationReject,
+        /// ESM Information Request (0xD9).
+        EsmInformationRequest = 217 => NasEsmInformationRequest,
+        /// ESM Information Response (0xDA).
+        EsmInformationResponse = 218 => NasEsmInformationResponse,
+        /// Notification (0xDB).
+        Notification = 219 => NasNotification,
+        /// ESM Dummy Message (0xDC).
+        EsmDummyMessage = 220 => NasEsmDummyMessage,
+        /// ESM Status (0xE8).
+        EsmStatus = 232 => NasEsmStatus,
+        /// Remote UE Report (0xE9).
+        RemoteUeReport = 233 => NasRemoteUeReport,
+        /// Remote UE Report Response (0xEA).
+        RemoteUeReportResponse = 234 => NasRemoteUeReportResponse,
+        /// ESM Data Transport (0xEB).
+        EsmDataTransport = 235 => NasEsmDataTransport,
     }
 }
 
-/// ESM message bodies (TS 24.301 §8.3).
-#[non_exhaustive]
-#[derive(Debug, Clone, PartialEq)]
-#[allow(clippy::large_enum_variant)]
-pub enum NasEsmMessage {
-    /// Activate Dedicated EPS Bearer Context Accept (§8.3.1).
-    ActivateDedicatedEpsBearerContextAccept(Box<NasActivateDedicatedEpsBearerContextAccept>),
-    /// Activate Dedicated EPS Bearer Context Reject (§8.3.2).
-    ActivateDedicatedEpsBearerContextReject(Box<NasActivateDedicatedEpsBearerContextReject>),
-    /// Activate Dedicated EPS Bearer Context Request (§8.3.3).
-    ActivateDedicatedEpsBearerContextRequest(Box<NasActivateDedicatedEpsBearerContextRequest>),
-    /// Activate Default EPS Bearer Context Accept (§8.3.4).
-    ActivateDefaultEpsBearerContextAccept(Box<NasActivateDefaultEpsBearerContextAccept>),
-    /// Activate Default EPS Bearer Context Reject (§8.3.5).
-    ActivateDefaultEpsBearerContextReject(Box<NasActivateDefaultEpsBearerContextReject>),
-    /// Activate Default EPS Bearer Context Request (§8.3.6).
-    ActivateDefaultEpsBearerContextRequest(Box<NasActivateDefaultEpsBearerContextRequest>),
-    /// Bearer Resource Allocation Reject (§8.3.7).
-    BearerResourceAllocationReject(Box<NasBearerResourceAllocationReject>),
-    /// Bearer Resource Allocation Request (§8.3.8).
-    BearerResourceAllocationRequest(Box<NasBearerResourceAllocationRequest>),
-    /// Bearer Resource Modification Reject (§8.3.9).
-    BearerResourceModificationReject(Box<NasBearerResourceModificationReject>),
-    /// Bearer Resource Modification Request (§8.3.10).
-    BearerResourceModificationRequest(Box<NasBearerResourceModificationRequest>),
-    /// Deactivate EPS Bearer Context Accept (§8.3.11).
-    DeactivateEpsBearerContextAccept(Box<NasDeactivateEpsBearerContextAccept>),
-    /// Deactivate EPS Bearer Context Request (§8.3.12).
-    DeactivateEpsBearerContextRequest(Box<NasDeactivateEpsBearerContextRequest>),
-    /// ESM Dummy Message (§8.3.12A).
-    EsmDummyMessage(Box<NasEsmDummyMessage>),
-    /// ESM Information Request (§8.3.13).
-    EsmInformationRequest(Box<NasEsmInformationRequest>),
-    /// ESM Information Response (§8.3.14).
-    EsmInformationResponse(Box<NasEsmInformationResponse>),
-    /// ESM Status (§8.3.15).
-    EsmStatus(Box<NasEsmStatus>),
-    /// Modify EPS Bearer Context Accept (§8.3.16).
-    ModifyEpsBearerContextAccept(Box<NasModifyEpsBearerContextAccept>),
-    /// Modify EPS Bearer Context Reject (§8.3.17).
-    ModifyEpsBearerContextReject(Box<NasModifyEpsBearerContextReject>),
-    /// Modify EPS Bearer Context Request (§8.3.18).
-    ModifyEpsBearerContextRequest(Box<NasModifyEpsBearerContextRequest>),
-    /// Notification (§8.3.18A).
-    Notification(Box<NasNotification>),
-    /// PDN Connectivity Reject (§8.3.19).
-    PdnConnectivityReject(Box<NasPdnConnectivityReject>),
-    /// PDN Connectivity Request (§8.3.20).
-    PdnConnectivityRequest(Box<NasPdnConnectivityRequest>),
-    /// PDN Disconnect Reject (§8.3.21).
-    PdnDisconnectReject(Box<NasPdnDisconnectReject>),
-    /// PDN Disconnect Request (§8.3.22).
-    PdnDisconnectRequest(Box<NasPdnDisconnectRequest>),
-    /// Remote UE Report (§8.3.23).
-    RemoteUeReport(Box<NasRemoteUeReport>),
-    /// Remote UE Report Response (§8.3.24).
-    RemoteUeReportResponse(Box<NasRemoteUeReportResponse>),
-    /// ESM Data Transport (§8.3.25).
-    EsmDataTransport(Box<NasEsmDataTransport>),
-}
-
-#[cfg(feature = "serde")]
-crate::common::readable::readable!(
-    enum NasEsmMessage {
-        ActivateDedicatedEpsBearerContextAccept(Box<NasActivateDedicatedEpsBearerContextAccept>),
-        ActivateDedicatedEpsBearerContextReject(Box<NasActivateDedicatedEpsBearerContextReject>),
-        ActivateDedicatedEpsBearerContextRequest(Box<NasActivateDedicatedEpsBearerContextRequest>),
-        ActivateDefaultEpsBearerContextAccept(Box<NasActivateDefaultEpsBearerContextAccept>),
-        ActivateDefaultEpsBearerContextReject(Box<NasActivateDefaultEpsBearerContextReject>),
-        ActivateDefaultEpsBearerContextRequest(Box<NasActivateDefaultEpsBearerContextRequest>),
-        BearerResourceAllocationReject(Box<NasBearerResourceAllocationReject>),
-        BearerResourceAllocationRequest(Box<NasBearerResourceAllocationRequest>),
-        BearerResourceModificationReject(Box<NasBearerResourceModificationReject>),
-        BearerResourceModificationRequest(Box<NasBearerResourceModificationRequest>),
-        DeactivateEpsBearerContextAccept(Box<NasDeactivateEpsBearerContextAccept>),
-        DeactivateEpsBearerContextRequest(Box<NasDeactivateEpsBearerContextRequest>),
-        EsmDummyMessage(Box<NasEsmDummyMessage>),
-        EsmInformationRequest(Box<NasEsmInformationRequest>),
-        EsmInformationResponse(Box<NasEsmInformationResponse>),
-        EsmStatus(Box<NasEsmStatus>),
-        ModifyEpsBearerContextAccept(Box<NasModifyEpsBearerContextAccept>),
-        ModifyEpsBearerContextReject(Box<NasModifyEpsBearerContextReject>),
-        ModifyEpsBearerContextRequest(Box<NasModifyEpsBearerContextRequest>),
-        Notification(Box<NasNotification>),
-        PdnConnectivityReject(Box<NasPdnConnectivityReject>),
-        PdnConnectivityRequest(Box<NasPdnConnectivityRequest>),
-        PdnDisconnectReject(Box<NasPdnDisconnectReject>),
-        PdnDisconnectRequest(Box<NasPdnDisconnectRequest>),
-        RemoteUeReport(Box<NasRemoteUeReport>),
-        RemoteUeReportResponse(Box<NasRemoteUeReportResponse>),
-        EsmDataTransport(Box<NasEsmDataTransport>),
-    }
-);
-
-impl From<NasActivateDedicatedEpsBearerContextAccept> for NasEsmMessage {
-    fn from(message: NasActivateDedicatedEpsBearerContextAccept) -> Self {
-        Self::ActivateDedicatedEpsBearerContextAccept(Box::new(message))
-    }
-}
-
-impl From<NasActivateDedicatedEpsBearerContextReject> for NasEsmMessage {
-    fn from(message: NasActivateDedicatedEpsBearerContextReject) -> Self {
-        Self::ActivateDedicatedEpsBearerContextReject(Box::new(message))
-    }
-}
-
-impl From<NasActivateDedicatedEpsBearerContextRequest> for NasEsmMessage {
-    fn from(message: NasActivateDedicatedEpsBearerContextRequest) -> Self {
-        Self::ActivateDedicatedEpsBearerContextRequest(Box::new(message))
-    }
-}
-
-impl From<NasActivateDefaultEpsBearerContextAccept> for NasEsmMessage {
-    fn from(message: NasActivateDefaultEpsBearerContextAccept) -> Self {
-        Self::ActivateDefaultEpsBearerContextAccept(Box::new(message))
-    }
-}
-
-impl From<NasActivateDefaultEpsBearerContextReject> for NasEsmMessage {
-    fn from(message: NasActivateDefaultEpsBearerContextReject) -> Self {
-        Self::ActivateDefaultEpsBearerContextReject(Box::new(message))
-    }
-}
-
-impl From<NasActivateDefaultEpsBearerContextRequest> for NasEsmMessage {
-    fn from(message: NasActivateDefaultEpsBearerContextRequest) -> Self {
-        Self::ActivateDefaultEpsBearerContextRequest(Box::new(message))
-    }
-}
-
-impl From<NasBearerResourceAllocationReject> for NasEsmMessage {
-    fn from(message: NasBearerResourceAllocationReject) -> Self {
-        Self::BearerResourceAllocationReject(Box::new(message))
-    }
-}
-
-impl From<NasBearerResourceAllocationRequest> for NasEsmMessage {
-    fn from(message: NasBearerResourceAllocationRequest) -> Self {
-        Self::BearerResourceAllocationRequest(Box::new(message))
-    }
-}
-
-impl From<NasBearerResourceModificationReject> for NasEsmMessage {
-    fn from(message: NasBearerResourceModificationReject) -> Self {
-        Self::BearerResourceModificationReject(Box::new(message))
-    }
-}
-
-impl From<NasBearerResourceModificationRequest> for NasEsmMessage {
-    fn from(message: NasBearerResourceModificationRequest) -> Self {
-        Self::BearerResourceModificationRequest(Box::new(message))
-    }
-}
-
-impl From<NasDeactivateEpsBearerContextAccept> for NasEsmMessage {
-    fn from(message: NasDeactivateEpsBearerContextAccept) -> Self {
-        Self::DeactivateEpsBearerContextAccept(Box::new(message))
-    }
-}
-
-impl From<NasDeactivateEpsBearerContextRequest> for NasEsmMessage {
-    fn from(message: NasDeactivateEpsBearerContextRequest) -> Self {
-        Self::DeactivateEpsBearerContextRequest(Box::new(message))
-    }
-}
-
-impl From<NasEsmDummyMessage> for NasEsmMessage {
-    fn from(message: NasEsmDummyMessage) -> Self {
-        Self::EsmDummyMessage(Box::new(message))
-    }
-}
-
-impl From<NasEsmInformationRequest> for NasEsmMessage {
-    fn from(message: NasEsmInformationRequest) -> Self {
-        Self::EsmInformationRequest(Box::new(message))
-    }
-}
-
-impl From<NasEsmInformationResponse> for NasEsmMessage {
-    fn from(message: NasEsmInformationResponse) -> Self {
-        Self::EsmInformationResponse(Box::new(message))
-    }
-}
-
-impl From<NasEsmStatus> for NasEsmMessage {
-    fn from(message: NasEsmStatus) -> Self {
-        Self::EsmStatus(Box::new(message))
-    }
-}
-
-impl From<NasModifyEpsBearerContextAccept> for NasEsmMessage {
-    fn from(message: NasModifyEpsBearerContextAccept) -> Self {
-        Self::ModifyEpsBearerContextAccept(Box::new(message))
-    }
-}
-
-impl From<NasModifyEpsBearerContextReject> for NasEsmMessage {
-    fn from(message: NasModifyEpsBearerContextReject) -> Self {
-        Self::ModifyEpsBearerContextReject(Box::new(message))
-    }
-}
-
-impl From<NasModifyEpsBearerContextRequest> for NasEsmMessage {
-    fn from(message: NasModifyEpsBearerContextRequest) -> Self {
-        Self::ModifyEpsBearerContextRequest(Box::new(message))
-    }
-}
-
-impl From<NasNotification> for NasEsmMessage {
-    fn from(message: NasNotification) -> Self {
-        Self::Notification(Box::new(message))
-    }
-}
-
-impl From<NasPdnConnectivityReject> for NasEsmMessage {
-    fn from(message: NasPdnConnectivityReject) -> Self {
-        Self::PdnConnectivityReject(Box::new(message))
-    }
-}
-
-impl From<NasPdnConnectivityRequest> for NasEsmMessage {
-    fn from(message: NasPdnConnectivityRequest) -> Self {
-        Self::PdnConnectivityRequest(Box::new(message))
-    }
-}
-
-impl From<NasPdnDisconnectReject> for NasEsmMessage {
-    fn from(message: NasPdnDisconnectReject) -> Self {
-        Self::PdnDisconnectReject(Box::new(message))
-    }
-}
-
-impl From<NasPdnDisconnectRequest> for NasEsmMessage {
-    fn from(message: NasPdnDisconnectRequest) -> Self {
-        Self::PdnDisconnectRequest(Box::new(message))
-    }
-}
-
-impl From<NasRemoteUeReport> for NasEsmMessage {
-    fn from(message: NasRemoteUeReport) -> Self {
-        Self::RemoteUeReport(Box::new(message))
-    }
-}
-
-impl From<NasRemoteUeReportResponse> for NasEsmMessage {
-    fn from(message: NasRemoteUeReportResponse) -> Self {
-        Self::RemoteUeReportResponse(Box::new(message))
-    }
-}
-
-impl From<NasEsmDataTransport> for NasEsmMessage {
-    fn from(message: NasEsmDataTransport) -> Self {
-        Self::EsmDataTransport(Box::new(message))
-    }
-}
 impl NasEsmMessage {
-    /// Message type of the body.
-    pub fn message_type(&self) -> NasEsmMessageType {
-        match self {
-            Self::ActivateDedicatedEpsBearerContextAccept(..) => {
-                NasEsmMessageType::ActivateDedicatedEpsBearerContextAccept
-            }
-            Self::ActivateDedicatedEpsBearerContextReject(..) => {
-                NasEsmMessageType::ActivateDedicatedEpsBearerContextReject
-            }
-            Self::ActivateDedicatedEpsBearerContextRequest(..) => {
-                NasEsmMessageType::ActivateDedicatedEpsBearerContextRequest
-            }
-            Self::ActivateDefaultEpsBearerContextAccept(..) => {
-                NasEsmMessageType::ActivateDefaultEpsBearerContextAccept
-            }
-            Self::ActivateDefaultEpsBearerContextReject(..) => {
-                NasEsmMessageType::ActivateDefaultEpsBearerContextReject
-            }
-            Self::ActivateDefaultEpsBearerContextRequest(..) => {
-                NasEsmMessageType::ActivateDefaultEpsBearerContextRequest
-            }
-            Self::BearerResourceAllocationReject(..) => {
-                NasEsmMessageType::BearerResourceAllocationReject
-            }
-            Self::BearerResourceAllocationRequest(..) => {
-                NasEsmMessageType::BearerResourceAllocationRequest
-            }
-            Self::BearerResourceModificationReject(..) => {
-                NasEsmMessageType::BearerResourceModificationReject
-            }
-            Self::BearerResourceModificationRequest(..) => {
-                NasEsmMessageType::BearerResourceModificationRequest
-            }
-            Self::DeactivateEpsBearerContextAccept(..) => {
-                NasEsmMessageType::DeactivateEpsBearerContextAccept
-            }
-            Self::DeactivateEpsBearerContextRequest(..) => {
-                NasEsmMessageType::DeactivateEpsBearerContextRequest
-            }
-            Self::EsmDummyMessage(..) => NasEsmMessageType::EsmDummyMessage,
-            Self::EsmInformationRequest(..) => NasEsmMessageType::EsmInformationRequest,
-            Self::EsmInformationResponse(..) => NasEsmMessageType::EsmInformationResponse,
-            Self::EsmStatus(..) => NasEsmMessageType::EsmStatus,
-            Self::ModifyEpsBearerContextAccept(..) => {
-                NasEsmMessageType::ModifyEpsBearerContextAccept
-            }
-            Self::ModifyEpsBearerContextReject(..) => {
-                NasEsmMessageType::ModifyEpsBearerContextReject
-            }
-            Self::ModifyEpsBearerContextRequest(..) => {
-                NasEsmMessageType::ModifyEpsBearerContextRequest
-            }
-            Self::Notification(..) => NasEsmMessageType::Notification,
-            Self::PdnConnectivityReject(..) => NasEsmMessageType::PdnConnectivityReject,
-            Self::PdnConnectivityRequest(..) => NasEsmMessageType::PdnConnectivityRequest,
-            Self::PdnDisconnectReject(..) => NasEsmMessageType::PdnDisconnectReject,
-            Self::PdnDisconnectRequest(..) => NasEsmMessageType::PdnDisconnectRequest,
-            Self::RemoteUeReport(..) => NasEsmMessageType::RemoteUeReport,
-            Self::RemoteUeReportResponse(..) => NasEsmMessageType::RemoteUeReportResponse,
-            Self::EsmDataTransport(..) => NasEsmMessageType::EsmDataTransport,
-        }
-    }
-}
-impl NasEsmMessage {
-    /// The message struct of the variant.
-    pub(crate) fn body(&self) -> &dyn crate::common::MessageBody {
-        match self {
-            Self::ActivateDedicatedEpsBearerContextAccept(message) => &**message,
-            Self::ActivateDedicatedEpsBearerContextReject(message) => &**message,
-            Self::ActivateDedicatedEpsBearerContextRequest(message) => &**message,
-            Self::ActivateDefaultEpsBearerContextAccept(message) => &**message,
-            Self::ActivateDefaultEpsBearerContextReject(message) => &**message,
-            Self::ActivateDefaultEpsBearerContextRequest(message) => &**message,
-            Self::BearerResourceAllocationReject(message) => &**message,
-            Self::BearerResourceAllocationRequest(message) => &**message,
-            Self::BearerResourceModificationReject(message) => &**message,
-            Self::BearerResourceModificationRequest(message) => &**message,
-            Self::DeactivateEpsBearerContextAccept(message) => &**message,
-            Self::DeactivateEpsBearerContextRequest(message) => &**message,
-            Self::EsmDummyMessage(message) => &**message,
-            Self::EsmInformationRequest(message) => &**message,
-            Self::EsmInformationResponse(message) => &**message,
-            Self::EsmStatus(message) => &**message,
-            Self::ModifyEpsBearerContextAccept(message) => &**message,
-            Self::ModifyEpsBearerContextReject(message) => &**message,
-            Self::ModifyEpsBearerContextRequest(message) => &**message,
-            Self::Notification(message) => &**message,
-            Self::PdnConnectivityReject(message) => &**message,
-            Self::PdnConnectivityRequest(message) => &**message,
-            Self::PdnDisconnectReject(message) => &**message,
-            Self::PdnDisconnectRequest(message) => &**message,
-            Self::RemoteUeReport(message) => &**message,
-            Self::RemoteUeReportResponse(message) => &**message,
-            Self::EsmDataTransport(message) => &**message,
-        }
-    }
-
-    /// The message struct of the variant, to change it.
-    #[cfg(feature = "serde")]
-    pub(crate) fn body_mut(&mut self) -> &mut dyn crate::common::MessageBody {
-        match self {
-            Self::ActivateDedicatedEpsBearerContextAccept(message) => &mut **message,
-            Self::ActivateDedicatedEpsBearerContextReject(message) => &mut **message,
-            Self::ActivateDedicatedEpsBearerContextRequest(message) => &mut **message,
-            Self::ActivateDefaultEpsBearerContextAccept(message) => &mut **message,
-            Self::ActivateDefaultEpsBearerContextReject(message) => &mut **message,
-            Self::ActivateDefaultEpsBearerContextRequest(message) => &mut **message,
-            Self::BearerResourceAllocationReject(message) => &mut **message,
-            Self::BearerResourceAllocationRequest(message) => &mut **message,
-            Self::BearerResourceModificationReject(message) => &mut **message,
-            Self::BearerResourceModificationRequest(message) => &mut **message,
-            Self::DeactivateEpsBearerContextAccept(message) => &mut **message,
-            Self::DeactivateEpsBearerContextRequest(message) => &mut **message,
-            Self::EsmDummyMessage(message) => &mut **message,
-            Self::EsmInformationRequest(message) => &mut **message,
-            Self::EsmInformationResponse(message) => &mut **message,
-            Self::EsmStatus(message) => &mut **message,
-            Self::ModifyEpsBearerContextAccept(message) => &mut **message,
-            Self::ModifyEpsBearerContextReject(message) => &mut **message,
-            Self::ModifyEpsBearerContextRequest(message) => &mut **message,
-            Self::Notification(message) => &mut **message,
-            Self::PdnConnectivityReject(message) => &mut **message,
-            Self::PdnConnectivityRequest(message) => &mut **message,
-            Self::PdnDisconnectReject(message) => &mut **message,
-            Self::PdnDisconnectRequest(message) => &mut **message,
-            Self::RemoteUeReport(message) => &mut **message,
-            Self::RemoteUeReportResponse(message) => &mut **message,
-            Self::EsmDataTransport(message) => &mut **message,
-        }
-    }
-
     /// IEs the decoder did not recognize in the message body, and known IEs
     /// it ignored. An unknown IE encoded as "comprehension required" is
     /// flagged by [`UnknownIe::is_comprehension_required`](crate::UnknownIe::is_comprehension_required): the receiver
@@ -2159,155 +1361,6 @@ impl TryFrom<(NasEsmMessageType, &mut &[u8])> for NasEsmMessage {
 
     fn try_from((kind, buffer): (NasEsmMessageType, &mut &[u8])) -> Result<Self> {
         Self::decode_keeping(kind, buffer, &mut crate::common::Reading::strict())
-    }
-}
-
-impl NasEsmMessage {
-    /// The message of the type `kind` from the front of `buffer`,
-    /// decoded strictly or keeping the faults of its mandatory IEs.
-    pub(crate) fn decode_keeping(
-        kind: NasEsmMessageType,
-        buffer: &mut &[u8],
-        faults: crate::common::Faults<'_, '_>,
-    ) -> Result<Self> {
-        match kind {
-            NasEsmMessageType::ActivateDedicatedEpsBearerContextAccept => {
-                Ok(Self::ActivateDedicatedEpsBearerContextAccept(Box::new(
-                    crate::common::decode_keeping::<NasActivateDedicatedEpsBearerContextAccept>(
-                        buffer, faults,
-                    )?,
-                )))
-            }
-            NasEsmMessageType::ActivateDedicatedEpsBearerContextReject => {
-                Ok(Self::ActivateDedicatedEpsBearerContextReject(Box::new(
-                    crate::common::decode_keeping::<NasActivateDedicatedEpsBearerContextReject>(
-                        buffer, faults,
-                    )?,
-                )))
-            }
-            NasEsmMessageType::ActivateDedicatedEpsBearerContextRequest => {
-                Ok(Self::ActivateDedicatedEpsBearerContextRequest(Box::new(
-                    crate::common::decode_keeping::<NasActivateDedicatedEpsBearerContextRequest>(
-                        buffer, faults,
-                    )?,
-                )))
-            }
-            NasEsmMessageType::ActivateDefaultEpsBearerContextAccept => {
-                Ok(Self::ActivateDefaultEpsBearerContextAccept(Box::new(
-                    crate::common::decode_keeping::<NasActivateDefaultEpsBearerContextAccept>(
-                        buffer, faults,
-                    )?,
-                )))
-            }
-            NasEsmMessageType::ActivateDefaultEpsBearerContextReject => {
-                Ok(Self::ActivateDefaultEpsBearerContextReject(Box::new(
-                    crate::common::decode_keeping::<NasActivateDefaultEpsBearerContextReject>(
-                        buffer, faults,
-                    )?,
-                )))
-            }
-            NasEsmMessageType::ActivateDefaultEpsBearerContextRequest => {
-                Ok(Self::ActivateDefaultEpsBearerContextRequest(Box::new(
-                    crate::common::decode_keeping::<NasActivateDefaultEpsBearerContextRequest>(
-                        buffer, faults,
-                    )?,
-                )))
-            }
-            NasEsmMessageType::BearerResourceAllocationReject => Ok(
-                Self::BearerResourceAllocationReject(Box::new(crate::common::decode_keeping::<
-                    NasBearerResourceAllocationReject,
-                >(buffer, faults)?)),
-            ),
-            NasEsmMessageType::BearerResourceAllocationRequest => Ok(
-                Self::BearerResourceAllocationRequest(Box::new(crate::common::decode_keeping::<
-                    NasBearerResourceAllocationRequest,
-                >(buffer, faults)?)),
-            ),
-            NasEsmMessageType::BearerResourceModificationReject => Ok(
-                Self::BearerResourceModificationReject(Box::new(crate::common::decode_keeping::<
-                    NasBearerResourceModificationReject,
-                >(buffer, faults)?)),
-            ),
-            NasEsmMessageType::BearerResourceModificationRequest => {
-                Ok(Self::BearerResourceModificationRequest(Box::new(
-                    crate::common::decode_keeping::<NasBearerResourceModificationRequest>(
-                        buffer, faults,
-                    )?,
-                )))
-            }
-            NasEsmMessageType::DeactivateEpsBearerContextAccept => Ok(
-                Self::DeactivateEpsBearerContextAccept(Box::new(crate::common::decode_keeping::<
-                    NasDeactivateEpsBearerContextAccept,
-                >(buffer, faults)?)),
-            ),
-            NasEsmMessageType::DeactivateEpsBearerContextRequest => {
-                Ok(Self::DeactivateEpsBearerContextRequest(Box::new(
-                    crate::common::decode_keeping::<NasDeactivateEpsBearerContextRequest>(
-                        buffer, faults,
-                    )?,
-                )))
-            }
-            NasEsmMessageType::EsmDummyMessage => Ok(Self::EsmDummyMessage(Box::new(
-                crate::common::decode_keeping::<NasEsmDummyMessage>(buffer, faults)?,
-            ))),
-            NasEsmMessageType::EsmInformationRequest => Ok(Self::EsmInformationRequest(Box::new(
-                crate::common::decode_keeping::<NasEsmInformationRequest>(buffer, faults)?,
-            ))),
-            NasEsmMessageType::EsmInformationResponse => {
-                Ok(Self::EsmInformationResponse(Box::new(
-                    crate::common::decode_keeping::<NasEsmInformationResponse>(buffer, faults)?,
-                )))
-            }
-            NasEsmMessageType::EsmStatus => {
-                Ok(Self::EsmStatus(Box::new(crate::common::decode_keeping::<
-                    NasEsmStatus,
-                >(buffer, faults)?)))
-            }
-            NasEsmMessageType::ModifyEpsBearerContextAccept => Ok(
-                Self::ModifyEpsBearerContextAccept(Box::new(crate::common::decode_keeping::<
-                    NasModifyEpsBearerContextAccept,
-                >(buffer, faults)?)),
-            ),
-            NasEsmMessageType::ModifyEpsBearerContextReject => Ok(
-                Self::ModifyEpsBearerContextReject(Box::new(crate::common::decode_keeping::<
-                    NasModifyEpsBearerContextReject,
-                >(buffer, faults)?)),
-            ),
-            NasEsmMessageType::ModifyEpsBearerContextRequest => Ok(
-                Self::ModifyEpsBearerContextRequest(Box::new(crate::common::decode_keeping::<
-                    NasModifyEpsBearerContextRequest,
-                >(buffer, faults)?)),
-            ),
-            NasEsmMessageType::Notification => Ok(Self::Notification(Box::new(
-                crate::common::decode_keeping::<NasNotification>(buffer, faults)?,
-            ))),
-            NasEsmMessageType::PdnConnectivityReject => Ok(Self::PdnConnectivityReject(Box::new(
-                crate::common::decode_keeping::<NasPdnConnectivityReject>(buffer, faults)?,
-            ))),
-            NasEsmMessageType::PdnConnectivityRequest => {
-                Ok(Self::PdnConnectivityRequest(Box::new(
-                    crate::common::decode_keeping::<NasPdnConnectivityRequest>(buffer, faults)?,
-                )))
-            }
-            NasEsmMessageType::PdnDisconnectReject => Ok(Self::PdnDisconnectReject(Box::new(
-                crate::common::decode_keeping::<NasPdnDisconnectReject>(buffer, faults)?,
-            ))),
-            NasEsmMessageType::PdnDisconnectRequest => Ok(Self::PdnDisconnectRequest(Box::new(
-                crate::common::decode_keeping::<NasPdnDisconnectRequest>(buffer, faults)?,
-            ))),
-            NasEsmMessageType::RemoteUeReport => Ok(Self::RemoteUeReport(Box::new(
-                crate::common::decode_keeping::<NasRemoteUeReport>(buffer, faults)?,
-            ))),
-            NasEsmMessageType::RemoteUeReportResponse => {
-                Ok(Self::RemoteUeReportResponse(Box::new(
-                    crate::common::decode_keeping::<NasRemoteUeReportResponse>(buffer, faults)?,
-                )))
-            }
-            NasEsmMessageType::EsmDataTransport => Ok(Self::EsmDataTransport(Box::new(
-                crate::common::decode_keeping::<NasEsmDataTransport>(buffer, faults)?,
-            ))),
-            NasEsmMessageType::Unknown(value) => Err(NasError::UnknownMessageType(value)),
-        }
     }
 }
 
@@ -2942,7 +1995,7 @@ impl Encode for NasEmmHeader {
             ));
         }
         buffer.put_u8(self.protocol_discriminator);
-        buffer.put_u8(self.message_type.as_u8());
+        buffer.put_u8(u8::from(self.message_type));
         Ok(())
     }
 }
@@ -2958,7 +2011,7 @@ impl Decode for NasEmmHeader {
                 "invalid plain EPS EMM header 0x{first:02x}"
             )));
         }
-        Ok(Self::new(NasEmmMessageType::try_from(buffer.get_u8())?))
+        Ok(Self::new(NasEmmMessageType::from(buffer.get_u8())))
     }
 }
 
@@ -3008,7 +2061,7 @@ impl Encode for NasEsmHeader {
         }
         buffer.put_u8((self.eps_bearer_identity << 4) | self.protocol_discriminator);
         buffer.put_u8(self.procedure_transaction_identity);
-        buffer.put_u8(self.message_type.as_u8());
+        buffer.put_u8(u8::from(self.message_type));
         Ok(())
     }
 }
@@ -3025,7 +2078,7 @@ impl Decode for NasEsmHeader {
             )));
         }
         let pti = buffer.get_u8();
-        let kind = NasEsmMessageType::try_from(buffer.get_u8())?;
+        let kind = NasEsmMessageType::from(buffer.get_u8());
         Ok(Self::new(kind, first >> 4, pti))
     }
 }
@@ -3836,7 +2889,7 @@ impl NasEpsMessage {
                     return None;
                 };
                 let cause = NasEsmCause::from_cause(EsmCause::InvalidMandatoryInformation);
-                let answer: NasEsmMessage = match (from_ue, Type::try_from(kind).ok()?) {
+                let answer: NasEsmMessage = match (from_ue, Type::from(kind)) {
                     (false, Type::ActivateDefaultEpsBearerContextRequest) => {
                         NasActivateDefaultEpsBearerContextReject::new(cause).into()
                     }

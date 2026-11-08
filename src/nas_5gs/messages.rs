@@ -119,7 +119,7 @@ impl Encode for Nas5gmmHeader {
 
         buffer.put_u8(self.extended_protocol_discriminator);
         buffer.put_u8(security_header_type_octet);
-        buffer.put_u8(self.message_type.as_u8());
+        buffer.put_u8(u8::from(self.message_type));
         Ok(())
     }
 }
@@ -136,7 +136,7 @@ impl Decode for Nas5gmmHeader {
 
         let security_header_type =
             Nas5gsSecurityHeaderType::try_from(security_header_type_octet & 0x0F)?;
-        let message_type = Nas5gmmMessageType::try_from(message_type_value)?;
+        let message_type = Nas5gmmMessageType::from(message_type_value);
 
         if extended_protocol_discriminator != EXTENDED_PROTOCOL_DISCRIMINATOR_5GMM {
             return Err(NasError::DecodingError(format!(
@@ -210,7 +210,7 @@ impl Encode for Nas5gsmHeader {
         buffer.put_u8(self.extended_protocol_discriminator);
         buffer.put_u8(self.pdu_session_identity);
         buffer.put_u8(self.procedure_transaction_identity);
-        buffer.put_u8(self.message_type.as_u8());
+        buffer.put_u8(u8::from(self.message_type));
         Ok(())
     }
 }
@@ -226,7 +226,7 @@ impl Decode for Nas5gsmHeader {
         let procedure_transaction_identity = buffer.get_u8();
         let message_type_value = buffer.get_u8();
 
-        let message_type = Nas5gsmMessageType::try_from(message_type_value)?;
+        let message_type = Nas5gsmMessageType::from(message_type_value);
 
         if extended_protocol_discriminator != EXTENDED_PROTOCOL_DISCRIMINATOR_5GSM {
             return Err(NasError::DecodingError(format!(
@@ -1430,527 +1430,107 @@ nas_message_empty!(
 
 // ── Message enums and dispatch ───────────────────────────────────────────────
 
-/// Enum over all 5G Mobility Management (5GMM) message types.
-///
-/// Each variant wraps a message struct defined by the `nas_message!` macro.
-/// Pattern-match to access the inner message fields.
-///
-/// ```
-/// use oxirush_nas::nas_5gs::{GmmCause, Nas5gmmMessage, Nas5gsMessage};
-///
-/// // 5GMM STATUS, cause #22
-/// let message = Nas5gsMessage::decode(&[0x7e, 0x00, 0x64, 0x16]).unwrap();
-/// let Nas5gsMessage::Gmm(_, Nas5gmmMessage::FiveGmmStatus(status)) = &message else {
-///     unreachable!()
-/// };
-/// assert_eq!(status.fgmm_cause.cause(), Some(GmmCause::Congestion));
-/// ```
-#[non_exhaustive]
-#[derive(Debug, Clone, PartialEq)]
-#[allow(clippy::large_enum_variant)]
-pub enum Nas5gmmMessage {
-    /// Registration request (TS 24.501 §8.2.6).
-    RegistrationRequest(Box<NasRegistrationRequest>),
-    /// Registration accept (TS 24.501 §8.2.7).
-    RegistrationAccept(Box<NasRegistrationAccept>),
-    /// Registration complete (TS 24.501 §8.2.8).
-    RegistrationComplete(Box<NasRegistrationComplete>),
-    /// Registration reject (TS 24.501 §8.2.9).
-    RegistrationReject(Box<NasRegistrationReject>),
-    /// De-registration request (UE originating de-registration) (TS 24.501 §8.2.12).
-    DeregistrationRequestUeOriginating(Box<NasDeregistrationRequestUeOriginating>),
-    /// De-registration request (UE terminated de-registration) (TS 24.501 §8.2.14).
-    DeregistrationRequestUeTerminated(Box<NasDeregistrationRequestUeTerminated>),
-    /// De-registration accept (UE originating de-registration) (TS 24.501 §8.2.13).
-    DeregistrationAcceptUeOriginating(Box<NasDeregistrationAcceptUeOriginating>),
-    /// De-registration accept (UE terminated de-registration) (TS 24.501 §8.2.15).
-    DeregistrationAcceptUeTerminated(Box<NasDeregistrationAcceptUeTerminated>),
-    /// Configuration update complete (TS 24.501 §8.2.20).
-    ConfigurationUpdateComplete(Box<NasConfigurationUpdateComplete>),
-    /// Service request (TS 24.501 §8.2.16).
-    ServiceRequest(Box<NasServiceRequest>),
-    /// Service reject (TS 24.501 §8.2.18).
-    ServiceReject(Box<NasServiceReject>),
-    /// Service accept (TS 24.501 §8.2.17).
-    ServiceAccept(Box<NasServiceAccept>),
-    /// Configuration update command (TS 24.501 §8.2.19).
-    ConfigurationUpdateCommand(Box<NasConfigurationUpdateCommand>),
-    /// Authentication request (TS 24.501 §8.2.1).
-    AuthenticationRequest(Box<NasAuthenticationRequest>),
-    /// Authentication response (TS 24.501 §8.2.2).
-    AuthenticationResponse(Box<NasAuthenticationResponse>),
-    /// Authentication reject (TS 24.501 §8.2.5).
-    AuthenticationReject(Box<NasAuthenticationReject>),
-    /// Authentication failure (TS 24.501 §8.2.4).
-    AuthenticationFailure(Box<NasAuthenticationFailure>),
-    /// Authentication result (TS 24.501 §8.2.3).
-    AuthenticationResult(Box<NasAuthenticationResult>),
-    /// Identity request (TS 24.501 §8.2.21).
-    IdentityRequest(Box<NasIdentityRequest>),
-    /// Identity response (TS 24.501 §8.2.22).
-    IdentityResponse(Box<NasIdentityResponse>),
-    /// Security mode command (TS 24.501 §8.2.25).
-    SecurityModeCommand(Box<NasSecurityModeCommand>),
-    /// Security mode complete (TS 24.501 §8.2.26).
-    SecurityModeComplete(Box<NasSecurityModeComplete>),
-    /// Security mode reject (TS 24.501 §8.2.27).
-    SecurityModeReject(Box<NasSecurityModeReject>),
-    /// 5GMM status (TS 24.501 §8.2.29).
-    FiveGmmStatus(Box<NasFGmmStatus>),
-    /// Notification (TS 24.501 §8.2.23).
-    Notification(Box<NasNotification>),
-    /// Notification response (TS 24.501 §8.2.24).
-    NotificationResponse(Box<NasNotificationResponse>),
-    /// UL NAS transport (TS 24.501 §8.2.10).
-    UlNasTransport(Box<NasUlNasTransport>),
-    /// DL NAS transport (TS 24.501 §8.2.11).
-    DlNasTransport(Box<NasDlNasTransport>),
-    /// Control Plane Service request (TS 24.501 §8.2.30).
-    ControlPlaneServiceRequest(Box<NasControlPlaneServiceRequest>),
-    /// Network slice-specific authentication command (TS 24.501 §8.2.31).
-    NetworkSliceSpecificAuthenticationCommand(Box<NasNetworkSliceSpecificAuthenticationCommand>),
-    /// Network slice-specific authentication complete (TS 24.501 §8.2.32).
-    NetworkSliceSpecificAuthenticationComplete(Box<NasNetworkSliceSpecificAuthenticationComplete>),
-    /// Network slice-specific authentication result (TS 24.501 §8.2.33).
-    NetworkSliceSpecificAuthenticationResult(Box<NasNetworkSliceSpecificAuthenticationResult>),
-    /// Relay key request (TS 24.501 §8.2.34).
-    RelayKeyRequest(Box<NasRelayKeyRequest>),
-    /// Relay key accept (TS 24.501 §8.2.35).
-    RelayKeyAccept(Box<NasRelayKeyAccept>),
-    /// Relay key reject (TS 24.501 §8.2.36).
-    RelayKeyReject(Box<NasRelayKeyReject>),
-    /// Relay authentication request (TS 24.501 §8.2.37).
-    RelayAuthenticationRequest(Box<NasRelayAuthenticationRequest>),
-    /// Relay authentication response (TS 24.501 §8.2.38).
-    RelayAuthenticationResponse(Box<NasRelayAuthenticationResponse>),
-}
-
-#[cfg(feature = "serde")]
-crate::common::readable::readable!(
-    enum Nas5gmmMessage {
-        RegistrationRequest(Box<NasRegistrationRequest>),
-        RegistrationAccept(Box<NasRegistrationAccept>),
-        RegistrationComplete(Box<NasRegistrationComplete>),
-        RegistrationReject(Box<NasRegistrationReject>),
-        DeregistrationRequestUeOriginating(Box<NasDeregistrationRequestUeOriginating>),
-        DeregistrationRequestUeTerminated(Box<NasDeregistrationRequestUeTerminated>),
-        DeregistrationAcceptUeOriginating(Box<NasDeregistrationAcceptUeOriginating>),
-        DeregistrationAcceptUeTerminated(Box<NasDeregistrationAcceptUeTerminated>),
-        ConfigurationUpdateComplete(Box<NasConfigurationUpdateComplete>),
-        ServiceRequest(Box<NasServiceRequest>),
-        ServiceReject(Box<NasServiceReject>),
-        ServiceAccept(Box<NasServiceAccept>),
-        ConfigurationUpdateCommand(Box<NasConfigurationUpdateCommand>),
-        AuthenticationRequest(Box<NasAuthenticationRequest>),
-        AuthenticationResponse(Box<NasAuthenticationResponse>),
-        AuthenticationReject(Box<NasAuthenticationReject>),
-        AuthenticationFailure(Box<NasAuthenticationFailure>),
-        AuthenticationResult(Box<NasAuthenticationResult>),
-        IdentityRequest(Box<NasIdentityRequest>),
-        IdentityResponse(Box<NasIdentityResponse>),
-        SecurityModeCommand(Box<NasSecurityModeCommand>),
-        SecurityModeComplete(Box<NasSecurityModeComplete>),
-        SecurityModeReject(Box<NasSecurityModeReject>),
-        FiveGmmStatus(Box<NasFGmmStatus>),
-        Notification(Box<NasNotification>),
-        NotificationResponse(Box<NasNotificationResponse>),
-        UlNasTransport(Box<NasUlNasTransport>),
-        DlNasTransport(Box<NasDlNasTransport>),
-        ControlPlaneServiceRequest(Box<NasControlPlaneServiceRequest>),
-        NetworkSliceSpecificAuthenticationCommand(
-            Box<NasNetworkSliceSpecificAuthenticationCommand>,
-        ),
-        NetworkSliceSpecificAuthenticationComplete(
-            Box<NasNetworkSliceSpecificAuthenticationComplete>,
-        ),
-        NetworkSliceSpecificAuthenticationResult(Box<NasNetworkSliceSpecificAuthenticationResult>),
-        RelayKeyRequest(Box<NasRelayKeyRequest>),
-        RelayKeyAccept(Box<NasRelayKeyAccept>),
-        RelayKeyReject(Box<NasRelayKeyReject>),
-        RelayAuthenticationRequest(Box<NasRelayAuthenticationRequest>),
-        RelayAuthenticationResponse(Box<NasRelayAuthenticationResponse>),
-    }
-);
-
-impl From<NasRegistrationRequest> for Nas5gmmMessage {
-    fn from(message: NasRegistrationRequest) -> Self {
-        Self::RegistrationRequest(Box::new(message))
-    }
-}
-
-impl From<NasRegistrationAccept> for Nas5gmmMessage {
-    fn from(message: NasRegistrationAccept) -> Self {
-        Self::RegistrationAccept(Box::new(message))
-    }
-}
-
-impl From<NasRegistrationComplete> for Nas5gmmMessage {
-    fn from(message: NasRegistrationComplete) -> Self {
-        Self::RegistrationComplete(Box::new(message))
-    }
-}
-
-impl From<NasRegistrationReject> for Nas5gmmMessage {
-    fn from(message: NasRegistrationReject) -> Self {
-        Self::RegistrationReject(Box::new(message))
-    }
-}
-
-impl From<NasDeregistrationRequestUeOriginating> for Nas5gmmMessage {
-    fn from(message: NasDeregistrationRequestUeOriginating) -> Self {
-        Self::DeregistrationRequestUeOriginating(Box::new(message))
-    }
-}
-
-impl From<NasDeregistrationRequestUeTerminated> for Nas5gmmMessage {
-    fn from(message: NasDeregistrationRequestUeTerminated) -> Self {
-        Self::DeregistrationRequestUeTerminated(Box::new(message))
-    }
-}
-
-impl From<NasDeregistrationAcceptUeOriginating> for Nas5gmmMessage {
-    fn from(message: NasDeregistrationAcceptUeOriginating) -> Self {
-        Self::DeregistrationAcceptUeOriginating(Box::new(message))
-    }
-}
-
-impl From<NasDeregistrationAcceptUeTerminated> for Nas5gmmMessage {
-    fn from(message: NasDeregistrationAcceptUeTerminated) -> Self {
-        Self::DeregistrationAcceptUeTerminated(Box::new(message))
-    }
-}
-
-impl From<NasConfigurationUpdateComplete> for Nas5gmmMessage {
-    fn from(message: NasConfigurationUpdateComplete) -> Self {
-        Self::ConfigurationUpdateComplete(Box::new(message))
-    }
-}
-
-impl From<NasServiceRequest> for Nas5gmmMessage {
-    fn from(message: NasServiceRequest) -> Self {
-        Self::ServiceRequest(Box::new(message))
-    }
-}
-
-impl From<NasServiceReject> for Nas5gmmMessage {
-    fn from(message: NasServiceReject) -> Self {
-        Self::ServiceReject(Box::new(message))
-    }
-}
-
-impl From<NasServiceAccept> for Nas5gmmMessage {
-    fn from(message: NasServiceAccept) -> Self {
-        Self::ServiceAccept(Box::new(message))
-    }
-}
-
-impl From<NasConfigurationUpdateCommand> for Nas5gmmMessage {
-    fn from(message: NasConfigurationUpdateCommand) -> Self {
-        Self::ConfigurationUpdateCommand(Box::new(message))
-    }
-}
-
-impl From<NasAuthenticationRequest> for Nas5gmmMessage {
-    fn from(message: NasAuthenticationRequest) -> Self {
-        Self::AuthenticationRequest(Box::new(message))
-    }
-}
-
-impl From<NasAuthenticationResponse> for Nas5gmmMessage {
-    fn from(message: NasAuthenticationResponse) -> Self {
-        Self::AuthenticationResponse(Box::new(message))
-    }
-}
-
-impl From<NasAuthenticationReject> for Nas5gmmMessage {
-    fn from(message: NasAuthenticationReject) -> Self {
-        Self::AuthenticationReject(Box::new(message))
-    }
-}
-
-impl From<NasAuthenticationFailure> for Nas5gmmMessage {
-    fn from(message: NasAuthenticationFailure) -> Self {
-        Self::AuthenticationFailure(Box::new(message))
-    }
-}
-
-impl From<NasAuthenticationResult> for Nas5gmmMessage {
-    fn from(message: NasAuthenticationResult) -> Self {
-        Self::AuthenticationResult(Box::new(message))
-    }
-}
-
-impl From<NasIdentityRequest> for Nas5gmmMessage {
-    fn from(message: NasIdentityRequest) -> Self {
-        Self::IdentityRequest(Box::new(message))
-    }
-}
-
-impl From<NasIdentityResponse> for Nas5gmmMessage {
-    fn from(message: NasIdentityResponse) -> Self {
-        Self::IdentityResponse(Box::new(message))
-    }
-}
-
-impl From<NasSecurityModeCommand> for Nas5gmmMessage {
-    fn from(message: NasSecurityModeCommand) -> Self {
-        Self::SecurityModeCommand(Box::new(message))
-    }
-}
-
-impl From<NasSecurityModeComplete> for Nas5gmmMessage {
-    fn from(message: NasSecurityModeComplete) -> Self {
-        Self::SecurityModeComplete(Box::new(message))
-    }
-}
-
-impl From<NasSecurityModeReject> for Nas5gmmMessage {
-    fn from(message: NasSecurityModeReject) -> Self {
-        Self::SecurityModeReject(Box::new(message))
-    }
-}
-
-impl From<NasFGmmStatus> for Nas5gmmMessage {
-    fn from(message: NasFGmmStatus) -> Self {
-        Self::FiveGmmStatus(Box::new(message))
-    }
-}
-
-impl From<NasNotification> for Nas5gmmMessage {
-    fn from(message: NasNotification) -> Self {
-        Self::Notification(Box::new(message))
-    }
-}
-
-impl From<NasNotificationResponse> for Nas5gmmMessage {
-    fn from(message: NasNotificationResponse) -> Self {
-        Self::NotificationResponse(Box::new(message))
-    }
-}
-
-impl From<NasUlNasTransport> for Nas5gmmMessage {
-    fn from(message: NasUlNasTransport) -> Self {
-        Self::UlNasTransport(Box::new(message))
-    }
-}
-
-impl From<NasDlNasTransport> for Nas5gmmMessage {
-    fn from(message: NasDlNasTransport) -> Self {
-        Self::DlNasTransport(Box::new(message))
-    }
-}
-
-impl From<NasControlPlaneServiceRequest> for Nas5gmmMessage {
-    fn from(message: NasControlPlaneServiceRequest) -> Self {
-        Self::ControlPlaneServiceRequest(Box::new(message))
-    }
-}
-
-impl From<NasNetworkSliceSpecificAuthenticationCommand> for Nas5gmmMessage {
-    fn from(message: NasNetworkSliceSpecificAuthenticationCommand) -> Self {
-        Self::NetworkSliceSpecificAuthenticationCommand(Box::new(message))
-    }
-}
-
-impl From<NasNetworkSliceSpecificAuthenticationComplete> for Nas5gmmMessage {
-    fn from(message: NasNetworkSliceSpecificAuthenticationComplete) -> Self {
-        Self::NetworkSliceSpecificAuthenticationComplete(Box::new(message))
-    }
-}
-
-impl From<NasNetworkSliceSpecificAuthenticationResult> for Nas5gmmMessage {
-    fn from(message: NasNetworkSliceSpecificAuthenticationResult) -> Self {
-        Self::NetworkSliceSpecificAuthenticationResult(Box::new(message))
-    }
-}
-
-impl From<NasRelayKeyRequest> for Nas5gmmMessage {
-    fn from(message: NasRelayKeyRequest) -> Self {
-        Self::RelayKeyRequest(Box::new(message))
-    }
-}
-
-impl From<NasRelayKeyAccept> for Nas5gmmMessage {
-    fn from(message: NasRelayKeyAccept) -> Self {
-        Self::RelayKeyAccept(Box::new(message))
-    }
-}
-
-impl From<NasRelayKeyReject> for Nas5gmmMessage {
-    fn from(message: NasRelayKeyReject) -> Self {
-        Self::RelayKeyReject(Box::new(message))
-    }
-}
-
-impl From<NasRelayAuthenticationRequest> for Nas5gmmMessage {
-    fn from(message: NasRelayAuthenticationRequest) -> Self {
-        Self::RelayAuthenticationRequest(Box::new(message))
-    }
-}
-
-impl From<NasRelayAuthenticationResponse> for Nas5gmmMessage {
-    fn from(message: NasRelayAuthenticationResponse) -> Self {
-        Self::RelayAuthenticationResponse(Box::new(message))
+crate::common::nas_messages! {
+    /// Enum over all 5G Mobility Management (5GMM) message types.
+    ///
+    /// Each variant wraps a message struct defined by the `nas_message!` macro.
+    /// Pattern-match to access the inner message fields.
+    ///
+    /// ```
+    /// use oxirush_nas::nas_5gs::{GmmCause, Nas5gmmMessage, Nas5gsMessage};
+    ///
+    /// // 5GMM STATUS, cause #22
+    /// let message = Nas5gsMessage::decode(&[0x7e, 0x00, 0x64, 0x16]).unwrap();
+    /// let Nas5gsMessage::Gmm(_, Nas5gmmMessage::FiveGmmStatus(status)) = &message else {
+    ///     unreachable!()
+    /// };
+    /// assert_eq!(status.fgmm_cause.cause(), Some(GmmCause::Congestion));
+    /// ```
+    pub enum Nas5gmmMessage;
+    /// 5G Mobility Management (5GMM) message types per TS 24.501 §9.7.
+    ///
+    /// `u8::from` gives the message type octet, and `From<u8>` reads one: a code
+    /// that the table does not have is `Unknown`.
+    pub enum Nas5gmmMessageType;
+    {
+        /// Registration request (TS 24.501 §8.2.6).
+        RegistrationRequest = 65 => NasRegistrationRequest,
+        /// Registration accept (TS 24.501 §8.2.7).
+        RegistrationAccept = 66 => NasRegistrationAccept,
+        /// Registration complete (TS 24.501 §8.2.8).
+        RegistrationComplete = 67 => NasRegistrationComplete,
+        /// Registration reject (TS 24.501 §8.2.9).
+        RegistrationReject = 68 => NasRegistrationReject,
+        /// De-registration request (UE originating de-registration) (TS 24.501 §8.2.12).
+        DeregistrationRequestUeOriginating = 69 => NasDeregistrationRequestUeOriginating,
+        /// De-registration accept (UE originating de-registration) (TS 24.501 §8.2.13).
+        DeregistrationAcceptUeOriginating = 70 => NasDeregistrationAcceptUeOriginating,
+        /// De-registration request (UE terminated de-registration) (TS 24.501 §8.2.14).
+        DeregistrationRequestUeTerminated = 71 => NasDeregistrationRequestUeTerminated,
+        /// De-registration accept (UE terminated de-registration) (TS 24.501 §8.2.15).
+        DeregistrationAcceptUeTerminated = 72 => NasDeregistrationAcceptUeTerminated,
+        /// Service request (TS 24.501 §8.2.16).
+        ServiceRequest = 76 => NasServiceRequest,
+        /// Service reject (TS 24.501 §8.2.18).
+        ServiceReject = 77 => NasServiceReject,
+        /// Service accept (TS 24.501 §8.2.17).
+        ServiceAccept = 78 => NasServiceAccept,
+        /// Control Plane Service request (TS 24.501 §8.2.30).
+        ControlPlaneServiceRequest = 79 => NasControlPlaneServiceRequest,
+        /// Network slice-specific authentication command (TS 24.501 §8.2.31).
+        NetworkSliceSpecificAuthenticationCommand = 80 => NasNetworkSliceSpecificAuthenticationCommand,
+        /// Network slice-specific authentication complete (TS 24.501 §8.2.32).
+        NetworkSliceSpecificAuthenticationComplete = 81 => NasNetworkSliceSpecificAuthenticationComplete,
+        /// Network slice-specific authentication result (TS 24.501 §8.2.33).
+        NetworkSliceSpecificAuthenticationResult = 82 => NasNetworkSliceSpecificAuthenticationResult,
+        /// Configuration update command (TS 24.501 §8.2.19).
+        ConfigurationUpdateCommand = 84 => NasConfigurationUpdateCommand,
+        /// Configuration update complete (TS 24.501 §8.2.20).
+        ConfigurationUpdateComplete = 85 => NasConfigurationUpdateComplete,
+        /// Authentication request (TS 24.501 §8.2.1).
+        AuthenticationRequest = 86 => NasAuthenticationRequest,
+        /// Authentication response (TS 24.501 §8.2.2).
+        AuthenticationResponse = 87 => NasAuthenticationResponse,
+        /// Authentication reject (TS 24.501 §8.2.5).
+        AuthenticationReject = 88 => NasAuthenticationReject,
+        /// Authentication failure (TS 24.501 §8.2.4).
+        AuthenticationFailure = 89 => NasAuthenticationFailure,
+        /// Authentication result (TS 24.501 §8.2.3).
+        AuthenticationResult = 90 => NasAuthenticationResult,
+        /// Identity request (TS 24.501 §8.2.21).
+        IdentityRequest = 91 => NasIdentityRequest,
+        /// Identity response (TS 24.501 §8.2.22).
+        IdentityResponse = 92 => NasIdentityResponse,
+        /// Security mode command (TS 24.501 §8.2.25).
+        SecurityModeCommand = 93 => NasSecurityModeCommand,
+        /// Security mode complete (TS 24.501 §8.2.26).
+        SecurityModeComplete = 94 => NasSecurityModeComplete,
+        /// Security mode reject (TS 24.501 §8.2.27).
+        SecurityModeReject = 95 => NasSecurityModeReject,
+        /// 5GMM status (TS 24.501 §8.2.29).
+        FiveGmmStatus = 100 => NasFGmmStatus,
+        /// Notification (TS 24.501 §8.2.23).
+        Notification = 101 => NasNotification,
+        /// Notification response (TS 24.501 §8.2.24).
+        NotificationResponse = 102 => NasNotificationResponse,
+        /// UL NAS transport (TS 24.501 §8.2.10).
+        UlNasTransport = 103 => NasUlNasTransport,
+        /// DL NAS transport (TS 24.501 §8.2.11).
+        DlNasTransport = 104 => NasDlNasTransport,
+        /// Relay key request (TS 24.501 §8.2.34).
+        RelayKeyRequest = 105 => NasRelayKeyRequest,
+        /// Relay key accept (TS 24.501 §8.2.35).
+        RelayKeyAccept = 106 => NasRelayKeyAccept,
+        /// Relay key reject (TS 24.501 §8.2.36).
+        RelayKeyReject = 107 => NasRelayKeyReject,
+        /// Relay authentication request (TS 24.501 §8.2.37).
+        RelayAuthenticationRequest = 108 => NasRelayAuthenticationRequest,
+        /// Relay authentication response (TS 24.501 §8.2.38).
+        RelayAuthenticationResponse = 109 => NasRelayAuthenticationResponse,
     }
 }
 
 impl Nas5gmmMessage {
-    /// Message type of the body.
-    pub fn message_type(&self) -> Nas5gmmMessageType {
-        match self {
-            Nas5gmmMessage::RegistrationRequest(_) => Nas5gmmMessageType::RegistrationRequest,
-            Nas5gmmMessage::RegistrationAccept(_) => Nas5gmmMessageType::RegistrationAccept,
-            Nas5gmmMessage::RegistrationComplete(_) => Nas5gmmMessageType::RegistrationComplete,
-            Nas5gmmMessage::RegistrationReject(_) => Nas5gmmMessageType::RegistrationReject,
-            Nas5gmmMessage::DeregistrationRequestUeOriginating(_) => {
-                Nas5gmmMessageType::DeregistrationRequestUeOriginating
-            }
-            Nas5gmmMessage::DeregistrationRequestUeTerminated(_) => {
-                Nas5gmmMessageType::DeregistrationRequestUeTerminated
-            }
-            Nas5gmmMessage::DeregistrationAcceptUeOriginating(_) => {
-                Nas5gmmMessageType::DeregistrationAcceptUeOriginating
-            }
-            Nas5gmmMessage::DeregistrationAcceptUeTerminated(_) => {
-                Nas5gmmMessageType::DeregistrationAcceptUeTerminated
-            }
-            Nas5gmmMessage::ConfigurationUpdateComplete(_) => {
-                Nas5gmmMessageType::ConfigurationUpdateComplete
-            }
-            Nas5gmmMessage::ServiceRequest(_) => Nas5gmmMessageType::ServiceRequest,
-            Nas5gmmMessage::ServiceReject(_) => Nas5gmmMessageType::ServiceReject,
-            Nas5gmmMessage::ServiceAccept(_) => Nas5gmmMessageType::ServiceAccept,
-            Nas5gmmMessage::ConfigurationUpdateCommand(_) => {
-                Nas5gmmMessageType::ConfigurationUpdateCommand
-            }
-            Nas5gmmMessage::AuthenticationRequest(_) => Nas5gmmMessageType::AuthenticationRequest,
-            Nas5gmmMessage::AuthenticationResponse(_) => Nas5gmmMessageType::AuthenticationResponse,
-            Nas5gmmMessage::AuthenticationReject(_) => Nas5gmmMessageType::AuthenticationReject,
-            Nas5gmmMessage::AuthenticationFailure(_) => Nas5gmmMessageType::AuthenticationFailure,
-            Nas5gmmMessage::AuthenticationResult(_) => Nas5gmmMessageType::AuthenticationResult,
-            Nas5gmmMessage::IdentityRequest(_) => Nas5gmmMessageType::IdentityRequest,
-            Nas5gmmMessage::IdentityResponse(_) => Nas5gmmMessageType::IdentityResponse,
-            Nas5gmmMessage::SecurityModeCommand(_) => Nas5gmmMessageType::SecurityModeCommand,
-            Nas5gmmMessage::SecurityModeComplete(_) => Nas5gmmMessageType::SecurityModeComplete,
-            Nas5gmmMessage::SecurityModeReject(_) => Nas5gmmMessageType::SecurityModeReject,
-            Nas5gmmMessage::FiveGmmStatus(_) => Nas5gmmMessageType::FiveGmmStatus,
-            Nas5gmmMessage::Notification(_) => Nas5gmmMessageType::Notification,
-            Nas5gmmMessage::NotificationResponse(_) => Nas5gmmMessageType::NotificationResponse,
-            Nas5gmmMessage::UlNasTransport(_) => Nas5gmmMessageType::UlNasTransport,
-            Nas5gmmMessage::DlNasTransport(_) => Nas5gmmMessageType::DlNasTransport,
-            Nas5gmmMessage::ControlPlaneServiceRequest(_) => {
-                Nas5gmmMessageType::ControlPlaneServiceRequest
-            }
-            Nas5gmmMessage::NetworkSliceSpecificAuthenticationCommand(_) => {
-                Nas5gmmMessageType::NetworkSliceSpecificAuthenticationCommand
-            }
-            Nas5gmmMessage::NetworkSliceSpecificAuthenticationComplete(_) => {
-                Nas5gmmMessageType::NetworkSliceSpecificAuthenticationComplete
-            }
-            Nas5gmmMessage::NetworkSliceSpecificAuthenticationResult(_) => {
-                Nas5gmmMessageType::NetworkSliceSpecificAuthenticationResult
-            }
-            Nas5gmmMessage::RelayKeyRequest(_) => Nas5gmmMessageType::RelayKeyRequest,
-            Nas5gmmMessage::RelayKeyAccept(_) => Nas5gmmMessageType::RelayKeyAccept,
-            Nas5gmmMessage::RelayKeyReject(_) => Nas5gmmMessageType::RelayKeyReject,
-            Nas5gmmMessage::RelayAuthenticationRequest(_) => {
-                Nas5gmmMessageType::RelayAuthenticationRequest
-            }
-            Nas5gmmMessage::RelayAuthenticationResponse(_) => {
-                Nas5gmmMessageType::RelayAuthenticationResponse
-            }
-        }
-    }
-}
-
-impl Nas5gmmMessage {
-    /// The message struct of the variant.
-    pub(crate) fn body(&self) -> &dyn crate::common::MessageBody {
-        match self {
-            Self::RegistrationRequest(message) => &**message,
-            Self::RegistrationAccept(message) => &**message,
-            Self::RegistrationComplete(message) => &**message,
-            Self::RegistrationReject(message) => &**message,
-            Self::DeregistrationRequestUeOriginating(message) => &**message,
-            Self::DeregistrationRequestUeTerminated(message) => &**message,
-            Self::DeregistrationAcceptUeOriginating(message) => &**message,
-            Self::DeregistrationAcceptUeTerminated(message) => &**message,
-            Self::ConfigurationUpdateComplete(message) => &**message,
-            Self::ServiceRequest(message) => &**message,
-            Self::ServiceReject(message) => &**message,
-            Self::ServiceAccept(message) => &**message,
-            Self::ConfigurationUpdateCommand(message) => &**message,
-            Self::AuthenticationRequest(message) => &**message,
-            Self::AuthenticationResponse(message) => &**message,
-            Self::AuthenticationReject(message) => &**message,
-            Self::AuthenticationFailure(message) => &**message,
-            Self::AuthenticationResult(message) => &**message,
-            Self::IdentityRequest(message) => &**message,
-            Self::IdentityResponse(message) => &**message,
-            Self::SecurityModeCommand(message) => &**message,
-            Self::SecurityModeComplete(message) => &**message,
-            Self::SecurityModeReject(message) => &**message,
-            Self::FiveGmmStatus(message) => &**message,
-            Self::Notification(message) => &**message,
-            Self::NotificationResponse(message) => &**message,
-            Self::UlNasTransport(message) => &**message,
-            Self::DlNasTransport(message) => &**message,
-            Self::ControlPlaneServiceRequest(message) => &**message,
-            Self::NetworkSliceSpecificAuthenticationCommand(message) => &**message,
-            Self::NetworkSliceSpecificAuthenticationComplete(message) => &**message,
-            Self::NetworkSliceSpecificAuthenticationResult(message) => &**message,
-            Self::RelayKeyRequest(message) => &**message,
-            Self::RelayKeyAccept(message) => &**message,
-            Self::RelayKeyReject(message) => &**message,
-            Self::RelayAuthenticationRequest(message) => &**message,
-            Self::RelayAuthenticationResponse(message) => &**message,
-        }
-    }
-
-    /// The message struct of the variant, to change it.
-    #[cfg(feature = "serde")]
-    pub(crate) fn body_mut(&mut self) -> &mut dyn crate::common::MessageBody {
-        match self {
-            Self::RegistrationRequest(message) => &mut **message,
-            Self::RegistrationAccept(message) => &mut **message,
-            Self::RegistrationComplete(message) => &mut **message,
-            Self::RegistrationReject(message) => &mut **message,
-            Self::DeregistrationRequestUeOriginating(message) => &mut **message,
-            Self::DeregistrationRequestUeTerminated(message) => &mut **message,
-            Self::DeregistrationAcceptUeOriginating(message) => &mut **message,
-            Self::DeregistrationAcceptUeTerminated(message) => &mut **message,
-            Self::ConfigurationUpdateComplete(message) => &mut **message,
-            Self::ServiceRequest(message) => &mut **message,
-            Self::ServiceReject(message) => &mut **message,
-            Self::ServiceAccept(message) => &mut **message,
-            Self::ConfigurationUpdateCommand(message) => &mut **message,
-            Self::AuthenticationRequest(message) => &mut **message,
-            Self::AuthenticationResponse(message) => &mut **message,
-            Self::AuthenticationReject(message) => &mut **message,
-            Self::AuthenticationFailure(message) => &mut **message,
-            Self::AuthenticationResult(message) => &mut **message,
-            Self::IdentityRequest(message) => &mut **message,
-            Self::IdentityResponse(message) => &mut **message,
-            Self::SecurityModeCommand(message) => &mut **message,
-            Self::SecurityModeComplete(message) => &mut **message,
-            Self::SecurityModeReject(message) => &mut **message,
-            Self::FiveGmmStatus(message) => &mut **message,
-            Self::Notification(message) => &mut **message,
-            Self::NotificationResponse(message) => &mut **message,
-            Self::UlNasTransport(message) => &mut **message,
-            Self::DlNasTransport(message) => &mut **message,
-            Self::ControlPlaneServiceRequest(message) => &mut **message,
-            Self::NetworkSliceSpecificAuthenticationCommand(message) => &mut **message,
-            Self::NetworkSliceSpecificAuthenticationComplete(message) => &mut **message,
-            Self::NetworkSliceSpecificAuthenticationResult(message) => &mut **message,
-            Self::RelayKeyRequest(message) => &mut **message,
-            Self::RelayKeyAccept(message) => &mut **message,
-            Self::RelayKeyReject(message) => &mut **message,
-            Self::RelayAuthenticationRequest(message) => &mut **message,
-            Self::RelayAuthenticationResponse(message) => &mut **message,
-        }
-    }
-
     /// IEs the decoder did not recognize in the message body, and known IEs
     /// it ignored. An unknown IE encoded as "comprehension required" is
     /// flagged by [`UnknownIe::is_comprehension_required`](crate::UnknownIe::is_comprehension_required): the receiver
@@ -1974,509 +1554,61 @@ impl TryFrom<(Nas5gmmMessageType, &mut &[u8])> for Nas5gmmMessage {
     }
 }
 
-impl Nas5gmmMessage {
-    /// The message of the type `message_type` from the front of `buffer`,
-    /// decoded strictly or keeping the faults of its mandatory IEs.
-    pub(crate) fn decode_keeping(
-        message_type: Nas5gmmMessageType,
-        buffer: &mut &[u8],
-        faults: crate::common::Faults<'_, '_>,
-    ) -> Result<Self> {
-        match message_type {
-            Nas5gmmMessageType::RegistrationRequest => {
-                Ok(Nas5gmmMessage::RegistrationRequest(Box::new(
-                    crate::common::decode_keeping::<NasRegistrationRequest>(buffer, faults)?,
-                )))
-            }
-            Nas5gmmMessageType::RegistrationAccept => {
-                Ok(Nas5gmmMessage::RegistrationAccept(Box::new(
-                    crate::common::decode_keeping::<NasRegistrationAccept>(buffer, faults)?,
-                )))
-            }
-            Nas5gmmMessageType::RegistrationComplete => {
-                Ok(Nas5gmmMessage::RegistrationComplete(Box::new(
-                    crate::common::decode_keeping::<NasRegistrationComplete>(buffer, faults)?,
-                )))
-            }
-            Nas5gmmMessageType::RegistrationReject => {
-                Ok(Nas5gmmMessage::RegistrationReject(Box::new(
-                    crate::common::decode_keeping::<NasRegistrationReject>(buffer, faults)?,
-                )))
-            }
-            Nas5gmmMessageType::DeregistrationRequestUeOriginating => {
-                Ok(Nas5gmmMessage::DeregistrationRequestUeOriginating(
-                    Box::new(crate::common::decode_keeping::<
-                        NasDeregistrationRequestUeOriginating,
-                    >(buffer, faults)?),
-                ))
-            }
-            Nas5gmmMessageType::DeregistrationRequestUeTerminated => {
-                Ok(Nas5gmmMessage::DeregistrationRequestUeTerminated(Box::new(
-                    crate::common::decode_keeping::<NasDeregistrationRequestUeTerminated>(
-                        buffer, faults,
-                    )?,
-                )))
-            }
-            Nas5gmmMessageType::ServiceRequest => Ok(Nas5gmmMessage::ServiceRequest(Box::new(
-                crate::common::decode_keeping::<NasServiceRequest>(buffer, faults)?,
-            ))),
-            Nas5gmmMessageType::ServiceReject => Ok(Nas5gmmMessage::ServiceReject(Box::new(
-                crate::common::decode_keeping::<NasServiceReject>(buffer, faults)?,
-            ))),
-            Nas5gmmMessageType::ServiceAccept => Ok(Nas5gmmMessage::ServiceAccept(Box::new(
-                crate::common::decode_keeping::<NasServiceAccept>(buffer, faults)?,
-            ))),
-            Nas5gmmMessageType::ConfigurationUpdateCommand => {
-                Ok(Nas5gmmMessage::ConfigurationUpdateCommand(Box::new(
-                    crate::common::decode_keeping::<NasConfigurationUpdateCommand>(buffer, faults)?,
-                )))
-            }
-            Nas5gmmMessageType::AuthenticationRequest => {
-                Ok(Nas5gmmMessage::AuthenticationRequest(Box::new(
-                    crate::common::decode_keeping::<NasAuthenticationRequest>(buffer, faults)?,
-                )))
-            }
-            Nas5gmmMessageType::AuthenticationResponse => {
-                Ok(Nas5gmmMessage::AuthenticationResponse(Box::new(
-                    crate::common::decode_keeping::<NasAuthenticationResponse>(buffer, faults)?,
-                )))
-            }
-            Nas5gmmMessageType::AuthenticationReject => {
-                Ok(Nas5gmmMessage::AuthenticationReject(Box::new(
-                    crate::common::decode_keeping::<NasAuthenticationReject>(buffer, faults)?,
-                )))
-            }
-            Nas5gmmMessageType::AuthenticationFailure => {
-                Ok(Nas5gmmMessage::AuthenticationFailure(Box::new(
-                    crate::common::decode_keeping::<NasAuthenticationFailure>(buffer, faults)?,
-                )))
-            }
-            Nas5gmmMessageType::AuthenticationResult => {
-                Ok(Nas5gmmMessage::AuthenticationResult(Box::new(
-                    crate::common::decode_keeping::<NasAuthenticationResult>(buffer, faults)?,
-                )))
-            }
-            Nas5gmmMessageType::IdentityRequest => Ok(Nas5gmmMessage::IdentityRequest(Box::new(
-                crate::common::decode_keeping::<NasIdentityRequest>(buffer, faults)?,
-            ))),
-            Nas5gmmMessageType::IdentityResponse => Ok(Nas5gmmMessage::IdentityResponse(Box::new(
-                crate::common::decode_keeping::<NasIdentityResponse>(buffer, faults)?,
-            ))),
-            Nas5gmmMessageType::SecurityModeCommand => {
-                Ok(Nas5gmmMessage::SecurityModeCommand(Box::new(
-                    crate::common::decode_keeping::<NasSecurityModeCommand>(buffer, faults)?,
-                )))
-            }
-            Nas5gmmMessageType::SecurityModeComplete => {
-                Ok(Nas5gmmMessage::SecurityModeComplete(Box::new(
-                    crate::common::decode_keeping::<NasSecurityModeComplete>(buffer, faults)?,
-                )))
-            }
-            Nas5gmmMessageType::SecurityModeReject => {
-                Ok(Nas5gmmMessage::SecurityModeReject(Box::new(
-                    crate::common::decode_keeping::<NasSecurityModeReject>(buffer, faults)?,
-                )))
-            }
-            Nas5gmmMessageType::FiveGmmStatus => Ok(Nas5gmmMessage::FiveGmmStatus(Box::new(
-                crate::common::decode_keeping::<NasFGmmStatus>(buffer, faults)?,
-            ))),
-            Nas5gmmMessageType::Notification => Ok(Nas5gmmMessage::Notification(Box::new(
-                crate::common::decode_keeping::<NasNotification>(buffer, faults)?,
-            ))),
-            Nas5gmmMessageType::NotificationResponse => {
-                Ok(Nas5gmmMessage::NotificationResponse(Box::new(
-                    crate::common::decode_keeping::<NasNotificationResponse>(buffer, faults)?,
-                )))
-            }
-            Nas5gmmMessageType::UlNasTransport => Ok(Nas5gmmMessage::UlNasTransport(Box::new(
-                crate::common::decode_keeping::<NasUlNasTransport>(buffer, faults)?,
-            ))),
-            Nas5gmmMessageType::DlNasTransport => Ok(Nas5gmmMessage::DlNasTransport(Box::new(
-                crate::common::decode_keeping::<NasDlNasTransport>(buffer, faults)?,
-            ))),
-            Nas5gmmMessageType::DeregistrationAcceptUeOriginating => {
-                Ok(Nas5gmmMessage::DeregistrationAcceptUeOriginating(Box::new(
-                    crate::common::decode_keeping::<NasDeregistrationAcceptUeOriginating>(
-                        buffer, faults,
-                    )?,
-                )))
-            }
-            Nas5gmmMessageType::DeregistrationAcceptUeTerminated => {
-                Ok(Nas5gmmMessage::DeregistrationAcceptUeTerminated(Box::new(
-                    crate::common::decode_keeping::<NasDeregistrationAcceptUeTerminated>(
-                        buffer, faults,
-                    )?,
-                )))
-            }
-            Nas5gmmMessageType::ConfigurationUpdateComplete => {
-                Ok(Nas5gmmMessage::ConfigurationUpdateComplete(Box::new(
-                    crate::common::decode_keeping::<NasConfigurationUpdateComplete>(
-                        buffer, faults,
-                    )?,
-                )))
-            }
-            Nas5gmmMessageType::ControlPlaneServiceRequest => {
-                Ok(Nas5gmmMessage::ControlPlaneServiceRequest(Box::new(
-                    crate::common::decode_keeping::<NasControlPlaneServiceRequest>(buffer, faults)?,
-                )))
-            }
-            Nas5gmmMessageType::NetworkSliceSpecificAuthenticationCommand => {
-                Ok(Nas5gmmMessage::NetworkSliceSpecificAuthenticationCommand(
-                    Box::new(crate::common::decode_keeping::<
-                        NasNetworkSliceSpecificAuthenticationCommand,
-                    >(buffer, faults)?),
-                ))
-            }
-            Nas5gmmMessageType::NetworkSliceSpecificAuthenticationComplete => {
-                Ok(Nas5gmmMessage::NetworkSliceSpecificAuthenticationComplete(
-                    Box::new(crate::common::decode_keeping::<
-                        NasNetworkSliceSpecificAuthenticationComplete,
-                    >(buffer, faults)?),
-                ))
-            }
-            Nas5gmmMessageType::NetworkSliceSpecificAuthenticationResult => {
-                Ok(Nas5gmmMessage::NetworkSliceSpecificAuthenticationResult(
-                    Box::new(crate::common::decode_keeping::<
-                        NasNetworkSliceSpecificAuthenticationResult,
-                    >(buffer, faults)?),
-                ))
-            }
-            Nas5gmmMessageType::RelayKeyRequest => Ok(Nas5gmmMessage::RelayKeyRequest(Box::new(
-                crate::common::decode_keeping::<NasRelayKeyRequest>(buffer, faults)?,
-            ))),
-            Nas5gmmMessageType::RelayKeyAccept => Ok(Nas5gmmMessage::RelayKeyAccept(Box::new(
-                crate::common::decode_keeping::<NasRelayKeyAccept>(buffer, faults)?,
-            ))),
-            Nas5gmmMessageType::RelayKeyReject => Ok(Nas5gmmMessage::RelayKeyReject(Box::new(
-                crate::common::decode_keeping::<NasRelayKeyReject>(buffer, faults)?,
-            ))),
-            Nas5gmmMessageType::RelayAuthenticationRequest => {
-                Ok(Nas5gmmMessage::RelayAuthenticationRequest(Box::new(
-                    crate::common::decode_keeping::<NasRelayAuthenticationRequest>(buffer, faults)?,
-                )))
-            }
-            Nas5gmmMessageType::RelayAuthenticationResponse => {
-                Ok(Nas5gmmMessage::RelayAuthenticationResponse(Box::new(
-                    crate::common::decode_keeping::<NasRelayAuthenticationResponse>(
-                        buffer, faults,
-                    )?,
-                )))
-            }
-            Nas5gmmMessageType::Unknown(v) => Err(NasError::UnknownMessageType(v)),
-        }
-    }
-}
-
-/// Enum over all 5G Session Management (5GSM) message types.
-///
-/// Each variant wraps a message struct defined by the `nas_message!` macro.
-#[non_exhaustive]
-#[derive(Debug, Clone, PartialEq)]
-pub enum Nas5gsmMessage {
-    /// PDU session establishment request (TS 24.501 §8.3.1).
-    PduSessionEstablishmentRequest(Box<NasPduSessionEstablishmentRequest>),
-    /// PDU session establishment accept (TS 24.501 §8.3.2).
-    PduSessionEstablishmentAccept(Box<NasPduSessionEstablishmentAccept>),
-    /// PDU session establishment reject (TS 24.501 §8.3.3).
-    PduSessionEstablishmentReject(Box<NasPduSessionEstablishmentReject>),
-    /// PDU session authentication command (TS 24.501 §8.3.4).
-    PduSessionAuthenticationCommand(Box<NasPduSessionAuthenticationCommand>),
-    /// PDU session authentication complete (TS 24.501 §8.3.5).
-    PduSessionAuthenticationComplete(Box<NasPduSessionAuthenticationComplete>),
-    /// PDU session authentication result (TS 24.501 §8.3.6).
-    PduSessionAuthenticationResult(Box<NasPduSessionAuthenticationResult>),
-    /// PDU session modification request (TS 24.501 §8.3.7).
-    PduSessionModificationRequest(Box<NasPduSessionModificationRequest>),
-    /// PDU session modification reject (TS 24.501 §8.3.8).
-    PduSessionModificationReject(Box<NasPduSessionModificationReject>),
-    /// PDU session modification command (TS 24.501 §8.3.9).
-    PduSessionModificationCommand(Box<NasPduSessionModificationCommand>),
-    /// PDU session modification complete (TS 24.501 §8.3.10).
-    PduSessionModificationComplete(Box<NasPduSessionModificationComplete>),
-    /// PDU session modification command reject (TS 24.501 §8.3.11).
-    PduSessionModificationCommandReject(Box<NasPduSessionModificationCommandReject>),
-    /// PDU session release request (TS 24.501 §8.3.12).
-    PduSessionReleaseRequest(Box<NasPduSessionReleaseRequest>),
-    /// PDU session release reject (TS 24.501 §8.3.13).
-    PduSessionReleaseReject(Box<NasPduSessionReleaseReject>),
-    /// PDU session release command (TS 24.501 §8.3.14).
-    PduSessionReleaseCommand(Box<NasPduSessionReleaseCommand>),
-    /// PDU session release complete (TS 24.501 §8.3.15).
-    PduSessionReleaseComplete(Box<NasPduSessionReleaseComplete>),
-    /// 5GSM status (TS 24.501 §8.3.16).
-    FiveGsmStatus(Box<NasFGsmStatus>),
-    /// Service-level authentication command (TS 24.501 §8.3.17).
-    ServiceLevelAuthenticationCommand(Box<NasServiceLevelAuthenticationCommand>),
-    /// Service-level authentication complete (TS 24.501 §8.3.18).
-    ServiceLevelAuthenticationComplete(Box<NasServiceLevelAuthenticationComplete>),
-    /// Remote UE report (TS 24.501 §8.3.19).
-    RemoteUeReport(Box<NasRemoteUeReport>),
-    /// Remote UE report response (TS 24.501 §8.3.20).
-    RemoteUeReportResponse(Box<NasRemoteUeReportResponse>),
-}
-
-#[cfg(feature = "serde")]
-crate::common::readable::readable!(
-    enum Nas5gsmMessage {
-        PduSessionEstablishmentRequest(Box<NasPduSessionEstablishmentRequest>),
-        PduSessionEstablishmentAccept(Box<NasPduSessionEstablishmentAccept>),
-        PduSessionEstablishmentReject(Box<NasPduSessionEstablishmentReject>),
-        PduSessionAuthenticationCommand(Box<NasPduSessionAuthenticationCommand>),
-        PduSessionAuthenticationComplete(Box<NasPduSessionAuthenticationComplete>),
-        PduSessionAuthenticationResult(Box<NasPduSessionAuthenticationResult>),
-        PduSessionModificationRequest(Box<NasPduSessionModificationRequest>),
-        PduSessionModificationReject(Box<NasPduSessionModificationReject>),
-        PduSessionModificationCommand(Box<NasPduSessionModificationCommand>),
-        PduSessionModificationComplete(Box<NasPduSessionModificationComplete>),
-        PduSessionModificationCommandReject(Box<NasPduSessionModificationCommandReject>),
-        PduSessionReleaseRequest(Box<NasPduSessionReleaseRequest>),
-        PduSessionReleaseReject(Box<NasPduSessionReleaseReject>),
-        PduSessionReleaseCommand(Box<NasPduSessionReleaseCommand>),
-        PduSessionReleaseComplete(Box<NasPduSessionReleaseComplete>),
-        FiveGsmStatus(Box<NasFGsmStatus>),
-        ServiceLevelAuthenticationCommand(Box<NasServiceLevelAuthenticationCommand>),
-        ServiceLevelAuthenticationComplete(Box<NasServiceLevelAuthenticationComplete>),
-        RemoteUeReport(Box<NasRemoteUeReport>),
-        RemoteUeReportResponse(Box<NasRemoteUeReportResponse>),
-    }
-);
-
-impl From<NasPduSessionEstablishmentRequest> for Nas5gsmMessage {
-    fn from(message: NasPduSessionEstablishmentRequest) -> Self {
-        Self::PduSessionEstablishmentRequest(Box::new(message))
-    }
-}
-
-impl From<NasPduSessionEstablishmentAccept> for Nas5gsmMessage {
-    fn from(message: NasPduSessionEstablishmentAccept) -> Self {
-        Self::PduSessionEstablishmentAccept(Box::new(message))
-    }
-}
-
-impl From<NasPduSessionEstablishmentReject> for Nas5gsmMessage {
-    fn from(message: NasPduSessionEstablishmentReject) -> Self {
-        Self::PduSessionEstablishmentReject(Box::new(message))
-    }
-}
-
-impl From<NasPduSessionAuthenticationCommand> for Nas5gsmMessage {
-    fn from(message: NasPduSessionAuthenticationCommand) -> Self {
-        Self::PduSessionAuthenticationCommand(Box::new(message))
-    }
-}
-
-impl From<NasPduSessionAuthenticationComplete> for Nas5gsmMessage {
-    fn from(message: NasPduSessionAuthenticationComplete) -> Self {
-        Self::PduSessionAuthenticationComplete(Box::new(message))
-    }
-}
-
-impl From<NasPduSessionAuthenticationResult> for Nas5gsmMessage {
-    fn from(message: NasPduSessionAuthenticationResult) -> Self {
-        Self::PduSessionAuthenticationResult(Box::new(message))
-    }
-}
-
-impl From<NasPduSessionModificationRequest> for Nas5gsmMessage {
-    fn from(message: NasPduSessionModificationRequest) -> Self {
-        Self::PduSessionModificationRequest(Box::new(message))
-    }
-}
-
-impl From<NasPduSessionModificationReject> for Nas5gsmMessage {
-    fn from(message: NasPduSessionModificationReject) -> Self {
-        Self::PduSessionModificationReject(Box::new(message))
-    }
-}
-
-impl From<NasPduSessionModificationCommand> for Nas5gsmMessage {
-    fn from(message: NasPduSessionModificationCommand) -> Self {
-        Self::PduSessionModificationCommand(Box::new(message))
-    }
-}
-
-impl From<NasPduSessionModificationComplete> for Nas5gsmMessage {
-    fn from(message: NasPduSessionModificationComplete) -> Self {
-        Self::PduSessionModificationComplete(Box::new(message))
-    }
-}
-
-impl From<NasPduSessionModificationCommandReject> for Nas5gsmMessage {
-    fn from(message: NasPduSessionModificationCommandReject) -> Self {
-        Self::PduSessionModificationCommandReject(Box::new(message))
-    }
-}
-
-impl From<NasPduSessionReleaseRequest> for Nas5gsmMessage {
-    fn from(message: NasPduSessionReleaseRequest) -> Self {
-        Self::PduSessionReleaseRequest(Box::new(message))
-    }
-}
-
-impl From<NasPduSessionReleaseReject> for Nas5gsmMessage {
-    fn from(message: NasPduSessionReleaseReject) -> Self {
-        Self::PduSessionReleaseReject(Box::new(message))
-    }
-}
-
-impl From<NasPduSessionReleaseCommand> for Nas5gsmMessage {
-    fn from(message: NasPduSessionReleaseCommand) -> Self {
-        Self::PduSessionReleaseCommand(Box::new(message))
-    }
-}
-
-impl From<NasPduSessionReleaseComplete> for Nas5gsmMessage {
-    fn from(message: NasPduSessionReleaseComplete) -> Self {
-        Self::PduSessionReleaseComplete(Box::new(message))
-    }
-}
-
-impl From<NasFGsmStatus> for Nas5gsmMessage {
-    fn from(message: NasFGsmStatus) -> Self {
-        Self::FiveGsmStatus(Box::new(message))
-    }
-}
-
-impl From<NasServiceLevelAuthenticationCommand> for Nas5gsmMessage {
-    fn from(message: NasServiceLevelAuthenticationCommand) -> Self {
-        Self::ServiceLevelAuthenticationCommand(Box::new(message))
-    }
-}
-
-impl From<NasServiceLevelAuthenticationComplete> for Nas5gsmMessage {
-    fn from(message: NasServiceLevelAuthenticationComplete) -> Self {
-        Self::ServiceLevelAuthenticationComplete(Box::new(message))
-    }
-}
-
-impl From<NasRemoteUeReport> for Nas5gsmMessage {
-    fn from(message: NasRemoteUeReport) -> Self {
-        Self::RemoteUeReport(Box::new(message))
-    }
-}
-
-impl From<NasRemoteUeReportResponse> for Nas5gsmMessage {
-    fn from(message: NasRemoteUeReportResponse) -> Self {
-        Self::RemoteUeReportResponse(Box::new(message))
+crate::common::nas_messages! {
+    /// Enum over all 5G Session Management (5GSM) message types.
+    ///
+    /// Each variant wraps a message struct defined by the `nas_message!` macro.
+    pub enum Nas5gsmMessage;
+    /// 5G Session Management (5GSM) message types per TS 24.501 §9.7.
+    ///
+    /// `u8::from` gives the message type octet, and `From<u8>` reads one: a code
+    /// that the table does not have is `Unknown`.
+    pub enum Nas5gsmMessageType;
+    {
+        /// PDU session establishment request (TS 24.501 §8.3.1).
+        PduSessionEstablishmentRequest = 193 => NasPduSessionEstablishmentRequest,
+        /// PDU session establishment accept (TS 24.501 §8.3.2).
+        PduSessionEstablishmentAccept = 194 => NasPduSessionEstablishmentAccept,
+        /// PDU session establishment reject (TS 24.501 §8.3.3).
+        PduSessionEstablishmentReject = 195 => NasPduSessionEstablishmentReject,
+        /// PDU session authentication command (TS 24.501 §8.3.4).
+        PduSessionAuthenticationCommand = 197 => NasPduSessionAuthenticationCommand,
+        /// PDU session authentication complete (TS 24.501 §8.3.5).
+        PduSessionAuthenticationComplete = 198 => NasPduSessionAuthenticationComplete,
+        /// PDU session authentication result (TS 24.501 §8.3.6).
+        PduSessionAuthenticationResult = 199 => NasPduSessionAuthenticationResult,
+        /// PDU session modification request (TS 24.501 §8.3.7).
+        PduSessionModificationRequest = 201 => NasPduSessionModificationRequest,
+        /// PDU session modification reject (TS 24.501 §8.3.8).
+        PduSessionModificationReject = 202 => NasPduSessionModificationReject,
+        /// PDU session modification command (TS 24.501 §8.3.9).
+        PduSessionModificationCommand = 203 => NasPduSessionModificationCommand,
+        /// PDU session modification complete (TS 24.501 §8.3.10).
+        PduSessionModificationComplete = 204 => NasPduSessionModificationComplete,
+        /// PDU session modification command reject (TS 24.501 §8.3.11).
+        PduSessionModificationCommandReject = 205 => NasPduSessionModificationCommandReject,
+        /// PDU session release request (TS 24.501 §8.3.12).
+        PduSessionReleaseRequest = 209 => NasPduSessionReleaseRequest,
+        /// PDU session release reject (TS 24.501 §8.3.13).
+        PduSessionReleaseReject = 210 => NasPduSessionReleaseReject,
+        /// PDU session release command (TS 24.501 §8.3.14).
+        PduSessionReleaseCommand = 211 => NasPduSessionReleaseCommand,
+        /// PDU session release complete (TS 24.501 §8.3.15).
+        PduSessionReleaseComplete = 212 => NasPduSessionReleaseComplete,
+        /// 5GSM status (TS 24.501 §8.3.16).
+        FiveGsmStatus = 214 => NasFGsmStatus,
+        /// Service-level authentication command (TS 24.501 §8.3.17).
+        ServiceLevelAuthenticationCommand = 216 => NasServiceLevelAuthenticationCommand,
+        /// Service-level authentication complete (TS 24.501 §8.3.18).
+        ServiceLevelAuthenticationComplete = 217 => NasServiceLevelAuthenticationComplete,
+        /// Remote UE report (TS 24.501 §8.3.19).
+        RemoteUeReport = 218 => NasRemoteUeReport,
+        /// Remote UE report response (TS 24.501 §8.3.20).
+        RemoteUeReportResponse = 219 => NasRemoteUeReportResponse,
     }
 }
 
 impl Nas5gsmMessage {
-    /// Message type of the body.
-    pub fn message_type(&self) -> Nas5gsmMessageType {
-        match self {
-            Nas5gsmMessage::PduSessionEstablishmentRequest(_) => {
-                Nas5gsmMessageType::PduSessionEstablishmentRequest
-            }
-            Nas5gsmMessage::PduSessionEstablishmentAccept(_) => {
-                Nas5gsmMessageType::PduSessionEstablishmentAccept
-            }
-            Nas5gsmMessage::PduSessionEstablishmentReject(_) => {
-                Nas5gsmMessageType::PduSessionEstablishmentReject
-            }
-            Nas5gsmMessage::PduSessionAuthenticationCommand(_) => {
-                Nas5gsmMessageType::PduSessionAuthenticationCommand
-            }
-            Nas5gsmMessage::PduSessionAuthenticationComplete(_) => {
-                Nas5gsmMessageType::PduSessionAuthenticationComplete
-            }
-            Nas5gsmMessage::PduSessionAuthenticationResult(_) => {
-                Nas5gsmMessageType::PduSessionAuthenticationResult
-            }
-            Nas5gsmMessage::PduSessionModificationRequest(_) => {
-                Nas5gsmMessageType::PduSessionModificationRequest
-            }
-            Nas5gsmMessage::PduSessionModificationReject(_) => {
-                Nas5gsmMessageType::PduSessionModificationReject
-            }
-            Nas5gsmMessage::PduSessionModificationCommand(_) => {
-                Nas5gsmMessageType::PduSessionModificationCommand
-            }
-            Nas5gsmMessage::PduSessionModificationComplete(_) => {
-                Nas5gsmMessageType::PduSessionModificationComplete
-            }
-            Nas5gsmMessage::PduSessionModificationCommandReject(_) => {
-                Nas5gsmMessageType::PduSessionModificationCommandReject
-            }
-            Nas5gsmMessage::PduSessionReleaseRequest(_) => {
-                Nas5gsmMessageType::PduSessionReleaseRequest
-            }
-            Nas5gsmMessage::PduSessionReleaseReject(_) => {
-                Nas5gsmMessageType::PduSessionReleaseReject
-            }
-            Nas5gsmMessage::PduSessionReleaseCommand(_) => {
-                Nas5gsmMessageType::PduSessionReleaseCommand
-            }
-            Nas5gsmMessage::PduSessionReleaseComplete(_) => {
-                Nas5gsmMessageType::PduSessionReleaseComplete
-            }
-            Nas5gsmMessage::FiveGsmStatus(_) => Nas5gsmMessageType::FiveGsmStatus,
-            Nas5gsmMessage::ServiceLevelAuthenticationCommand(_) => {
-                Nas5gsmMessageType::ServiceLevelAuthenticationCommand
-            }
-            Nas5gsmMessage::ServiceLevelAuthenticationComplete(_) => {
-                Nas5gsmMessageType::ServiceLevelAuthenticationComplete
-            }
-            Nas5gsmMessage::RemoteUeReport(_) => Nas5gsmMessageType::RemoteUeReport,
-            Nas5gsmMessage::RemoteUeReportResponse(_) => Nas5gsmMessageType::RemoteUeReportResponse,
-        }
-    }
-}
-
-impl Nas5gsmMessage {
-    /// The message struct of the variant.
-    pub(crate) fn body(&self) -> &dyn crate::common::MessageBody {
-        match self {
-            Self::PduSessionEstablishmentRequest(message) => &**message,
-            Self::PduSessionEstablishmentAccept(message) => &**message,
-            Self::PduSessionEstablishmentReject(message) => &**message,
-            Self::PduSessionAuthenticationCommand(message) => &**message,
-            Self::PduSessionAuthenticationComplete(message) => &**message,
-            Self::PduSessionAuthenticationResult(message) => &**message,
-            Self::PduSessionModificationRequest(message) => &**message,
-            Self::PduSessionModificationReject(message) => &**message,
-            Self::PduSessionModificationCommand(message) => &**message,
-            Self::PduSessionModificationComplete(message) => &**message,
-            Self::PduSessionModificationCommandReject(message) => &**message,
-            Self::PduSessionReleaseRequest(message) => &**message,
-            Self::PduSessionReleaseReject(message) => &**message,
-            Self::PduSessionReleaseCommand(message) => &**message,
-            Self::PduSessionReleaseComplete(message) => &**message,
-            Self::FiveGsmStatus(message) => &**message,
-            Self::ServiceLevelAuthenticationCommand(message) => &**message,
-            Self::ServiceLevelAuthenticationComplete(message) => &**message,
-            Self::RemoteUeReport(message) => &**message,
-            Self::RemoteUeReportResponse(message) => &**message,
-        }
-    }
-
-    /// The message struct of the variant, to change it.
-    #[cfg(feature = "serde")]
-    pub(crate) fn body_mut(&mut self) -> &mut dyn crate::common::MessageBody {
-        match self {
-            Self::PduSessionEstablishmentRequest(message) => &mut **message,
-            Self::PduSessionEstablishmentAccept(message) => &mut **message,
-            Self::PduSessionEstablishmentReject(message) => &mut **message,
-            Self::PduSessionAuthenticationCommand(message) => &mut **message,
-            Self::PduSessionAuthenticationComplete(message) => &mut **message,
-            Self::PduSessionAuthenticationResult(message) => &mut **message,
-            Self::PduSessionModificationRequest(message) => &mut **message,
-            Self::PduSessionModificationReject(message) => &mut **message,
-            Self::PduSessionModificationCommand(message) => &mut **message,
-            Self::PduSessionModificationComplete(message) => &mut **message,
-            Self::PduSessionModificationCommandReject(message) => &mut **message,
-            Self::PduSessionReleaseRequest(message) => &mut **message,
-            Self::PduSessionReleaseReject(message) => &mut **message,
-            Self::PduSessionReleaseCommand(message) => &mut **message,
-            Self::PduSessionReleaseComplete(message) => &mut **message,
-            Self::FiveGsmStatus(message) => &mut **message,
-            Self::ServiceLevelAuthenticationCommand(message) => &mut **message,
-            Self::ServiceLevelAuthenticationComplete(message) => &mut **message,
-            Self::RemoteUeReport(message) => &mut **message,
-            Self::RemoteUeReportResponse(message) => &mut **message,
-        }
-    }
-
     /// IEs the decoder did not recognize in the message body, and known IEs
     /// it ignored. An unknown IE encoded as "comprehension required" is
     /// flagged by [`UnknownIe::is_comprehension_required`](crate::UnknownIe::is_comprehension_required): the receiver
@@ -2497,142 +1629,6 @@ impl TryFrom<(Nas5gsmMessageType, &mut &[u8])> for Nas5gsmMessage {
 
     fn try_from((message_type, buffer): (Nas5gsmMessageType, &mut &[u8])) -> Result<Self> {
         Self::decode_keeping(message_type, buffer, &mut crate::common::Reading::strict())
-    }
-}
-
-impl Nas5gsmMessage {
-    /// The message of the type `message_type` from the front of `buffer`,
-    /// decoded strictly or keeping the faults of its mandatory IEs.
-    pub(crate) fn decode_keeping(
-        message_type: Nas5gsmMessageType,
-        buffer: &mut &[u8],
-        faults: crate::common::Faults<'_, '_>,
-    ) -> Result<Self> {
-        match message_type {
-            Nas5gsmMessageType::PduSessionEstablishmentRequest => {
-                Ok(Nas5gsmMessage::PduSessionEstablishmentRequest(Box::new(
-                    crate::common::decode_keeping::<NasPduSessionEstablishmentRequest>(
-                        buffer, faults,
-                    )?,
-                )))
-            }
-            Nas5gsmMessageType::PduSessionEstablishmentAccept => {
-                Ok(Nas5gsmMessage::PduSessionEstablishmentAccept(Box::new(
-                    crate::common::decode_keeping::<NasPduSessionEstablishmentAccept>(
-                        buffer, faults,
-                    )?,
-                )))
-            }
-            Nas5gsmMessageType::PduSessionEstablishmentReject => {
-                Ok(Nas5gsmMessage::PduSessionEstablishmentReject(Box::new(
-                    crate::common::decode_keeping::<NasPduSessionEstablishmentReject>(
-                        buffer, faults,
-                    )?,
-                )))
-            }
-            Nas5gsmMessageType::PduSessionAuthenticationCommand => {
-                Ok(Nas5gsmMessage::PduSessionAuthenticationCommand(Box::new(
-                    crate::common::decode_keeping::<NasPduSessionAuthenticationCommand>(
-                        buffer, faults,
-                    )?,
-                )))
-            }
-            Nas5gsmMessageType::PduSessionAuthenticationComplete => {
-                Ok(Nas5gsmMessage::PduSessionAuthenticationComplete(Box::new(
-                    crate::common::decode_keeping::<NasPduSessionAuthenticationComplete>(
-                        buffer, faults,
-                    )?,
-                )))
-            }
-            Nas5gsmMessageType::PduSessionAuthenticationResult => {
-                Ok(Nas5gsmMessage::PduSessionAuthenticationResult(Box::new(
-                    crate::common::decode_keeping::<NasPduSessionAuthenticationResult>(
-                        buffer, faults,
-                    )?,
-                )))
-            }
-            Nas5gsmMessageType::PduSessionModificationRequest => {
-                Ok(Nas5gsmMessage::PduSessionModificationRequest(Box::new(
-                    crate::common::decode_keeping::<NasPduSessionModificationRequest>(
-                        buffer, faults,
-                    )?,
-                )))
-            }
-            Nas5gsmMessageType::PduSessionModificationReject => {
-                Ok(Nas5gsmMessage::PduSessionModificationReject(Box::new(
-                    crate::common::decode_keeping::<NasPduSessionModificationReject>(
-                        buffer, faults,
-                    )?,
-                )))
-            }
-            Nas5gsmMessageType::PduSessionModificationCommand => {
-                Ok(Nas5gsmMessage::PduSessionModificationCommand(Box::new(
-                    crate::common::decode_keeping::<NasPduSessionModificationCommand>(
-                        buffer, faults,
-                    )?,
-                )))
-            }
-            Nas5gsmMessageType::PduSessionModificationComplete => {
-                Ok(Nas5gsmMessage::PduSessionModificationComplete(Box::new(
-                    crate::common::decode_keeping::<NasPduSessionModificationComplete>(
-                        buffer, faults,
-                    )?,
-                )))
-            }
-            Nas5gsmMessageType::PduSessionModificationCommandReject => {
-                Ok(Nas5gsmMessage::PduSessionModificationCommandReject(
-                    Box::new(crate::common::decode_keeping::<
-                        NasPduSessionModificationCommandReject,
-                    >(buffer, faults)?),
-                ))
-            }
-            Nas5gsmMessageType::PduSessionReleaseRequest => {
-                Ok(Nas5gsmMessage::PduSessionReleaseRequest(Box::new(
-                    crate::common::decode_keeping::<NasPduSessionReleaseRequest>(buffer, faults)?,
-                )))
-            }
-            Nas5gsmMessageType::PduSessionReleaseReject => {
-                Ok(Nas5gsmMessage::PduSessionReleaseReject(Box::new(
-                    crate::common::decode_keeping::<NasPduSessionReleaseReject>(buffer, faults)?,
-                )))
-            }
-            Nas5gsmMessageType::PduSessionReleaseCommand => {
-                Ok(Nas5gsmMessage::PduSessionReleaseCommand(Box::new(
-                    crate::common::decode_keeping::<NasPduSessionReleaseCommand>(buffer, faults)?,
-                )))
-            }
-            Nas5gsmMessageType::PduSessionReleaseComplete => {
-                Ok(Nas5gsmMessage::PduSessionReleaseComplete(Box::new(
-                    crate::common::decode_keeping::<NasPduSessionReleaseComplete>(buffer, faults)?,
-                )))
-            }
-            Nas5gsmMessageType::FiveGsmStatus => Ok(Nas5gsmMessage::FiveGsmStatus(Box::new(
-                crate::common::decode_keeping::<NasFGsmStatus>(buffer, faults)?,
-            ))),
-            Nas5gsmMessageType::ServiceLevelAuthenticationCommand => {
-                Ok(Nas5gsmMessage::ServiceLevelAuthenticationCommand(Box::new(
-                    crate::common::decode_keeping::<NasServiceLevelAuthenticationCommand>(
-                        buffer, faults,
-                    )?,
-                )))
-            }
-            Nas5gsmMessageType::ServiceLevelAuthenticationComplete => {
-                Ok(Nas5gsmMessage::ServiceLevelAuthenticationComplete(
-                    Box::new(crate::common::decode_keeping::<
-                        NasServiceLevelAuthenticationComplete,
-                    >(buffer, faults)?),
-                ))
-            }
-            Nas5gsmMessageType::RemoteUeReport => Ok(Nas5gsmMessage::RemoteUeReport(Box::new(
-                crate::common::decode_keeping::<NasRemoteUeReport>(buffer, faults)?,
-            ))),
-            Nas5gsmMessageType::RemoteUeReportResponse => {
-                Ok(Nas5gsmMessage::RemoteUeReportResponse(Box::new(
-                    crate::common::decode_keeping::<NasRemoteUeReportResponse>(buffer, faults)?,
-                )))
-            }
-            Nas5gsmMessageType::Unknown(v) => Err(NasError::UnknownMessageType(v)),
-        }
     }
 }
 
@@ -3156,7 +2152,7 @@ impl Nas5gsMessage {
                 },
             ) if from_ue => {
                 let cause = session(GsmCause::InvalidPduSessionIdentity);
-                match Type::try_from(message_type).ok()? {
+                match Type::from(message_type) {
                     Type::PduSessionModificationRequest => {
                         let reject = NasPduSessionModificationReject::new(cause);
                         Some(Self::new_5gsm(reject, identity, pti))
@@ -3237,7 +2233,7 @@ impl Nas5gsMessage {
                     return None;
                 };
                 let cause = NasFGsmCause::from_cause(GsmCause::InvalidMandatoryInformation);
-                let answer: Nas5gsmMessage = match (from_ue, Type::try_from(kind).ok()?) {
+                let answer: Nas5gsmMessage = match (from_ue, Type::from(kind)) {
                     (true, Type::PduSessionEstablishmentRequest) => {
                         NasPduSessionEstablishmentReject::new(cause).into()
                     }
