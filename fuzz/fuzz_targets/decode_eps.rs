@@ -74,7 +74,10 @@ const IDENTITIES: [&str; 2] = ["eps_bearer_identity", "procedure_transaction_ide
 /// What a receiver reads of `octets`, which `decode` read as `decoded`, and
 /// what it answers.
 fn receive(octets: &[u8], decoded: &Result<Message, Error>) {
-    match (Message::decode_lenient(octets), decoded) {
+    match (
+        Message::decode_lenient(octets, oxirush_nas::DecodeOptions::STRICT),
+        decoded,
+    ) {
         (Ok((lenient, faults)), Ok(message)) => {
             assert_eq!(faults, [], "faults of a message that decode reads");
             assert_eq!(&lenient, message);
@@ -117,7 +120,10 @@ fn receive(octets: &[u8], decoded: &Result<Message, Error>) {
         assert!(errors.is_empty(), "the answer {answer} has {errors:?}");
     }
     for direction in [Direction::Uplink, Direction::Downlink] {
-        let Ok(message) = Message::decode_with_direction(octets, direction) else {
+        let Ok(message) = Message::decode_with(
+            octets,
+            oxirush_nas::DecodeOptions::STRICT.with_direction(direction),
+        ) else {
             continue;
         };
         match message.encode() {

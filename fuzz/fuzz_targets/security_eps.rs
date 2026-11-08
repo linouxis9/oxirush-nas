@@ -385,7 +385,11 @@ impl Ends {
         };
         match &result {
             Ok(verified) => {
-                let message = Message::decode_with_direction(plain, self.direction).unwrap();
+                let message = Message::decode_with(
+                    plain,
+                    oxirush_nas::DecodeOptions::STRICT.with_direction(self.direction),
+                )
+                .unwrap();
                 assert_eq!(verified.message, message);
                 assert_eq!(verified.security_header_type, sent.header);
             }
@@ -434,8 +438,11 @@ impl Ends {
                 let plain = PLAIN[usize::from(*message) % PLAIN.len()].clone();
                 let header = header(*number);
                 let direction = self.direction;
-                let result = Message::decode_with_direction(&plain, direction)
-                    .and_then(|message| self.sender.protect(&message, header, direction));
+                let result = Message::decode_with(
+                    &plain,
+                    oxirush_nas::DecodeOptions::STRICT.with_direction(direction),
+                )
+                .and_then(|message| self.sender.protect(&message, header, direction));
                 self.sent(result, header, plain, true);
             }
             Step::Burst {

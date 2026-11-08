@@ -3108,7 +3108,11 @@ pub(crate) mod tests {
             } else {
                 Direction::Uplink
             };
-            let message = nas_eps::Message::decode_with_direction(&wire, direction).unwrap();
+            let message = nas_eps::Message::decode_with(
+                &wire,
+                crate::DecodeOptions::STRICT.with_direction(direction),
+            )
+            .unwrap();
             let message = encode_back(&message, name);
             (0..3).for_each(|index| counts[index] += message[index]);
         }
@@ -3135,7 +3139,11 @@ pub(crate) mod tests {
             } else {
                 Direction::Uplink
             };
-            let message = nas_eps::Message::decode_with_direction(&wire, direction).unwrap();
+            let message = nas_eps::Message::decode_with(
+                &wire,
+                crate::DecodeOptions::STRICT.with_direction(direction),
+            )
+            .unwrap();
             if describe_alone(&message, name).encode().unwrap() != wire {
                 other.push(name);
             }

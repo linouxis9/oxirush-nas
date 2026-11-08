@@ -380,10 +380,13 @@ fn complete_eps_crypto_matrix_with_short_and_partial_messages() {
                         let mut rx = ectx(nia, nea, count);
                         let wire = tx.protect(message, sht, direction).unwrap();
                         assert_eq!(
-                            e::Message::decode_with_direction(&wire, direction)
-                                .unwrap()
-                                .encode()
-                                .unwrap(),
+                            e::Message::decode_with(
+                                &wire,
+                                oxirush_nas::DecodeOptions::STRICT.with_direction(direction)
+                            )
+                            .unwrap()
+                            .encode()
+                            .unwrap(),
                             wire
                         );
                         let decoded = rx.unprotect(&wire, direction).unwrap().message;
@@ -590,7 +593,11 @@ fn every_message_type_also_roundtrips_under_integrity_and_ciphering() {
         } else {
             oxirush_nas::Direction::Downlink
         };
-        let pdu = e::Message::decode_with_direction(&inner, direction).unwrap();
+        let pdu = e::Message::decode_with(
+            &inner,
+            oxirush_nas::DecodeOptions::STRICT.with_direction(direction),
+        )
+        .unwrap();
         let sht = match kind {
             "SecurityModeCommand" => {
                 e::SecurityHeaderType::IntegrityProtectedWithNewEpsSecurityContext

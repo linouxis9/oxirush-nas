@@ -71,7 +71,10 @@ const IDENTITIES: [&str; 2] = ["pdu_session_identity", "procedure_transaction_id
 /// What a receiver reads of `octets`, which `decode` read as `decoded`, and
 /// what it answers.
 fn receive(octets: &[u8], decoded: &Result<Message, Error>) {
-    match (Message::decode_lenient(octets), decoded) {
+    match (
+        Message::decode_lenient(octets, oxirush_nas::DecodeOptions::STRICT),
+        decoded,
+    ) {
         (Ok((lenient, faults)), Ok(message)) => {
             assert_eq!(faults, [], "faults of a message that decode reads");
             assert_eq!(&lenient, message);

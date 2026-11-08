@@ -5183,9 +5183,9 @@ impl EpsNasMessageContainer {
     /// presence and length, so a decoding error does not by itself make the
     /// REGISTRATION REQUEST invalid.
     pub fn decode_as_eps_message(&self) -> crate::common::Result<crate::nas_eps::Message> {
-        let message = crate::nas_eps::Message::decode_with_direction(
+        let message = crate::nas_eps::Message::decode_with(
             &self.value,
-            crate::common::Direction::Uplink,
+            crate::DecodeOptions::STRICT.with_direction(crate::common::Direction::Uplink),
         )?;
         if eps_container_message_is_supported(&message) {
             Ok(message)

@@ -769,7 +769,7 @@ macro_rules! nas_message {
                 buffer: &mut &[u8],
                 faults: &mut Vec<Error>,
             ) -> Result<Self> {
-                Self::decode_keeping(buffer, &mut crate::common::Reading::keeping(faults))
+                Self::decode_keeping(buffer, &mut crate::common::Reading::keeping(faults, crate::common::DecodeOptions::STRICT))
             }
         }
 

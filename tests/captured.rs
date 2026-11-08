@@ -133,8 +133,11 @@ fn each_captured_message_is_read_as_its_dissector_names_it_and_written_back() {
                     true => oxirush_nas::Direction::Downlink,
                     false => oxirush_nas::Direction::Uplink,
                 };
-                let decoded = e::Message::decode_with_direction(&message.plain, direction)
-                    .unwrap_or_else(|error| panic!("{at}: {error}"));
+                let decoded = e::Message::decode_with(
+                    &message.plain,
+                    oxirush_nas::DecodeOptions::STRICT.with_direction(direction),
+                )
+                .unwrap_or_else(|error| panic!("{at}: {error}"));
                 let name = match &decoded {
                     e::Message::Emm(_, emm) => {
                         named_by_pycrate("EMM", &format!("{:?}", emm.message_type()))
@@ -281,8 +284,10 @@ fn each_protected_captured_message_is_verified_and_deciphered_with_its_keys() {
                 verified.security_header_type as u8, message.security_header_type,
                 "{at}"
             );
-            let plain =
-                e::Message::decode_with_direction(&message.plain, oxirush_nas::Direction::Downlink);
+            let plain = e::Message::decode_with(
+                &message.plain,
+                oxirush_nas::DecodeOptions::STRICT.with_direction(oxirush_nas::Direction::Downlink),
+            );
             assert_eq!(verified.message, plain.unwrap(), "{at}");
         }
     }

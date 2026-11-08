@@ -32,7 +32,11 @@ fn the_serde_form_of_each_fixture_is_its_tree() {
             oxirush_nas::Direction::Uplink
         };
         let wire = hex::decode(hex).unwrap();
-        let message = e::Message::decode_with_direction(&wire, direction).unwrap();
+        let message = e::Message::decode_with(
+            &wire,
+            oxirush_nas::DecodeOptions::STRICT.with_direction(direction),
+        )
+        .unwrap();
         let document = serde_json::to_value(&message).unwrap();
         assert_eq!(Value::from(document.clone()), message.to_tree(), "{name}");
         let restored: e::Message = serde_json::from_value(document).unwrap();
@@ -147,7 +151,11 @@ fn every_fixture_is_shown_as_a_tree_and_written_from_it() {
         } else {
             oxirush_nas::Direction::Uplink
         };
-        let message = e::Message::decode_with_direction(&wire, direction).unwrap();
+        let message = e::Message::decode_with(
+            &wire,
+            oxirush_nas::DecodeOptions::STRICT.with_direction(direction),
+        )
+        .unwrap();
         let tree = message.to_tree();
         let back = e::Message::from_tree(tree.clone());
         let back = back.unwrap_or_else(|error| panic!("{name}: {error} from {tree}"));

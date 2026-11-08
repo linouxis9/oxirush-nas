@@ -239,7 +239,8 @@ fn a_message_with_a_faulty_mandatory_ie_is_read_with_its_fault() {
         reason: Some(Box::new(REALM.into())),
     };
     assert_eq!(f::Message::decode(&octets).unwrap_err(), fault);
-    let (message, faults) = f::Message::decode_lenient(&octets).unwrap();
+    let (message, faults) =
+        f::Message::decode_lenient(&octets, oxirush_nas::DecodeOptions::STRICT).unwrap();
     assert_eq!(faults, vec![fault.clone()]);
     // The IEs that are sound, and the octets of the one that is not
     let f::Message::Gmm(_, f::GmmMessage::RegistrationRequest(request)) = &message else {
@@ -264,7 +265,8 @@ fn a_message_with_a_faulty_mandatory_ie_is_read_with_its_fault() {
     // Under a security header, as an AMF receives it after `unprotect`
     let protected = [&[0x7e, 0x01, 1, 2, 3, 4, 0][..], &octets].concat();
     assert_eq!(f::Message::decode(&protected).unwrap_err(), fault);
-    let (message, faults) = f::Message::decode_lenient(&protected).unwrap();
+    let (message, faults) =
+        f::Message::decode_lenient(&protected, oxirush_nas::DecodeOptions::STRICT).unwrap();
     assert_eq!(faults, [fault]);
     assert_eq!(message.encode().unwrap(), protected);
 }
@@ -279,7 +281,8 @@ fn a_lenient_decode_is_the_decode_of_a_sound_message_and_its_errors() {
     {
         let (name, hex) = line.split_once('\t').unwrap();
         let octets = hex::decode(hex).unwrap();
-        let (message, faults) = f::Message::decode_lenient(&octets).unwrap();
+        let (message, faults) =
+            f::Message::decode_lenient(&octets, oxirush_nas::DecodeOptions::STRICT).unwrap();
         assert_eq!(faults, [], "{name}");
         assert_eq!(message, f::Message::decode(&octets).unwrap(), "{name}");
     }
@@ -293,10 +296,17 @@ fn a_lenient_decode_is_the_decode_of_a_sound_message_and_its_errors() {
             true => oxirush_nas::Direction::Downlink,
             false => oxirush_nas::Direction::Uplink,
         };
-        let (message, faults) =
-            e::Message::decode_lenient_with_direction(&octets, direction).unwrap();
+        let (message, faults) = e::Message::decode_lenient(
+            &octets,
+            oxirush_nas::DecodeOptions::STRICT.with_direction(direction),
+        )
+        .unwrap();
         assert_eq!(faults, [], "{name}");
-        let strict = e::Message::decode_with_direction(&octets, direction).unwrap();
+        let strict = e::Message::decode_with(
+            &octets,
+            oxirush_nas::DecodeOptions::STRICT.with_direction(direction),
+        )
+        .unwrap();
         assert_eq!(message, strict, "{name}");
     }
 
@@ -310,14 +320,14 @@ fn a_lenient_decode_is_the_decode_of_a_sound_message_and_its_errors() {
         &[0x7e, 0x05, 0x43],
     ] {
         assert_eq!(
-            f::Message::decode_lenient(octets).unwrap_err(),
+            f::Message::decode_lenient(octets, oxirush_nas::DecodeOptions::STRICT).unwrap_err(),
             f::Message::decode(octets).unwrap_err(),
             "{octets:02x?}"
         );
     }
     for octets in [&[0x07, 0x41][..], &[0x07, 0x53, 0x03, 0, 0], &[0x05, 0x41]] {
         assert_eq!(
-            e::Message::decode_lenient(octets).unwrap_err(),
+            e::Message::decode_lenient(octets, oxirush_nas::DecodeOptions::STRICT).unwrap_err(),
             e::Message::decode(octets).unwrap_err(),
             "{octets:02x?}"
         );
@@ -337,7 +347,8 @@ fn each_faulty_mandatory_ie_is_listed() {
         reason: None,
     };
     assert_eq!(e::Message::decode(&octets).unwrap_err(), short);
-    let (message, faults) = e::Message::decode_lenient(&octets).unwrap();
+    let (message, faults) =
+        e::Message::decode_lenient(&octets, oxirush_nas::DecodeOptions::STRICT).unwrap();
     assert_eq!(faults, [short]);
     let e::Message::Emm(_, e::EmmMessage::AuthenticationResponse(response)) = &message else {
         panic!("{message:?}");
@@ -350,7 +361,8 @@ fn each_faulty_mandatory_ie_is_listed() {
 
     // IDENTITY RESPONSE of 5GS whose identity has a reserved type
     let octets = [0x7e, 0x00, 0x5c, 0x00, 0x01, 0x07];
-    let (message, faults) = f::Message::decode_lenient(&octets).unwrap();
+    let (message, faults) =
+        f::Message::decode_lenient(&octets, oxirush_nas::DecodeOptions::STRICT).unwrap();
     assert_eq!(
         faults,
         [Error::InvalidMandatoryIe {
@@ -366,9 +378,14 @@ fn each_faulty_mandatory_ie_is_listed() {
     // DETACH REQUEST of EPS from the network, whose direction the caller
     // says: its detach type is reserved
     let octets = [0x07, 0x45, 0x07];
-    let strict = e::Message::decode_with_direction(&octets, oxirush_nas::Direction::Downlink);
-    let lenient =
-        e::Message::decode_lenient_with_direction(&octets, oxirush_nas::Direction::Downlink);
+    let strict = e::Message::decode_with(
+        &octets,
+        oxirush_nas::DecodeOptions::STRICT.with_direction(oxirush_nas::Direction::Downlink),
+    );
+    let lenient = e::Message::decode_lenient(
+        &octets,
+        oxirush_nas::DecodeOptions::STRICT.with_direction(oxirush_nas::Direction::Downlink),
+    );
     match strict {
         // The type is one that a receiver takes: nothing to list
         Ok(message) => assert_eq!(lenient.unwrap(), (message, vec![])),
@@ -456,7 +473,11 @@ fn a_refused_message_has_the_answer_of_clause_7() {
     assert_eq!(answer.unwrap().encode().unwrap(), [0x7e, 0x00, 0x64, 0x61]);
 
     let eps = |octets: &[u8], direction| {
-        let error = e::Message::decode_with_direction(octets, direction).unwrap_err();
+        let error = e::Message::decode_with(
+            octets,
+            oxirush_nas::DecodeOptions::STRICT.with_direction(direction),
+        )
+        .unwrap_err();
         let answer = e::Message::answer_to_refused(octets, &error, direction);
         answer.map(|answer| hex::encode(answer.encode().unwrap()))
     };
@@ -509,7 +530,7 @@ fn an_ie_out_of_sequence_is_taken_with_the_option() {
     // parameter
     let octets =
         hex::decode("07410108298039000000001002e0e000040201d0315c0a005202f8390001").unwrap();
-    let taken = e::Message::decode_with(&octets, Uplink, options).unwrap();
+    let taken = e::Message::decode_with(&octets, options.with_direction(Uplink)).unwrap();
     let e::Message::Emm(_, e::EmmMessage::AttachRequest(attach)) = &taken else {
         panic!("{taken:?}")
     };
@@ -539,9 +560,9 @@ fn a_finding_on_an_ie_says_the_rule_that_it_breaks() {
         "{message}"
     );
     // ATTACH REQUEST with a DRX parameter whose split PG cycle code is 99
-    let attach = e::Message::decode_with_direction(
+    let attach = e::Message::decode_with(
         &hex::decode("07410108298039000000001002e0e000040201d0315c6300").unwrap(),
-        oxirush_nas::Direction::Uplink,
+        oxirush_nas::DecodeOptions::STRICT.with_direction(oxirush_nas::Direction::Uplink),
     )
     .unwrap();
     let message = rule(attach.validate(), "drx_parameter");
@@ -586,7 +607,10 @@ fn a_received_message_is_answered_whatever_was_wrong() {
 
     let eps = |octets: &str| {
         let octets = hex::decode(octets).unwrap();
-        let received = e::Message::decode_with_direction(&octets, Uplink);
+        let received = e::Message::decode_with(
+            &octets,
+            oxirush_nas::DecodeOptions::STRICT.with_direction(Uplink),
+        );
         let answer = e::Message::answer_to(&octets, &received, Uplink);
         answer.map(|answer| hex::encode(answer.encode().unwrap()))
     };

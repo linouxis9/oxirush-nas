@@ -251,7 +251,7 @@
 //! | Optional IE that is syntactically incorrect or out of sequence | Treated as absent, and kept in raw form. |
 //! | Mandatory IE that is missing, cut short, shorter than its message allows or syntactically incorrect | [`Error::InvalidMandatoryIe`], with the field and the fault. |
 //! | Unknown IE encoded as "comprehension required" | Kept when it is well framed, so that a tool can inspect the message: `unknown_ies()` returns it, [`UnknownIe::is_comprehension_required`] flags it, `validate()` reports it. The answer that §7.5.1 of TS 24.501 or TS 24.301 requires of a receiver is the caller's. One that is cut short is [`Error::UnknownIeCutShort`]. |
-//! | EPS DETACH REQUEST | One message type for the two directions (TS 24.301 §8.2.11). [`nas_eps::Message::decode`] tells them apart by their contents, which do not decide every case; [`nas_eps::Message::decode_with_direction`] takes the direction. |
+//! | EPS DETACH REQUEST | One message type for the two directions (TS 24.301 §8.2.11). [`nas_eps::Message::decode`] tells them apart by their contents, which do not decide every case; [`nas_eps::Message::decode_with`] takes the direction in its [`DecodeOptions`]. |
 //! | Typed getters | The value a receiver must act on, with the receive fallbacks of the IE tables: `IdentityType::Imsi` for an undefined identity type of EPS, for example. `*_strict` and `*_raw` variants give the exact code. |
 //! | `validate()` | The value and conditional rules of TS 24.501 and TS 24.301, repeated IEs and out-of-sequence IEs, as errors or warnings. `is_well_formed()` checks a single IE. |
 //! | Encoding | Accepts every value a type can represent, so a test tool can emit invalid values. |

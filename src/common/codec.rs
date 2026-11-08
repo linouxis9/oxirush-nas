@@ -17,6 +17,7 @@
 
 //! Shared NAS codec traits, errors, and wire helpers.
 
+use crate::common::Direction;
 use crate::common::names::printed;
 use crate::prelude::*;
 use core::fmt;
@@ -412,12 +413,11 @@ pub trait Decode: Sized {
     }
 }
 
-/// What a receiver takes beyond the rules of TS 24.501 and TS 24.301, from
-/// a peer that does not follow them: [`Message::decode_with`] and
-/// [`Message::decode_with`] read a message by them.
-///
-/// [`Message::decode_with`]: crate::nas_5gs::Message::decode_with
-/// [`Message::decode_with`]: crate::nas_eps::Message::decode_with
+/// How a message is read beyond what its octets say: who sent it, and what
+/// a receiver takes beyond the rules of TS 24.501 and TS 24.301 from a peer
+/// that does not follow them. `decode_with` and `decode_lenient` of
+/// [`nas_5gs::Message`](crate::nas_5gs::Message) and
+/// [`nas_eps::Message`](crate::nas_eps::Message) read a message by them.
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct DecodeOptions {
@@ -426,18 +426,33 @@ pub struct DecodeOptions {
     /// other implementations do: `validate()` reports each one as out of the
     /// order of the table, and the message is encoded in the order it came.
     pub out_of_sequence: bool,
+    /// The direction the message was sent in, where its octets do not say
+    /// it: TS 24.301 has one message type for the DETACH REQUEST of the UE
+    /// and for that of the network. `None` reads the one that the octets
+    /// fit. A 5GS message says its direction by its type, and needs none.
+    pub direction: Option<Direction>,
 }
 
 impl DecodeOptions {
     /// The rules of the specifications, which [`Decode::decode`] follows.
     pub const STRICT: Self = Self {
         out_of_sequence: false,
+        direction: None,
     };
 
     /// These options, taking the known optional IEs out of sequence too.
     pub const fn with_out_of_sequence(self) -> Self {
         Self {
             out_of_sequence: true,
+            ..self
+        }
+    }
+
+    /// These options, for a message sent in `direction`.
+    pub const fn with_direction(self, direction: Direction) -> Self {
+        Self {
+            direction: Some(direction),
+            ..self
         }
     }
 }
@@ -465,11 +480,12 @@ impl<'b> Reading<'b> {
         }
     }
 
-    /// A reading that keeps the faults of the mandatory IEs in `faults`.
-    pub(crate) fn keeping(faults: &'b mut Vec<Error>) -> Self {
+    /// A reading by `options` that keeps the faults of the mandatory IEs in
+    /// `faults`.
+    pub(crate) fn keeping(faults: &'b mut Vec<Error>, options: DecodeOptions) -> Self {
         Self {
             faults: Some(faults),
-            options: DecodeOptions::STRICT,
+            options,
         }
     }
 }
@@ -610,5 +626,26 @@ impl Writer for Vec<u8> {
 
     fn put_slice(&mut self, octets: &[u8]) {
         self.extend_from_slice(octets);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Each option of a reading is set by its own method, and keeps the others.
+    #[test]
+    fn the_options_of_a_reading_are_set_one_by_one() {
+        let options = DecodeOptions::STRICT.with_direction(Direction::Downlink);
+        assert_eq!(
+            (options.out_of_sequence, options.direction),
+            (false, Some(Direction::Downlink))
+        );
+        let options = options.with_out_of_sequence();
+        assert_eq!(
+            (options.out_of_sequence, options.direction),
+            (true, Some(Direction::Downlink))
+        );
+        assert_eq!(DecodeOptions::STRICT, DecodeOptions::default());
     }
 }

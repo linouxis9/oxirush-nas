@@ -1980,7 +1980,10 @@ impl Decode for Message {
     }
 
     fn decode_lenient_from(buffer: &mut &[u8], faults: &mut Vec<Error>) -> Result<Self> {
-        Self::decode_keeping(buffer, &mut crate::common::Reading::keeping(faults))
+        Self::decode_keeping(
+            buffer,
+            &mut crate::common::Reading::keeping(faults, crate::common::DecodeOptions::STRICT),
+        )
     }
 }
 
@@ -2279,7 +2282,7 @@ impl Message {
     /// assert_eq!(Message::decode(&octets), Err(refusal.clone()));
     ///
     /// // What the AMF reads of it, to log it and to choose its answer
-    /// let (message, faults) = Message::decode_lenient(&octets).unwrap();
+    /// let (message, faults) = Message::decode_lenient(&octets, oxirush_nas::DecodeOptions::STRICT).unwrap();
     /// assert_eq!(faults, [refusal]);
     /// let Message::Gmm(_, GmmMessage::RegistrationRequest(request)) = &message else {
     ///     panic!("another message")
@@ -2294,9 +2297,13 @@ impl Message {
     /// let status = Message::new_5gmm(GmmStatus::new(cause));
     /// assert_eq!(status.encode().unwrap(), [0x7e, 0x00, 0x64, 0x60]);
     /// ```
-    pub fn decode_lenient(mut octets: &[u8]) -> Result<(Self, Vec<Error>)> {
+    pub fn decode_lenient(
+        mut octets: &[u8],
+        options: crate::common::DecodeOptions,
+    ) -> Result<(Self, Vec<Error>)> {
         let mut faults = Vec::new();
-        let message = Self::decode_lenient_from(&mut octets, &mut faults)?;
+        let mut reading = crate::common::Reading::keeping(&mut faults, options);
+        let message = Self::decode_keeping(&mut octets, &mut reading)?;
         match octets.len() {
             0 => Ok((message, faults)),
             more => Err(crate::common::trailing(more)),

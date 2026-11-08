@@ -114,7 +114,7 @@ impl Implementation for OxirushNas {
     fn check(&self, name: &str, octets: &[u8]) -> (bool, Option<bool>) {
         let encoded = match self.eps {
             false => Message::decode(octets).map(|message| message.encode()),
-            true => Message::decode_with_direction(octets, direction(name))
+            true => Message::decode_with(octets, oxirush_nas::DecodeOptions::STRICT.with_direction(direction(name)))
                 .map(|message| message.encode()),
         };
         match encoded {
@@ -140,7 +140,7 @@ impl Implementation for OxirushNas {
                 timed(messages.len(), passes, || {
                     for (octets, direction) in &octets {
                         let decoded =
-                            Message::decode_with_direction(black_box(octets), *direction);
+                            Message::decode_with(black_box(octets), oxirush_nas::DecodeOptions::STRICT.with_direction(*direction));
                         drop(black_box(decoded));
                     }
                 });
@@ -158,7 +158,7 @@ impl Implementation for OxirushNas {
             ("encode", true) => {
                 let decoded: Vec<_> = (messages.iter())
                     .map(|(name, octets)| {
-                        Message::decode_with_direction(octets, direction(name)).unwrap()
+                        Message::decode_with(octets, oxirush_nas::DecodeOptions::STRICT.with_direction(direction(name))).unwrap()
                     })
                     .collect();
                 timed(messages.len(), passes, || {

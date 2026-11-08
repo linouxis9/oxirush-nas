@@ -463,7 +463,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // What the message has, to log it or to treat it all the same
-    let (message, faults) = Message::decode_lenient(&octets)?;
+    let (message, faults) = Message::decode_lenient(&octets, oxirush_nas::DecodeOptions::STRICT)?;
     assert_eq!(faults.first(), error.as_ref());
     println!("{message}");
 

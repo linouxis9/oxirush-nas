@@ -63,7 +63,11 @@ fn decode_5gs(octets: &[u8]) -> nas_5gs::Message {
 }
 
 fn decode_eps(octets: &[u8], direction: Direction) -> nas_eps::Message {
-    nas_eps::Message::decode_with_direction(octets, direction).unwrap()
+    nas_eps::Message::decode_with(
+        octets,
+        oxirush_nas::DecodeOptions::STRICT.with_direction(direction),
+    )
+    .unwrap()
 }
 
 fn encode_5gs(message: &nas_5gs::Message) -> Vec<u8> {

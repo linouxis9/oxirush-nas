@@ -129,7 +129,7 @@ fn reading(system: &str, octets: &[u8]) -> Value {
             )),
             Err(error) => Err((
                 error.to_string(),
-                nas_5gs::Message::decode_lenient(octets)
+                nas_5gs::Message::decode_lenient(octets, crate::DecodeOptions::STRICT)
                     .ok()
                     .map(|(message, faults)| {
                         (
@@ -148,7 +148,7 @@ fn reading(system: &str, octets: &[u8]) -> Value {
             )),
             Err(error) => Err((
                 error.to_string(),
-                nas_eps::Message::decode_lenient(octets)
+                nas_eps::Message::decode_lenient(octets, crate::DecodeOptions::STRICT)
                     .ok()
                     .map(|(message, faults)| {
                         (

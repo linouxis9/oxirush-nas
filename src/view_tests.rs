@@ -65,7 +65,7 @@ fn eps_fixture(name: &str, wire: &[u8]) -> e::Message {
     } else {
         crate::Direction::Uplink
     };
-    e::Message::decode_with_direction(wire, direction).unwrap()
+    e::Message::decode_with(wire, crate::DecodeOptions::STRICT.with_direction(direction)).unwrap()
 }
 
 #[test]
@@ -841,7 +841,10 @@ fn every_message_of_a_view_alone_is_the_fixture_it_was_viewed_from() {
             } else {
                 crate::Direction::Uplink
             };
-            let Ok(message) = e::Message::decode_with_direction(&bytes, direction) else {
+            let Ok(message) = e::Message::decode_with(
+                &bytes,
+                crate::DecodeOptions::STRICT.with_direction(direction),
+            ) else {
                 continue;
             };
             let view = message.to_view();
@@ -3394,7 +3397,10 @@ fn a_value_that_says_nothing_writes_no_message() {
                 true => crate::Direction::Downlink,
                 false => crate::Direction::Uplink,
             };
-            match e::Message::decode_with_direction(&octets, direction) {
+            match e::Message::decode_with(
+                &octets,
+                crate::DecodeOptions::STRICT.with_direction(direction),
+            ) {
                 Err(error) => unread.push(format!(
                     "{name} {path} = {}: {error}",
                     pointer(&tree, &path).unwrap()

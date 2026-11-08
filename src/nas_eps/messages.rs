@@ -2553,7 +2553,10 @@ impl Decode for Message {
     }
 
     fn decode_lenient_from(buffer: &mut &[u8], faults: &mut Vec<Error>) -> Result<Self> {
-        Self::decode_keeping(buffer, &mut crate::common::Reading::keeping(faults))
+        Self::decode_keeping(
+            buffer,
+            &mut crate::common::Reading::keeping(faults, crate::common::DecodeOptions::STRICT),
+        )
     }
 }
 
@@ -2638,8 +2641,8 @@ impl Message {
     /// what is decoded: an EMM message (7), with or without a security
     /// header, or an ESM message (2). Octets after the message are an error.
     /// A DETACH REQUEST, which has one message type for both directions, is
-    /// read as the one that its octets fit: [`Self::decode_with_direction`]
-    /// reads it as the one of its direction.
+    /// read as the one that its octets fit: [`Self::decode_with`] reads it
+    /// as the one of the direction of its options.
     ///
     /// ```
     /// use oxirush_nas::nas_eps::*;
@@ -2662,16 +2665,15 @@ impl Message {
         <Self as Decode>::decode(octets)
     }
 
-    /// The message that `octets` are, as [`Self::decode_with_direction`]
-    /// reads one of the direction `direction`, with what a receiver takes
-    /// beyond the rules of TS 24.301 by `options`: a known optional IE out of
-    /// the order of its table, which §7.6.2 has a receiver ignore and other
-    /// implementations take.
+    /// The message that `octets` are, read by `options`: as one sent in
+    /// their direction, which tells the two DETACH REQUESTs apart, and with
+    /// what a receiver takes beyond the rules of TS 24.301, as a known
+    /// optional IE out of the order of its table, which §7.6.2 has a
+    /// receiver ignore and other implementations take.
     ///
     /// ```
-    /// use oxirush_nas::DecodeOptions;
     /// use oxirush_nas::nas_eps::{EmmMessage, Message};
-    /// use oxirush_nas::Direction;
+    /// use oxirush_nas::{DecodeOptions, Direction};
     ///
     /// // ATTACH REQUEST whose last visited registered TAI comes after its
     /// // DRX parameter, which its table places after it
@@ -2685,20 +2687,12 @@ impl Message {
     /// };
     /// assert!(tai(&Message::decode(&octets).unwrap()).is_none());
     /// let options = DecodeOptions::STRICT.with_out_of_sequence();
-    /// let taken = Message::decode_with(&octets, Direction::Uplink, options).unwrap();
+    /// let taken = Message::decode_with(&octets, options.with_direction(Direction::Uplink)).unwrap();
     /// assert!(tai(&taken).is_some());
     /// assert_eq!(taken.encode().unwrap(), octets);
     /// ```
-    pub fn decode_with(
-        octets: &[u8],
-        direction: Direction,
-        options: crate::common::DecodeOptions,
-    ) -> Result<Self> {
-        Self::decode_directed(
-            octets,
-            direction,
-            &mut crate::common::Reading::with(options),
-        )
+    pub fn decode_with(octets: &[u8], options: crate::common::DecodeOptions) -> Result<Self> {
+        Self::decode_by(octets, &mut crate::common::Reading::with(options))
     }
 
     /// The octets of the message, header first.
@@ -2711,14 +2705,6 @@ impl Message {
     /// What a message is first given to be encoded in: most signalling
     /// messages are shorter, and one that is longer takes more.
     const ENCODED: usize = 64;
-
-    /// [`Self::decode`] for a message of the direction `direction`.
-    ///
-    /// Both DETACH REQUEST forms use message type 0x45, so their body alone
-    /// cannot distinguish every valid optional-IE combination.
-    pub fn decode_with_direction(data: &[u8], direction: Direction) -> Result<Message> {
-        Self::decode_directed(data, direction, &mut crate::common::Reading::strict())
-    }
 
     /// The message that TS 24.301 clause 7 has a receiver answer with, to
     /// `octets` that [`Self::decode`] refused with `error`. `direction` is
@@ -2905,35 +2891,36 @@ impl Message {
     /// };
     /// assert_eq!(Message::decode(&octets), Err(refusal.clone()));
     ///
-    /// let (message, faults) = Message::decode_lenient(&octets).unwrap();
+    /// let (message, faults) = Message::decode_lenient(&octets, oxirush_nas::DecodeOptions::STRICT).unwrap();
     /// assert_eq!(faults, [refusal]);
     /// let Message::Emm(_, EmmMessage::AuthenticationResponse(response)) = &message else {
     ///     panic!("another message")
     /// };
     /// assert_eq!(response.authentication_response_parameter.value, [0xa1, 0xa2, 0xa3]);
     /// ```
-    pub fn decode_lenient(mut octets: &[u8]) -> Result<(Self, Vec<Error>)> {
+    pub fn decode_lenient(
+        octets: &[u8],
+        options: crate::common::DecodeOptions,
+    ) -> Result<(Self, Vec<Error>)> {
         let mut faults = Vec::new();
-        let message = Self::decode_lenient_from(&mut octets, &mut faults)?;
-        match octets.len() {
-            0 => Ok((message, faults)),
-            more => Err(crate::common::trailing(more)),
-        }
-    }
-
-    /// [`Self::decode_lenient`] for a message of the direction `direction`,
-    /// as [`Self::decode_with_direction`] reads one.
-    pub fn decode_lenient_with_direction(
-        data: &[u8],
-        direction: Direction,
-    ) -> Result<(Message, Vec<Error>)> {
-        let mut faults = Vec::new();
-        let message = Self::decode_directed(
-            data,
-            direction,
-            &mut crate::common::Reading::keeping(&mut faults),
+        let message = Self::decode_by(
+            octets,
+            &mut crate::common::Reading::keeping(&mut faults, options),
         )?;
         Ok((message, faults))
+    }
+
+    /// The message that `octets` are, read by `reading`: as one of the
+    /// direction of its options, or as the one that the octets fit.
+    fn decode_by(mut octets: &[u8], reading: crate::common::Faults<'_, '_>) -> Result<Self> {
+        if let Some(direction) = reading.options.direction {
+            return Self::decode_directed(octets, direction, reading);
+        }
+        let message = Self::decode_keeping(&mut octets, reading)?;
+        match octets.len() {
+            0 => Ok(message),
+            more => Err(crate::common::trailing(more)),
+        }
     }
 
     /// A message of the direction `direction`, decoded strictly or keeping
@@ -3387,7 +3374,11 @@ mod tests {
                         [Direction::Uplink, Direction::Downlink]
                             .into_iter()
                             .map(|direction| {
-                                Message::decode_with_direction(&wire, direction).is_ok()
+                                Message::decode_with(
+                                    &wire,
+                                    crate::DecodeOptions::STRICT.with_direction(direction),
+                                )
+                                .is_ok()
                             })
                             .collect::<Vec<_>>(),
                     )
@@ -4117,7 +4108,10 @@ mod tests {
         let empty = [0x17, 0, 0, 0, 0, 0];
         assert_eq!(Message::decode(&empty), Err(crate::Error::MessageTooShort));
         assert_eq!(
-            Message::decode_with_direction(&empty, Direction::Uplink),
+            Message::decode_with(
+                &empty,
+                crate::DecodeOptions::STRICT.with_direction(Direction::Uplink)
+            ),
             Err(crate::Error::MessageTooShort)
         );
         // T1, T2: unknown type 1/2 and TLV-E IEs are skipped by their format
@@ -4387,9 +4381,17 @@ mod tests {
             ),
         ] {
             let direction = Direction::Downlink;
-            let short = Message::decode_with_direction(&pdu(with_two), direction).unwrap();
+            let short = Message::decode_with(
+                &pdu(with_two),
+                crate::DecodeOptions::STRICT.with_direction(direction),
+            )
+            .unwrap();
             assert_eq!(short.unknown_ies().len(), 1, "{message}");
-            let whole = Message::decode_with_direction(&pdu(with_four), direction).unwrap();
+            let whole = Message::decode_with(
+                &pdu(with_four),
+                crate::DecodeOptions::STRICT.with_direction(direction),
+            )
+            .unwrap();
             assert_eq!(whole.unknown_ies().len(), 0, "{message}");
             assert_eq!(whole.encode().unwrap(), pdu(with_four), "{message}");
         }
@@ -4575,8 +4577,11 @@ mod tests {
         // The direction selects the network form also when the octets read
         // as a UE identity; its unknown comprehension-required IE is kept.
         let unknown_required = [0x07, 0x45, 0x01, 0x05, 0x04, 0x11, 0x22, 0x33, 0x44];
-        let message =
-            Message::decode_with_direction(&unknown_required, Direction::Downlink).unwrap();
+        let message = Message::decode_with(
+            &unknown_required,
+            crate::DecodeOptions::STRICT.with_direction(Direction::Downlink),
+        )
+        .unwrap();
         assert!(matches!(
             message,
             Message::Emm(_, EmmMessage::DetachRequestUeTerminated(_))
@@ -4585,13 +4590,17 @@ mod tests {
         assert!(first.is_comprehension_required());
         let downlink = [0x07, 0x45, 0x01, 0x53, 0x03];
         assert!(matches!(
-            Message::decode_with_direction(&downlink, Direction::Downlink).unwrap(),
+            Message::decode_with(
+                &downlink,
+                crate::DecodeOptions::STRICT.with_direction(Direction::Downlink)
+            )
+            .unwrap(),
             Message::Emm(_, EmmMessage::DetachRequestUeTerminated(_))
         ));
         let mut protected = vec![0x17, 0, 0, 0, 0, 0];
         protected.extend_from_slice(&downlink);
         assert!(matches!(
-            Message::decode_with_direction(&protected, Direction::Downlink).unwrap(),
+            Message::decode_with(&protected, crate::DecodeOptions::STRICT.with_direction(Direction::Downlink)).unwrap(),
             Message::SecurityProtected(_, inner) if matches!(*inner, Message::Emm(_, EmmMessage::DetachRequestUeTerminated(_)))
         ));
     }
@@ -4702,10 +4711,7 @@ mod tests {
     #[test]
     fn identity_and_authentication_ksi_follow_eps_value_rules() {
         assert!(matches!(
-            Message::decode_with_direction(
-                &[0x07, 0x45, 0x01, 0x04, 0, 0, 0, 0],
-                Direction::Uplink,
-            ),
+            Message::decode_with(&[0x07, 0x45, 0x01, 0x04, 0, 0, 0, 0], crate::DecodeOptions::STRICT.with_direction(Direction::Uplink)),
             Err(Error::InvalidMandatoryIe {
                 ie,
                 fault: IeFault::Syntax,
@@ -4911,7 +4917,11 @@ mod tests {
     #[test]
     fn a_protected_message_is_read_and_answered_as_its_plain_message() {
         let detach = [0x17, 0, 0, 0, 0, 0, 0x07, 0x45, 0x01];
-        let message = Message::decode_with_direction(&detach, Direction::Downlink).unwrap();
+        let message = Message::decode_with(
+            &detach,
+            crate::DecodeOptions::STRICT.with_direction(Direction::Downlink),
+        )
+        .unwrap();
         let Message::SecurityProtected(_, inner) = message else {
             panic!("a protected message");
         };
@@ -4920,7 +4930,10 @@ mod tests {
             Message::Emm(_, EmmMessage::DetachRequestUeTerminated(_))
         ));
         // In the uplink the same octets are a DETACH REQUEST without its identity
-        let refused = Message::decode_with_direction(&detach, Direction::Uplink);
+        let refused = Message::decode_with(
+            &detach,
+            crate::DecodeOptions::STRICT.with_direction(Direction::Uplink),
+        );
         assert!(
             matches!(refused, Err(Error::InvalidMandatoryIe { ie, .. }) if ie.to_string() == "eps-mobile-identity"),
             "{refused:?}"

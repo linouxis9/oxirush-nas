@@ -885,8 +885,11 @@ impl SecurityContext {
             }
             return Ok((plain, None, sht, nas_count));
         }
-        let inner = Message::decode_with_direction(&plain, direction)
-            .map_err(|error| refused(error, &plain))?;
+        let inner = Message::decode_with(
+            &plain,
+            crate::DecodeOptions::STRICT.with_direction(direction),
+        )
+        .map_err(|error| refused(error, &plain))?;
         validate_sht_message(sht, &inner, direction).map_err(|_| {
             let error = "EPS security header type does not match message type";
             refused(Error::DecodingError(error.into()), &plain)
@@ -1360,7 +1363,11 @@ mod tests {
             "0745011d200d5ab2594f09d78af9848bc8c934aef5f813475d1d03fdd4592d4febacfde0ed",
         )
         .unwrap();
-        let message = Message::decode_with_direction(&plain, Direction::Downlink).unwrap();
+        let message = Message::decode_with(
+            &plain,
+            crate::DecodeOptions::STRICT.with_direction(Direction::Downlink),
+        )
+        .unwrap();
         assert!(matches!(
             message,
             Message::Emm(_, EmmMessage::DetachRequestUeTerminated(_))

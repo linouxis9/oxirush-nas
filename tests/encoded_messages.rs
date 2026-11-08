@@ -59,8 +59,11 @@ fn every_supported_eps_message_has_a_canonical_exact_byte_fixture() {
         } else {
             oxirush_nas::Direction::Uplink
         };
-        let pdu = e::Message::decode_with_direction(&wire, direction)
-            .unwrap_or_else(|e| panic!("{name}: {e}"));
+        let pdu = e::Message::decode_with(
+            &wire,
+            oxirush_nas::DecodeOptions::STRICT.with_direction(direction),
+        )
+        .unwrap_or_else(|e| panic!("{name}: {e}"));
         let errors: Vec<_> = pdu
             .validate()
             .into_iter()
@@ -269,7 +272,11 @@ fn every_message_of_the_fixtures_prints_its_ies() {
         } else {
             oxirush_nas::Direction::Uplink
         };
-        let message = e::Message::decode_with_direction(&wire, direction).unwrap();
+        let message = e::Message::decode_with(
+            &wire,
+            oxirush_nas::DecodeOptions::STRICT.with_direction(direction),
+        )
+        .unwrap();
         assert_eq!(lines.next(), Some((name, message.to_string().as_str())));
     }
     assert_eq!(lines.next(), None);
