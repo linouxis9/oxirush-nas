@@ -586,20 +586,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ## Performance
 
-On one core of an AMD Ryzen 7 5700G (Linux 7.0, Rust 1.98.1), at c4fdffc on
-2026-10-18, and the JSON forms at 3a0d08d, for a message of the 5GS
-fixtures (17 octets on average). `with_tree` was timed for 0.6.0 beside
-`from_tree`, on a busy machine: it takes 1.14 times as long.
+On one core of an AMD Ryzen 7 5700G (Linux 7.0, Rust 1.98.1), for 0.6.0 on
+2026-11-08, for a message of the 5GS fixtures (19 octets on average): the
+lowest of three runs, on a machine that other work shared, so that the
+times are high rather than low.
 
 | Operation | Time | Allocations |
 |-----------|------|-------------|
-| `decode` | 109 ns | 1.2 |
-| `encode` | 46 ns | 1.0 |
-| `validate` | 210 ns | 3.2 |
-| `to_tree` | 15.2 µs | 210 |
-| `from_tree` | 29.9 µs | 339 |
-| `with_tree` | 34 µs | 478 |
-| `protect`, `unprotect` (128-NIA2, 128-NEA2) | 230 ns, 323 ns | 2.0, 2.3 |
+| `decode` | 122 ns | 1.2 |
+| `encode` | 65 ns | 1.0 |
+| `validate` | 244 ns | 3.2 |
+| `to_tree` | 15.9 µs | 256 |
+| `from_tree` | 24.0 µs | 350 |
+| `with_tree` | 35.2 µs | 530 |
+| `protect`, `unprotect` (128-NIA2, 128-NEA2) | 204 ns, 408 ns | 2.0, 2.3 |
 
 [`benches/`](benches/README.md) has how to run them and the profilers.
 

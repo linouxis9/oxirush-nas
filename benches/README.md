@@ -5,8 +5,8 @@ the codec, the JSON forms and NAS security on the messages of the fixtures,
 with criterion; [`src/lib.rs`](src/lib.rs) has the commands of the
 profilers. The [README](../README.md#performance) has the figures of the
 crate alone, taken on an AMD Ryzen 7 5700G (16 threads, Linux 7.0, Rust
-1.98.1), on a quiet machine on 2026-10-18, at c4fdffc, and the JSON forms at
-3a0d08d, the lowest of five runs.
+1.98.1) for 0.6.0 on 2026-11-08, the lowest of three runs, on a machine that
+other work shared.
 
 ```sh
 cargo bench
