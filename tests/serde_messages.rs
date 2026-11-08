@@ -714,3 +714,45 @@ fn an_emm_transport_is_shown_and_written() {
     assert_eq!(tree["data-container"], tree!({"octets": "0102"}));
     assert_eq!(e::Message::from_tree(tree).unwrap(), plain);
 }
+
+/// An edit of the type of a payload container keeps the octets of the
+/// container, which read as the new type says: found by the `edit_5gs` fuzz
+/// target, which took the new reading for a change of the container. This
+/// DL NAS TRANSPORT that Open5GS sent carries a PDU SESSION ESTABLISHMENT
+/// ACCEPT, which a CIoT user data container is not read as (TS 24.501
+/// §9.11.3.40).
+#[test]
+fn the_type_of_a_payload_container_says_how_its_octets_read() {
+    let wire = hex::decode(
+        "7e006801004a2e0703c211000901000631310101ff010603f42403f4242905010a2d0004220401010203\
+         7900060120410101097b000f80000d0408080808000d0408080404250908696e7465726e65741207",
+    )
+    .unwrap();
+    let message = f::Message::decode(&wire).unwrap();
+    let container = message.ie_octets("/nas/payload-container").unwrap();
+    let tree = message.to_tree();
+    assert_eq!(
+        tree["payload-container"]["message-type"],
+        tree!("pdu-session-establishment-accept")
+    );
+
+    let mut edited = tree.clone();
+    edited["payload-container-type"] = tree!("ciot");
+    let ciot = message.with_tree(edited).unwrap();
+    assert_eq!(ciot.ie_octets("/nas/payload-container").unwrap(), container);
+    assert_eq!(
+        ciot.to_tree()["payload-container"],
+        tree!({"octets": hex::encode(container.unwrap())})
+    );
+    // On the wire, the type alone changes
+    let mut changed = wire.clone();
+    changed[3] = 0x08;
+    assert_eq!(ciot.encode().unwrap(), changed);
+
+    // As N1 SM information again, the container is the message it was
+    let mut edited = ciot.to_tree();
+    edited["payload-container-type"] = tree!("n1-sm-information");
+    let again = ciot.with_tree(edited).unwrap();
+    assert_eq!(again, message);
+    assert_eq!(again.to_tree(), tree);
+}

@@ -21,9 +21,11 @@
 //!
 //! An edit that the tree or the message refuses is an error, never a panic.
 //! The message that `with_tree` writes is one that the crate wrote
-//! ([`written`]), and only what was edited changes: each IE and each field of
-//! the header that no edit touched is as it was, unless an edit was of the
-//! header, whose fields decide what the IEs are.
+//! ([`written`]), and only what was edited changes: each IE that no edit
+//! touched has the octets that it had, and each field of the header is as it
+//! was, unless an edit was of the header, whose fields decide what the IEs
+//! are. The octets of an IE read as an edited IE may say: a payload
+//! container as its type.
 
 use crate::messages::{Leaf, Message, change, hex, written};
 use libfuzzer_sys::arbitrary::{self, Arbitrary};
@@ -154,8 +156,9 @@ pub fn edit<M: Message>(input: Edits) {
     };
     written(&changed);
 
-    // An edit of the header may change what the IEs are; else each member
-    // that no edit touched is as it was
+    // An edit of the header may change what the IEs are; else each IE that
+    // no edit touched has its octets, however they read now, and each other
+    // member of the tree is as it was
     let after = changed.to_tree();
     let header = ["message-type", "security-header-type", "spare-half-octet"];
     if edited.iter().any(|key| header.contains(&key.as_str())) {
@@ -165,10 +168,18 @@ pub fn edit<M: Message>(input: Edits) {
         .flat_map(|tree| tree.keys())
         .filter(|key| !edited.contains(key));
     for key in keys {
-        assert_eq!(
-            before.get(key),
-            after.get(key),
-            "`{key}` changed with an edit of {edited:?} of {message:?} to {changed:?}"
-        );
+        let path = format!("/nas/{key}");
+        match (message.ie_octets(&path), changed.ie_octets(&path)) {
+            (Ok(octets), Ok(again)) => assert_eq!(
+                octets, again,
+                "the octets of `{key}` changed with an edit of {edited:?} of {message:?} to \
+                 {changed:?}"
+            ),
+            _ => assert_eq!(
+                before.get(key),
+                after.get(key),
+                "`{key}` changed with an edit of {edited:?} of {message:?} to {changed:?}"
+            ),
+        }
     }
 }
