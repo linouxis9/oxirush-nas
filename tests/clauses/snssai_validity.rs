@@ -129,7 +129,7 @@ fn a_recurrence_pattern_is_one_of_its_ten_codes() {
     ];
     for code in 0..16u8 {
         let pattern = patterns.get(usize::from(code)).copied();
-        assert_eq!(Pattern::from_u8(code), pattern, "{code}");
+        assert_eq!(Pattern::try_from(code & 0x0F).ok(), pattern, "{code}");
     }
 }
 

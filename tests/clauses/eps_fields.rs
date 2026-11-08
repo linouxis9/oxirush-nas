@@ -39,7 +39,11 @@ fn a_request_type_is_one_of_the_five_of_table_10_5_173() {
         (7, None),
     ];
     for (value, request_type) in types {
-        assert_eq!(RequestTypeValue::from_u8(value), request_type, "{value}");
+        assert_eq!(
+            RequestTypeValue::try_from(value & 0x07).ok(),
+            request_type,
+            "{value}"
+        );
         let emergency = matches!(
             request_type,
             Some(RequestTypeValue::Emergency | RequestTypeValue::EmergencyHandover)
@@ -67,9 +71,12 @@ fn cs_lcs_is_no_information_supported_or_not_supported() {
         CsLcsSupport::NotSupported,
     ];
     for (value, support) in support.into_iter().enumerate() {
-        assert_eq!(CsLcsSupport::from_u8_strict(value as u8), Some(support));
+        assert_eq!(
+            CsLcsSupport::try_from((value as u8) & 0x03).ok(),
+            Some(support)
+        );
     }
-    assert_eq!(CsLcsSupport::from_u8_strict(3), None);
+    assert_eq!(CsLcsSupport::try_from(3).ok(), None);
 }
 
 #[test]

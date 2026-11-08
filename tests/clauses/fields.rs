@@ -113,7 +113,7 @@ fn a_field_of_a_few_bits_is_read_from_its_bits() {
             octet & 0x0f
         );
         let mode = NasNssaiInclusionMode::new(octet).mode();
-        assert_eq!(mode, NssaiInclusionModeValue::from_u8(octet & 0x03));
+        assert_eq!(mode, NssaiInclusionModeValue::received(octet & 0x03));
         let drx = NasFGsDrxParameters::new(vec![octet]);
         assert_eq!(drx.drx_value_raw(), Some(octet & 0x0f));
         assert_eq!(NasRsn::new(vec![octet]).rsn_raw(), octet);
@@ -134,7 +134,8 @@ fn a_field_of_a_few_bits_is_read_from_its_bits() {
         );
         // A payload container type of a defined value, with its spare bits 8 to 5
         // clear (TS 24.501 §9.11.3.40)
-        let defined = octet & 0xf0 == 0 && PayloadContainerKind::from_u8(octet).is_some();
+        let defined =
+            octet & 0xf0 == 0 && PayloadContainerKind::try_from(octet & 0x0F).ok().is_some();
         let container = NasPayloadContainerType::new(octet);
         assert_eq!(container.is_well_formed(), defined, "{octet}");
     }
@@ -229,7 +230,11 @@ fn a_t3512_value_is_a_unit_and_a_number_of_it() {
     for octet in 0..=u8::MAX {
         let t3512 = NasT3512Value::new(vec![octet]);
         let (unit, value) = (octet >> 5, octet & 0x1f);
-        assert_eq!(t3512.unit(), Some(GprsTimer3Unit::from_u8(unit)), "{octet}");
+        assert_eq!(
+            t3512.unit(),
+            Some(GprsTimer3Unit::received(unit & 0x07)),
+            "{octet}"
+        );
         assert_eq!(t3512.timer_value(), Some(value), "{octet}");
         let read = match seconds.get(usize::from(unit)) {
             Some(step) => GprsTimerValue::Seconds(step * u64::from(value)),
@@ -295,7 +300,10 @@ fn the_rates_and_the_number_of_packet_filters_are_their_octets() {
     let reserved = NasIntegrityProtectionMaximumDataRate::new(0x02fe);
     let kbps64 = Some(MaxDataRate::Kbps64);
     assert_eq!((reserved.ul(), reserved.dl()), (kbps64, kbps64));
-    assert_eq!(MaxDataRate::from_u8(0xff), Some(MaxDataRate::FullRate));
+    assert_eq!(
+        Some(MaxDataRate::received(0xff)),
+        Some(MaxDataRate::FullRate)
+    );
     // Maximum number of supported packet filters (§9.11.4.9): eleven bits from bit 8
     // of octet 3, 17 to 1024
     for count in [17, 18, 255, 1023, 1024] {

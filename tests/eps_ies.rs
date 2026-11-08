@@ -83,13 +83,13 @@ fn an_esm_cause_is_one_of_table_9_9_4_4_1() {
         (0x71, EsmCause::MultipleAccessesToAPdnConnectionNotAllowed),
     ];
     for (value, cause) in causes {
-        assert_eq!(EsmCause::from_u8(value), Some(cause), "{value:#04x}");
-        assert_eq!(cause.as_u8(), value);
+        assert_eq!(EsmCause::try_from(value).ok(), Some(cause), "{value:#04x}");
+        assert_eq!(u8::from(cause), value);
         assert_eq!(NasEsmCause::new(value).cause(), Some(cause));
     }
     // #46 is unused (NOTE 2), and any other value is none of the table
     for value in (0..=255u8).filter(|value| causes.iter().all(|(listed, _)| listed != value)) {
-        assert_eq!(EsmCause::from_u8(value), None, "{value:#04x}");
+        assert_eq!(EsmCause::try_from(value).ok(), None, "{value:#04x}");
     }
 }
 
@@ -128,15 +128,18 @@ fn a_paging_restriction_type_is_one_of_four() {
         ),
     ];
     for (value, restriction) in types {
-        assert_eq!(PagingRestrictionType::from_u8(value), Some(restriction));
+        assert_eq!(
+            PagingRestrictionType::try_from(value & 0x0f).ok(),
+            Some(restriction)
+        );
         // The spare bits 8 to 5 are not read
         assert_eq!(
-            PagingRestrictionType::from_u8(0xf0 | value),
+            PagingRestrictionType::try_from((0xf0 | value) & 0x0f).ok(),
             Some(restriction)
         );
     }
-    assert_eq!(PagingRestrictionType::from_u8(0), None);
-    assert_eq!(PagingRestrictionType::from_u8(5), None);
+    assert_eq!(PagingRestrictionType::try_from(0).ok(), None);
+    assert_eq!(PagingRestrictionType::try_from(5).ok(), None);
 }
 
 #[test]
@@ -150,12 +153,16 @@ fn an_s1_drx_value_is_not_specified_or_t_32_to_256() {
         (9, S1DrxValue::T256),
     ];
     for (value, drx) in values {
-        assert_eq!(S1DrxValue::from_u8_strict(value), Some(drx), "{value}");
-        assert_eq!(S1DrxValue::from_u8_strict(0x10 | value), Some(drx));
+        assert_eq!(
+            S1DrxValue::try_from(value & 0x0f).ok(),
+            Some(drx),
+            "{value}"
+        );
+        assert_eq!(S1DrxValue::try_from((0x10 | value) & 0x0f).ok(), Some(drx));
     }
     for value in [1, 5, 10, 15] {
-        assert_eq!(S1DrxValue::from_u8_strict(value), None, "{value}");
-        assert_eq!(S1DrxValue::from_u8(value), S1DrxValue::NotSpecified);
+        assert_eq!(S1DrxValue::try_from(value & 0x0f).ok(), None, "{value}");
+        assert_eq!(S1DrxValue::received(value & 0x0f), S1DrxValue::NotSpecified);
     }
 }
 
@@ -230,13 +237,13 @@ fn an_nbifom_status_is_one_of_table_6_1_3_1() {
         (0x82, NbifomStatus::UnknownRoutingAccessInformation),
     ];
     for (value, status) in statuses {
-        assert_eq!(NbifomStatus::from_u8_strict(value), Some(status));
-        assert_eq!(NbifomStatus::from_u8(value), status);
+        assert_eq!(NbifomStatus::try_from(value).ok(), Some(status));
+        assert_eq!(NbifomStatus::received(value), status);
     }
     // All other values are read as "protocol error, unspecified"
-    assert_eq!(NbifomStatus::from_u8_strict(0x01), None);
+    assert_eq!(NbifomStatus::try_from(0x01).ok(), None);
     assert_eq!(
-        NbifomStatus::from_u8(0x01),
+        NbifomStatus::received(0x01),
         NbifomStatus::ProtocolErrorUnspecified
     );
 }
@@ -624,13 +631,13 @@ fn an_eps_attach_type_is_one_of_table_9_9_3_11_1() {
         (7, AttachType::DisasterRoamingAttach),
     ];
     for (value, attach_type) in types {
-        assert_eq!(AttachType::from_u8_strict(value), Some(attach_type));
-        assert_eq!(AttachType::from_u8(value), attach_type);
+        assert_eq!(AttachType::try_from(value & 0x07).ok(), Some(attach_type));
+        assert_eq!(AttachType::received(value & 0x07), attach_type);
     }
     // The unused values are read as EPS attach by the network
     for value in [0, 4, 5] {
-        assert_eq!(AttachType::from_u8_strict(value), None);
-        assert_eq!(AttachType::from_u8(value), AttachType::EpsAttach);
+        assert_eq!(AttachType::try_from(value & 0x07).ok(), None);
+        assert_eq!(AttachType::received(value & 0x07), AttachType::EpsAttach);
     }
     // Bit 4 is spare
     let ie = NasEpsAttachType::new(0x0a);
@@ -653,8 +660,8 @@ fn a_service_type_is_one_of_table_9_9_3_27_1() {
         (8, ServiceType::PacketServicesViaS1),
     ];
     for (value, service_type) in types {
-        assert_eq!(ServiceType::from_u8_strict(value), Some(service_type));
-        assert_eq!(ServiceType::from_u8(value), Some(service_type));
+        assert_eq!(ServiceType::try_from(value & 0x0f).ok(), Some(service_type));
+        assert_eq!(ServiceType::received(value & 0x0f), Some(service_type));
         assert_eq!(
             NasServiceType::new(value).service_type_strict(),
             Some(service_type)
@@ -662,16 +669,16 @@ fn a_service_type_is_one_of_table_9_9_3_27_1() {
     }
     // 3 and 4 are read as mobile originating CS fallback, 9 to 11 as packet
     // services via S1, by the network
-    assert_eq!(ServiceType::from_u8_strict(3), None);
+    assert_eq!(ServiceType::try_from(3).ok(), None);
     assert_eq!(
-        ServiceType::from_u8(4),
+        ServiceType::received(4),
         Some(ServiceType::MobileOriginatingCsFallbackOr1xCsFallback)
     );
     assert_eq!(
-        ServiceType::from_u8(11),
+        ServiceType::received(11),
         Some(ServiceType::PacketServicesViaS1)
     );
-    assert_eq!(ServiceType::from_u8(12), None);
+    assert_eq!(ServiceType::received(12), None);
 }
 
 #[test]
@@ -700,24 +707,24 @@ fn a_pdn_type_is_one_of_table_9_9_4_10_1() {
         (6, PdnType::Ethernet),
     ];
     for (value, pdn_type) in types {
-        assert_eq!(PdnType::from_u8_strict(value), Some(pdn_type));
-        assert_eq!(PdnType::from_u8(value), Some(pdn_type));
+        assert_eq!(PdnType::try_from(value & 0x07).ok(), Some(pdn_type));
+        assert_eq!(PdnType::received(value & 0x07), Some(pdn_type));
     }
     // 4 is read as IPv6 by the network
-    assert_eq!(PdnType::from_u8_strict(4), None);
-    assert_eq!(PdnType::from_u8(4), Some(PdnType::Ipv6));
-    assert_eq!(PdnType::from_u8(7), None);
+    assert_eq!(PdnType::try_from(4).ok(), None);
+    assert_eq!(PdnType::received(4), Some(PdnType::Ipv6));
+    assert_eq!(PdnType::received(7), None);
 }
 
 #[test]
 fn an_eps_attach_result_is_eps_only_or_combined() {
     // Table 9.9.3.10.1, bit 4 spare
-    assert_eq!(AttachResult::from_u8(1), Some(AttachResult::EpsOnly));
+    assert_eq!(AttachResult::try_from(1).ok(), Some(AttachResult::EpsOnly));
     assert_eq!(
-        AttachResult::from_u8(2),
+        AttachResult::try_from(2).ok(),
         Some(AttachResult::CombinedEpsImsiAttach)
     );
-    assert_eq!(AttachResult::from_u8(3), None);
+    assert_eq!(AttachResult::try_from(3).ok(), None);
     let ie = NasEpsAttachResult::new(0x0a);
     assert_eq!(ie.attach_result_raw(), 2);
     assert_eq!(
@@ -737,17 +744,17 @@ fn an_eps_update_type_has_its_type_and_the_active_flag() {
         (6, UpdateType::DisasterRoamingUpdate),
     ];
     for (value, update_type) in types {
-        assert_eq!(UpdateType::from_u8_strict(value), Some(update_type));
-        assert_eq!(UpdateType::from_u8(value), Some(update_type));
+        assert_eq!(UpdateType::try_from(value & 0x07).ok(), Some(update_type));
+        assert_eq!(UpdateType::received(value & 0x07), Some(update_type));
         assert_eq!(
             NasEpsUpdateType::new(0x08 | value).update_type_strict(),
             Some(update_type)
         );
     }
     // 4 and 5 are read as TA updating by the network, 7 is reserved
-    assert_eq!(UpdateType::from_u8_strict(5), None);
-    assert_eq!(UpdateType::from_u8(5), Some(UpdateType::TaUpdating));
-    assert_eq!(UpdateType::from_u8(7), None);
+    assert_eq!(UpdateType::try_from(5).ok(), None);
+    assert_eq!(UpdateType::received(5), Some(UpdateType::TaUpdating));
+    assert_eq!(UpdateType::received(7), None);
     let ie = NasEpsUpdateType::new(0x09);
     assert_eq!(ie.update_type_raw(), 1);
     assert!(ie.is_active());
@@ -762,9 +769,9 @@ fn an_eps_update_result_is_one_of_table_9_9_3_13_1() {
         (5, UpdateResult::CombinedTaLaUpdatedAndIsrActivated),
     ];
     for (value, result) in results {
-        assert_eq!(UpdateResult::from_u8(value), Some(result));
+        assert_eq!(UpdateResult::try_from(value & 0x07).ok(), Some(result));
     }
-    assert_eq!(UpdateResult::from_u8(2), None);
+    assert_eq!(UpdateResult::try_from(2).ok(), None);
     let ie = NasEpsUpdateResult::new(0x0d);
     assert_eq!(ie.update_result_raw(), 5);
     assert_eq!(
@@ -830,13 +837,16 @@ fn a_detach_type_is_one_of_table_9_9_3_7_1_in_each_direction() {
         (3, UeDetachKind::CombinedEpsImsiDetach),
     ];
     for (value, kind) in ue {
-        assert_eq!(UeDetachKind::from_u8_strict(value), Some(kind));
-        assert_eq!(UeDetachKind::from_u8_strict(0x08 | value), Some(kind));
+        assert_eq!(UeDetachKind::try_from(value & 0x07).ok(), Some(kind));
+        assert_eq!(
+            UeDetachKind::try_from((0x08 | value) & 0x07).ok(),
+            Some(kind)
+        );
     }
-    assert_eq!(UeDetachKind::from_u8_strict(4), None);
+    assert_eq!(UeDetachKind::try_from(4).ok(), None);
     // Other values are read as combined EPS/IMSI detach by the network
     assert_eq!(
-        UeDetachKind::from_u8(4),
+        UeDetachKind::received(4),
         UeDetachKind::CombinedEpsImsiDetach
     );
     let network = [
@@ -845,12 +855,12 @@ fn a_detach_type_is_one_of_table_9_9_3_7_1_in_each_direction() {
         (3, NetworkDetachKind::ImsiDetach),
     ];
     for (value, kind) in network {
-        assert_eq!(NetworkDetachKind::from_u8_strict(value), Some(kind));
+        assert_eq!(NetworkDetachKind::try_from(value & 0x07).ok(), Some(kind));
     }
-    assert_eq!(NetworkDetachKind::from_u8_strict(0), None);
+    assert_eq!(NetworkDetachKind::try_from(0).ok(), None);
     // and as "re-attach not required" by the UE
     assert_eq!(
-        NetworkDetachKind::from_u8(0),
+        NetworkDetachKind::received(0),
         NetworkDetachKind::ReattachNotRequired
     );
     let switch_off = NasDetachType::from_ue_detach_kind(UeDetachKind::ImsiDetach, true);
@@ -1168,9 +1178,9 @@ fn a_tft_operation_is_one_of_table_10_5_162() {
         TftOperation::NoOperation,
     ];
     for (value, operation) in operations.into_iter().enumerate() {
-        assert_eq!(TftOperation::from_u8(value as u8), Some(operation));
+        assert_eq!(TftOperation::try_from(value as u8).ok(), Some(operation));
     }
-    assert_eq!(TftOperation::from_u8(7), None);
+    assert_eq!(TftOperation::try_from(7).ok(), None);
 }
 
 #[test]
@@ -1284,9 +1294,12 @@ fn an_additional_update_result_is_one_of_table_9_9_3_0a_1() {
         (2, AdditionalUpdateResult::SmsOnly),
     ];
     for (value, result) in results {
-        assert_eq!(AdditionalUpdateResult::from_u8(value), Some(result));
+        assert_eq!(
+            AdditionalUpdateResult::try_from(value & 0x03).ok(),
+            Some(result)
+        );
     }
-    assert_eq!(AdditionalUpdateResult::from_u8(3), None);
+    assert_eq!(AdditionalUpdateResult::try_from(3).ok(), None);
     let ie = NasAdditionalUpdateResult::new(0x06);
     assert_eq!(ie.result_raw(), 2);
     assert_eq!(ie.result(), Some(AdditionalUpdateResult::SmsOnly));
@@ -1302,10 +1315,10 @@ fn a_radio_priority_is_level_1_to_4() {
         (4, RadioPriorityLevel::Four),
     ];
     for (value, level) in levels {
-        assert_eq!(RadioPriorityLevel::from_u8_strict(value), Some(level));
+        assert_eq!(RadioPriorityLevel::try_from(value & 0x07).ok(), Some(level));
     }
-    assert_eq!(RadioPriorityLevel::from_u8_strict(0), None);
-    assert_eq!(RadioPriorityLevel::from_u8(5), RadioPriorityLevel::Four);
+    assert_eq!(RadioPriorityLevel::try_from(0).ok(), None);
+    assert_eq!(RadioPriorityLevel::received(5), RadioPriorityLevel::Four);
     let ie = NasRadioPriority::new(0x0a);
     assert_eq!(ie.priority_level_raw(), 2);
     assert_eq!(ie.priority_level(), RadioPriorityLevel::Two);
@@ -1322,9 +1335,12 @@ fn the_fields_of_a_calling_party_number_are_those_of_ts_24_008() {
         CallingPartyTypeOfNumber::DedicatedAccessShortCode,
     ];
     for (value, kind) in types.into_iter().enumerate() {
-        assert_eq!(CallingPartyTypeOfNumber::from_u8(value as u8), Some(kind));
+        assert_eq!(
+            CallingPartyTypeOfNumber::try_from(value as u8).ok(),
+            Some(kind)
+        );
     }
-    assert_eq!(CallingPartyTypeOfNumber::from_u8(5), None);
+    assert_eq!(CallingPartyTypeOfNumber::try_from(5).ok(), None);
     let plans = [
         (0, CallingPartyNumberingPlan::Unknown),
         (1, CallingPartyNumberingPlan::Isdn),
@@ -1334,9 +1350,9 @@ fn the_fields_of_a_calling_party_number_are_those_of_ts_24_008() {
         (9, CallingPartyNumberingPlan::Private),
     ];
     for (value, plan) in plans {
-        assert_eq!(CallingPartyNumberingPlan::from_u8(value), Some(plan));
+        assert_eq!(CallingPartyNumberingPlan::try_from(value).ok(), Some(plan));
     }
-    assert_eq!(CallingPartyNumberingPlan::from_u8(2), None);
+    assert_eq!(CallingPartyNumberingPlan::try_from(2).ok(), None);
     // Table 10.5.120: the presentation and the screening indicators
     let presentations = [
         CallingPartyPresentation::Allowed,
@@ -1345,11 +1361,11 @@ fn the_fields_of_a_calling_party_number_are_those_of_ts_24_008() {
     ];
     for (value, presentation) in presentations.into_iter().enumerate() {
         assert_eq!(
-            CallingPartyPresentation::from_u8(value as u8),
+            CallingPartyPresentation::try_from(value as u8).ok(),
             Some(presentation)
         );
     }
-    assert_eq!(CallingPartyPresentation::from_u8(3), None);
+    assert_eq!(CallingPartyPresentation::try_from(3).ok(), None);
     let screenings = [
         CallingPartyScreening::UserProvidedNotScreened,
         CallingPartyScreening::UserProvidedVerifiedPassed,
@@ -1357,9 +1373,12 @@ fn the_fields_of_a_calling_party_number_are_those_of_ts_24_008() {
         CallingPartyScreening::NetworkProvided,
     ];
     for (value, screening) in screenings.into_iter().enumerate() {
-        assert_eq!(CallingPartyScreening::from_u8(value as u8), Some(screening));
+        assert_eq!(
+            CallingPartyScreening::try_from(value as u8).ok(),
+            Some(screening)
+        );
     }
-    assert_eq!(CallingPartyScreening::from_u8(4), None);
+    assert_eq!(CallingPartyScreening::try_from(4).ok(), None);
 }
 
 #[test]
@@ -1416,12 +1435,12 @@ fn an_nb_s1_drx_value_is_one_of_table_9_9_3_63_1() {
         NbS1DrxValue::T1024,
     ];
     for (value, drx) in values.into_iter().enumerate() {
-        assert_eq!(NbS1DrxValue::from_u8_strict(value as u8), Some(drx));
-        assert_eq!(NbS1DrxValue::from_u8(value as u8), drx);
+        assert_eq!(NbS1DrxValue::try_from((value as u8) & 0x0f).ok(), Some(drx));
+        assert_eq!(NbS1DrxValue::received((value as u8) & 0x0f), drx);
     }
     // Other values are read as "not specified"
-    assert_eq!(NbS1DrxValue::from_u8_strict(7), None);
-    assert_eq!(NbS1DrxValue::from_u8(7), NbS1DrxValue::NotSpecified);
+    assert_eq!(NbS1DrxValue::try_from(7).ok(), None);
+    assert_eq!(NbS1DrxValue::received(7), NbS1DrxValue::NotSpecified);
 }
 
 #[test]
@@ -1574,11 +1593,11 @@ fn an_extended_emm_cause_has_four_flags() {
 fn the_values_of_a_generic_container_type_lcs_and_sms_services_are_those_of_their_tables() {
     // §9.9.3.42: LPP (1) and LCS (2)
     assert_eq!(
-        GenericMessageContainerType::from_u8_strict(1),
+        GenericMessageContainerType::try_from(1).ok(),
         Some(GenericMessageContainerType::Lpp)
     );
     assert_eq!(
-        GenericMessageContainerType::from_u8_strict(2),
+        GenericMessageContainerType::try_from(2).ok(),
         Some(GenericMessageContainerType::Lcs)
     );
     // §9.9.3.40: MT-LR (1), the others "normal, unspecified"
@@ -1592,14 +1611,20 @@ fn the_values_of_a_generic_container_type_lcs_and_sms_services_are_those_of_thei
         SmsServicesStatus::Congestion,
     ];
     for (value, status) in statuses.into_iter().enumerate() {
-        assert_eq!(SmsServicesStatus::from_u8(value as u8), Some(status));
-        assert_eq!(SmsServicesStatus::from_u8(0x08 | value as u8), Some(status));
+        assert_eq!(
+            SmsServicesStatus::try_from((value as u8) & 0x07).ok(),
+            Some(status)
+        );
+        assert_eq!(
+            SmsServicesStatus::try_from((0x08 | value as u8) & 0x07).ok(),
+            Some(status)
+        );
         assert_eq!(
             NasSmsServicesStatus::new(value as u8).status(),
             Some(status)
         );
     }
-    assert_eq!(SmsServicesStatus::from_u8(4), None);
+    assert_eq!(SmsServicesStatus::try_from(4).ok(), None);
 }
 
 #[test]
@@ -1628,9 +1653,9 @@ fn an_llc_sapi_is_one_of_ts_24_008_section_10_5_6_9() {
         (11, LlcSapi::Sapi11),
     ];
     for (value, sapi) in sapis {
-        assert_eq!(LlcSapi::from_u8(value), Some(sapi));
+        assert_eq!(LlcSapi::try_from(value & 0x0f).ok(), Some(sapi));
     }
-    assert_eq!(LlcSapi::from_u8(1), None);
+    assert_eq!(LlcSapi::try_from(1).ok(), None);
     let ie = NasLlcServiceAccessPointIdentifier::new(0x05);
     assert_eq!(ie.sapi_raw(), 5);
     assert_eq!(NasLlcServiceAccessPointIdentifier::new(0x39).sapi_raw(), 9);

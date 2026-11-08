@@ -176,8 +176,8 @@ impl fmt::Display for NasKeySetIdentifier {
 impl fmt::Display for NasSecurityAlgorithms {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let (ciphering, integrity) = (self.ciphering_raw(), self.integrity_raw());
-        let ciphering = Coded(CipheringAlgorithm::from_u8(ciphering), ciphering);
-        let integrity = Coded(IntegrityAlgorithm::from_u8(integrity), integrity);
+        let ciphering = Coded(CipheringAlgorithm::try_from(ciphering).ok(), ciphering);
+        let integrity = Coded(IntegrityAlgorithm::try_from(integrity).ok(), integrity);
         write!(f, "{ciphering} {integrity}")
     }
 }

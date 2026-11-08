@@ -1014,7 +1014,7 @@ named_ie!(
 // The fields of an octet.
 fields_ie!(NasFGsRegistrationType {
 "registration-type":
-    |ie| Code::of(RegistrationType::from_u8_strict(ie.value & 0x07), ie.value & 0x07),
+    |ie| Code::of(RegistrationType::try_from(ie.value & 0x07).ok(), ie.value & 0x07),
     |ie, code: Code<RegistrationType>| write_code(
         ie,
         code,
@@ -1068,7 +1068,7 @@ fields_ie!(NasFGsUpdateType {
 fields_ie!(NasFGsRegistrationResult {
     "result":
         |ie| Code::of(
-            RegistrationResult::from_u8_strict(ie.result_value_raw()),
+            RegistrationResult::try_from(ie.result_value_raw() & 0x07).ok(),
             ie.result_value_raw(),
         ),
         |ie, code: Code<RegistrationResult>| write_code(
@@ -1089,7 +1089,7 @@ fields_ie!(NasFGsRegistrationResult {
 fields_ie!(NasControlPlaneServiceType {
 "service-type":
     |ie| Code::of(
-        ControlPlaneServiceType::from_u8_strict(ie.service_type_raw()),
+        ControlPlaneServiceType::try_from(ie.service_type_raw() & 0x07).ok(),
         ie.service_type_raw(),
     ),
     |ie, code: Code<ControlPlaneServiceType>| write_code(
@@ -1103,7 +1103,7 @@ fields_ie!(NasControlPlaneServiceType {
 });
 fields_ie!(NasSecurityAlgorithms {
     "ciphering":
-        |ie| Code::of(CipheringAlgorithm::from_u8(ie.ciphering_raw()), ie.ciphering_raw()),
+        |ie| Code::of(CipheringAlgorithm::try_from(ie.ciphering_raw()).ok(), ie.ciphering_raw()),
         |ie, code: Code<CipheringAlgorithm>| write_code(
             ie,
             code,
@@ -1113,7 +1113,7 @@ fields_ie!(NasSecurityAlgorithms {
             |ie| ie.ciphering_raw(),
         );
     "integrity":
-        |ie| Code::of(IntegrityAlgorithm::from_u8(ie.integrity_raw()), ie.integrity_raw()),
+        |ie| Code::of(IntegrityAlgorithm::try_from(ie.integrity_raw()).ok(), ie.integrity_raw()),
         |ie, code: Code<IntegrityAlgorithm>| write_code(
             ie,
             code,
@@ -1125,7 +1125,7 @@ fields_ie!(NasSecurityAlgorithms {
 });
 fields_ie!(NasEpsNasSecurityAlgorithms {
     "ciphering":
-        |ie| Code::of(crate::common::ts24301::CipheringAlgorithm::from_u8(ie.ciphering_raw()), ie.ciphering_raw()),
+        |ie| Code::of(crate::common::ts24301::CipheringAlgorithm::try_from(ie.ciphering_raw()).ok(), ie.ciphering_raw()),
         |ie, code: Code<crate::common::ts24301::CipheringAlgorithm>| write_code(
             ie,
             code,
@@ -1135,7 +1135,7 @@ fields_ie!(NasEpsNasSecurityAlgorithms {
             |ie| ie.ciphering_raw(),
         );
     "integrity":
-        |ie| Code::of(crate::common::ts24301::IntegrityAlgorithm::from_u8(ie.integrity_raw()), ie.integrity_raw()),
+        |ie| Code::of(crate::common::ts24301::IntegrityAlgorithm::try_from(ie.integrity_raw()).ok(), ie.integrity_raw()),
         |ie, code: Code<crate::common::ts24301::IntegrityAlgorithm>| write_code(
             ie,
             code,
@@ -1806,8 +1806,8 @@ crate::common::readable::readable!(struct MaximumDataRates { ul, dl });
 decoded_ie!(
     NasIntegrityProtectionMaximumDataRate: MaximumDataRates,
     |ie| Some(MaximumDataRates {
-        ul: MaxDataRate::from_u8_strict(ie.ul_raw())?,
-        dl: MaxDataRate::from_u8_strict(ie.dl_raw())?,
+        ul: MaxDataRate::try_from(ie.ul_raw()).ok()?,
+        dl: MaxDataRate::try_from(ie.dl_raw()).ok()?,
     }),
     |_, rates| Ok(NasIntegrityProtectionMaximumDataRate::from_rates(rates.ul, rates.dl))
 );

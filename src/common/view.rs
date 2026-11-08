@@ -595,7 +595,7 @@ impl ConfigurationUnit {
     fn of_session(identifier: u16, contents: &[u8]) -> Option<Self> {
         match (identifier, contents) {
             (0x001a, [identity @ 1..=15]) => Some(Self::PduSessionId(*identity)),
-            (0x0022, [cause]) => GsmCause::from_u8(*cause).map(Self::FgsmCause),
+            (0x0022, [cause]) => GsmCause::try_from(*cause).ok().map(Self::FgsmCause),
             (0x001b, _) => {
                 let (s_nssai, plmn) = contents.split_at(contents.len().checked_sub(3)?);
                 let s_nssai = NasSNssai::new(s_nssai.to_vec()).parse()?;

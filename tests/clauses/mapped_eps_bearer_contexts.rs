@@ -25,7 +25,7 @@ fn ambr() -> Param {
 fn the_codes_of_a_context_are_those_of_its_table() {
     let operations = [Op::Reserved, Op::Create, Op::Delete, Op::Modify];
     for (code, operation) in (0..).zip(operations) {
-        assert_eq!(Op::from_u8(code), Some(operation));
+        assert_eq!(Op::try_from(code & 0x03).ok(), Some(operation));
     }
     let identifiers = [
         ParamId::EpsQos,
@@ -35,7 +35,7 @@ fn the_codes_of_a_context_are_those_of_its_table() {
         ParamId::ExtendedApnAmbr,
     ];
     for (code, identifier) in (1..).zip(identifiers) {
-        assert_eq!(ParamId::from_u8(code), Some(identifier));
+        assert_eq!(ParamId::try_from(code).ok(), Some(identifier));
     }
     // The extended EPS QoS has ten octets and the extended APN-AMBR six
     for (param_id, length, well_formed) in

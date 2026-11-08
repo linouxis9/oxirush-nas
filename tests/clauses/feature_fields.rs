@@ -89,7 +89,10 @@ fn the_codes_of_the_later_fields_are_those_of_their_tables() {
         PagingRestrictionType::AllRestrictedExceptVoiceAndSpecifiedPduSessions,
     ];
     for (code, restriction) in (1..).zip(restrictions) {
-        assert_eq!(PagingRestrictionType::from_u8(code), Some(restriction));
+        assert_eq!(
+            PagingRestrictionType::try_from(code & 0x0f).ok(),
+            Some(restriction)
+        );
     }
     let addresses = [
         (0x00, EcsAddressType::Ipv4),
@@ -98,7 +101,7 @@ fn the_codes_of_the_later_fields_are_those_of_their_tables() {
         (0x0f, EcsAddressType::Unspecified),
     ];
     for (code, address) in addresses {
-        assert_eq!(EcsAddressType::from_u8(code), Some(address));
+        assert_eq!(EcsAddressType::try_from(code & 0x0F).ok(), Some(address));
     }
     let validities = [
         EcsSpatialValidityType::None,
@@ -107,7 +110,10 @@ fn the_codes_of_the_later_fields_are_those_of_their_tables() {
         EcsSpatialValidityType::CountryWide,
     ];
     for (code, validity) in (0..).zip(validities) {
-        assert_eq!(EcsSpatialValidityType::from_u8(code), Some(validity));
+        assert_eq!(
+            EcsSpatialValidityType::try_from(code & 0x0F).ok(),
+            Some(validity)
+        );
     }
     // The spatial validity in bits 8 to 5 of the first octet of an ECS address, the
     // type of address in bits 4 to 1
@@ -117,23 +123,23 @@ fn the_codes_of_the_later_fields_are_those_of_their_tables() {
         Some(EcsSpatialValidityType::TrackingArea)
     );
     assert_eq!(address.address_type(), Some(EcsAddressType::Ipv6));
-    assert_eq!(Mbsrai::from_u8(0), Some(Mbsrai::NoInformation));
+    assert_eq!(Mbsrai::try_from(0).ok(), Some(Mbsrai::NoInformation));
     assert_eq!(
-        Mbsrai::from_u8(1),
+        Mbsrai::try_from(1).ok(),
         Some(Mbsrai::NotAuthorizedAsMbsrAllowedAsUe)
     );
     assert_eq!(
-        N3iwfIdentifierType::from_u8(2),
+        N3iwfIdentifierType::try_from(2).ok(),
         Some(N3iwfIdentifierType::Ipv6)
     );
-    assert_eq!(Ddx::from_u8(0), Ddx::NoInformationAvailable);
+    assert_eq!(Ddx::received(0), Ddx::NoInformationAvailable);
     assert_eq!(UeParametersUpdateDataSetType::Unknown(9).as_u8(), 9);
     for (code, key) in [
         (0, Some(KeyType::MasterSessionKey)),
         (1, Some(KeyType::KWagfKey)),
         (2, None),
     ] {
-        assert_eq!(KeyType::from_u8_strict(code), key, "{code}");
+        assert_eq!(KeyType::try_from(code & 0x03).ok(), key, "{code}");
     }
 }
 

@@ -110,41 +110,17 @@ impl NasUeRadioCapabilityId {
     }
 }
 
-/// UE radio capability ID deletion request (TS 24.501 Table 9.11.3.69.1).
-#[non_exhaustive]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[repr(u8)]
-pub enum RadioCapabilityIdDeletionRequest {
-    /// UE radio capability ID deletion not requested.
-    NotRequested = 0,
-    /// Network-assigned UE radio capability IDs deletion requested.
-    NetworkAssignedDeletion = 1,
-}
-
-#[cfg(feature = "serde")]
-crate::common::readable::readable!(
-    enum RadioCapabilityIdDeletionRequest {
-        NotRequested,
-        NetworkAssignedDeletion,
+crate::common::enums::nas_enum! {
+    /// UE radio capability ID deletion request (TS 24.501 Table 9.11.3.69.1).
+    #[non_exhaustive]
+    pub enum RadioCapabilityIdDeletionRequest {
+        /// UE radio capability ID deletion not requested.
+        NotRequested = 0,
+        /// Network-assigned UE radio capability IDs deletion requested.
+        NetworkAssignedDeletion = 1,
     }
-);
-#[cfg(feature = "serde")]
-crate::common::readable::serde_by_readable!(RadioCapabilityIdDeletionRequest);
-
-impl RadioCapabilityIdDeletionRequest {
-    /// Decode bits 3-1; unused values are read as "not requested" by the
-    /// UE. Always returns `Some`.
-    pub fn from_u8(value: u8) -> Option<Self> {
-        Some(Self::from_u8_strict(value).unwrap_or(Self::NotRequested))
-    }
-
-    /// Decode only the defined values.
-    pub fn from_u8_strict(value: u8) -> Option<Self> {
-        match value & 0x07 {
-            0 => Some(Self::NotRequested),
-            1 => Some(Self::NetworkAssignedDeletion),
-            _ => None,
-        }
+    received {
+        _ => NotRequested,
     }
 }
 
@@ -153,7 +129,9 @@ impl RadioCapabilityIdDeletionRequest {
 impl NasUeRadioCapabilityIdDeletionIndication {
     /// Deletion request with the UE receive fallback.
     pub fn deletion_request(&self) -> Option<RadioCapabilityIdDeletionRequest> {
-        RadioCapabilityIdDeletionRequest::from_u8(self.value)
+        Some(RadioCapabilityIdDeletionRequest::received(
+            self.value & 0x07,
+        ))
     }
 
     /// Raw deletion request (bits 3-1).
@@ -180,7 +158,7 @@ impl NasUeRadioCapabilityIdDeletionIndication {
 impl NasRegistrationWaitRange {
     fn wait_seconds(octet: Option<&u8>) -> Option<u64> {
         let octet = *octet?;
-        let unit = crate::common::ts24008::GprsTimerUnit::from_u8(octet >> 5)?;
+        let unit = Some(crate::common::ts24008::GprsTimerUnit::received(octet >> 5))?;
         (unit != crate::common::ts24008::GprsTimerUnit::Deactivated)
             .then(|| unit.seconds_multiplier() * u64::from(octet & 0x1f))
     }
@@ -215,7 +193,9 @@ impl NasRegistrationWaitRange {
     /// above maximum.
     pub fn is_well_formed(&self) -> bool {
         let defined = |octet: &u8| {
-            crate::common::ts24008::GprsTimerUnit::from_u8_strict(octet >> 5).is_some()
+            crate::common::ts24008::GprsTimerUnit::try_from(octet >> 5)
+                .ok()
+                .is_some()
         };
         matches!(self.value.as_slice(), [min, max] if defined(min) && defined(max))
             && self.min_seconds() <= self.max_seconds()
@@ -264,7 +244,7 @@ mod tests {
             Some(RadioCapabilityIdDeletionRequest::NotRequested)
         );
         assert_eq!(
-            RadioCapabilityIdDeletionRequest::from_u8_strict(deletion.value),
+            RadioCapabilityIdDeletionRequest::try_from(deletion.value & 0x07).ok(),
             None
         );
 
@@ -296,7 +276,9 @@ mod tests {
         for code in 0..=u8::MAX {
             let three = code & 0x07;
             assert_eq!(
-                RadioCapabilityIdDeletionRequest::from_u8_strict(code).map(|value| value as u8),
+                RadioCapabilityIdDeletionRequest::try_from(code & 0x07)
+                    .ok()
+                    .map(|value| value as u8),
                 (three < 2).then_some(three)
             );
         }

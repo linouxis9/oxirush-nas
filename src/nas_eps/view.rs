@@ -1070,13 +1070,13 @@ container_ie!(
 code_ie!(
     NasEmmCause,
     EmmCause,
-    |ie| EmmCause::from_u8(ie.cause_raw()),
+    |ie| EmmCause::try_from(ie.cause_raw()).ok(),
     NasEmmCause::from_cause
 );
 code_ie!(
     NasEsmCause,
     EsmCause,
-    |ie| EsmCause::from_u8(ie.cause_raw()),
+    |ie| EsmCause::try_from(ie.cause_raw()).ok(),
     NasEsmCause::from_cause
 );
 code_ie!(
@@ -1167,7 +1167,7 @@ code_ie!(
 code_ie!(
     NasRadioPriority,
     RadioPriorityLevel,
-    |ie| RadioPriorityLevel::from_u8_strict(ie.priority_level_raw()),
+    |ie| RadioPriorityLevel::try_from(ie.priority_level_raw() & 0x07).ok(),
     NasRadioPriority::from_priority_level
 );
 named_ie!(
@@ -1223,7 +1223,7 @@ fields_ie!(NasControlPlaneServiceType {
 // The same code names a type of detach in each direction, so both read.
 fields_ie!(NasDetachType {
     "ue-detach-kind":
-        |ie| Code::of(UeDetachKind::from_u8_strict(ie.value), ie.detach_type_raw()),
+        |ie| Code::of(UeDetachKind::try_from(ie.value & 0x07).ok(), ie.detach_type_raw()),
         |ie, code: Code<UeDetachKind>| write_code(
             ie,
             code,
@@ -1233,7 +1233,7 @@ fields_ie!(NasDetachType {
             |ie| ie.detach_type_raw(),
         );
     "network-detach-kind":
-        |ie| Code::of(NetworkDetachKind::from_u8_strict(ie.value), ie.detach_type_raw()),
+        |ie| Code::of(NetworkDetachKind::try_from(ie.value & 0x07).ok(), ie.detach_type_raw()),
         |ie, code: Code<NetworkDetachKind>| write_code(
             ie,
             code,
@@ -1248,7 +1248,7 @@ fields_ie!(NasDetachType {
 });
 fields_ie!(NasSecurityAlgorithms {
     "ciphering":
-        |ie| Code::of(CipheringAlgorithm::from_u8(ie.ciphering_raw()), ie.ciphering_raw()),
+        |ie| Code::of(CipheringAlgorithm::try_from(ie.ciphering_raw()).ok(), ie.ciphering_raw()),
         |ie, code: Code<CipheringAlgorithm>| write_code(
             ie,
             code,
@@ -1258,7 +1258,7 @@ fields_ie!(NasSecurityAlgorithms {
             |ie| ie.ciphering_raw(),
         );
     "integrity":
-        |ie| Code::of(IntegrityAlgorithm::from_u8(ie.integrity_raw()), ie.integrity_raw()),
+        |ie| Code::of(IntegrityAlgorithm::try_from(ie.integrity_raw()).ok(), ie.integrity_raw()),
         |ie, code: Code<IntegrityAlgorithm>| write_code(
             ie,
             code,
