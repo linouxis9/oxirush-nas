@@ -542,7 +542,7 @@ nas_message! {
     ///     .with_t3346_value(GprsTimer2::from_seconds(600).unwrap());
     /// let reject = Message::new_5gmm(reject);
     /// assert_eq!(reject.encode().unwrap(), [0x7e, 0x00, 0x44, 0x16, 0x5f, 0x01, 0x2a]);
-    /// let shown = "5GMM RegistrationReject (cause=#22 (Congestion), T3346=10 min)";
+    /// let shown = "5GMM RegistrationReject (5gmm-cause: #22 (Congestion), t3346-value: 10 min)";
     /// assert_eq!(reject.to_string(), shown);
     /// ```
     pub struct RegistrationReject {
@@ -2046,7 +2046,7 @@ impl Message {
     ///
     /// // A REGISTRATION REJECT, cause #22, and the message type of an EPS message
     /// let reject = Message::decode(&[0x7e, 0x00, 0x44, 0x16]).unwrap();
-    /// assert_eq!(reject.to_string(), "5GMM RegistrationReject (cause=#22 (Congestion))");
+    /// assert_eq!(reject.to_string(), "5GMM RegistrationReject (5gmm-cause: #22 (Congestion))");
     /// assert!(Message::decode(&[0x07, 0x44, 0x03]).is_err());
     /// ```
     pub fn decode(octets: &[u8]) -> Result<Self> {
@@ -2366,6 +2366,35 @@ impl Message {
     /// What a message is first given to be encoded in: most signalling
     /// messages are shorter, and one that is longer takes more.
     const ENCODED: usize = 64;
+}
+
+/// The system and the header of a message, then the message.
+impl core::fmt::Display for Message {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Message::Gmm(_hdr, msg) => {
+                write!(f, "5GMM {msg}")
+            }
+            Message::Gsm(hdr, msg) => {
+                write!(
+                    f,
+                    "5GSM (PSI={}, PTI={}) {}",
+                    hdr.pdu_session_identity, hdr.procedure_transaction_identity, msg
+                )
+            }
+            Message::SecurityProtected(hdr, inner) => {
+                write!(
+                    f,
+                    "SecurityProtected (SHT={:?}, MAC={:#010x}, SN={}) {}",
+                    hdr.security_header_type,
+                    hdr.message_authentication_code,
+                    hdr.sequence_number,
+                    inner
+                )
+            }
+            Message::Opaque(data) => write!(f, "Opaque ({} octets)", data.len()),
+        }
+    }
 }
 
 #[cfg(test)]

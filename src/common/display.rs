@@ -34,7 +34,7 @@ use crate::common::ts24008::GprsTimerValue;
 use crate::common::types::*;
 use core::fmt::{self, Display as _};
 
-/// The items of a message after its name: ` (label=value, word)`, and
+/// The items of a message after its name: ` (ie: value, label=value, word)`, and
 /// nothing when it shows none.
 pub(crate) struct Items<'a, 'b> {
     f: &'a mut fmt::Formatter<'b>,
@@ -59,12 +59,11 @@ impl<'a, 'b> Items<'a, 'b> {
         write!(self.f, "{label}={value}")
     }
 
-    /// `label=value`, for an IE that the message has.
-    pub(crate) fn some(&mut self, label: &str, value: Option<impl fmt::Display>) -> fmt::Result {
-        match value {
-            Some(value) => self.item(label, value),
-            None => Ok(()),
-        }
+    /// `label: value`, the IE `ie` of a message by its name.
+    pub(crate) fn ie(&mut self, label: &str, ie: &impl crate::common::IeRules) -> fmt::Result {
+        self.separate()?;
+        write!(self.f, "{label}: ")?;
+        ie.show(self.f)
     }
 
     /// A word that says that a bit is set, or that an IE has no value to
@@ -379,6 +378,78 @@ impl fmt::Display for EpsBearerContextStatus {
     }
 }
 
+/// A tree on one line, as the `Display` of a message shows the value of an IE:
+/// `{plmn: 208-93, tac: 1}`, `[1, 2]`, a text without its quotes.
+#[cfg(feature = "tree")]
+pub(crate) fn compact(
+    f: &mut fmt::Formatter<'_>,
+    tree: &oxirush_utils::tree::Value,
+) -> fmt::Result {
+    use oxirush_utils::tree::Value;
+    match tree {
+        Value::Null => f.write_str("null"),
+        Value::Bool(value) => write!(f, "{value}"),
+        Value::Number(number) => write!(f, "{number}"),
+        Value::String(text) => f.write_str(text),
+        Value::Array(items) => {
+            f.write_str("[")?;
+            for (at, item) in items.iter().enumerate() {
+                if at > 0 {
+                    f.write_str(", ")?;
+                }
+                compact(f, item)?;
+            }
+            f.write_str("]")
+        }
+        Value::Object(members) => {
+            f.write_str("{")?;
+            for (at, (name, member)) in members.iter().enumerate() {
+                if at > 0 {
+                    f.write_str(", ")?;
+                }
+                write!(f, "{name}: ")?;
+                compact(f, member)?;
+            }
+            f.write_str("}")
+        }
+    }
+}
+
+/// The `value` of an IE as its octets, which the `Display` of a message shows
+/// without the feature `tree`.
+#[cfg(not(feature = "tree"))]
+pub(crate) trait ValueOctets {
+    fn show(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result;
+}
+
+#[cfg(not(feature = "tree"))]
+impl ValueOctets for u8 {
+    fn show(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{self:02x}")
+    }
+}
+
+#[cfg(not(feature = "tree"))]
+impl ValueOctets for u16 {
+    fn show(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{self:04x}")
+    }
+}
+
+#[cfg(not(feature = "tree"))]
+impl ValueOctets for crate::common::Octets {
+    fn show(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        Octets(self).fmt(f)
+    }
+}
+
+#[cfg(not(feature = "tree"))]
+impl ValueOctets for alloc::vec::Vec<u8> {
+    fn show(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        Octets(self).fmt(f)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -445,5 +516,58 @@ mod tests {
         assert_eq!(name.to_string(), "\"Open5GS\"");
         let status = EpsBearerContextStatus::new(vec![0x60, 0x00]);
         assert_eq!(status.to_string(), "[5, 6]");
+    }
+}
+
+#[cfg(test)]
+mod shown_tests {
+    use crate::common::IeRules;
+    use crate::prelude::*;
+    use core::fmt;
+
+    /// An IE as the `Display` of its message shows it.
+    struct Shown<'a, T>(&'a T);
+
+    impl<T: IeRules> fmt::Display for Shown<'_, T> {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            self.0.show(f)
+        }
+    }
+
+    /// An IE that holds a key shows its length alone, and not its tree, which
+    /// has the key: RES and RES*, the ciphering keys of the positioning SIBs,
+    /// the MSK of an MBS session, K_NR_ProSe and the key of an AUN3 device.
+    #[test]
+    fn an_ie_that_holds_a_key_is_shown_without_it() {
+        use crate::nas_5gs as f;
+        let key = || vec![0x5a; 32];
+        let shown = [
+            Shown(&crate::common::types::AuthenticationResponseParameter::new(
+                key(),
+            ))
+            .to_string(),
+            Shown(&f::CipheringKeyData::new(key())).to_string(),
+            Shown(&crate::nas_eps::CipheringKeyData::new(key())).to_string(),
+            Shown(&f::ReceivedMbsContainer::new(key())).to_string(),
+            Shown(&f::RelayKeyResponseParameters::new(key())).to_string(),
+            Shown(&f::Aun3DeviceSecurityKey::new(key())).to_string(),
+        ];
+        for shown in shown {
+            assert_eq!(shown, "hidden (32 octets)");
+        }
+    }
+
+    /// An IE without a `Display` of its own is shown by its tree on one line.
+    #[cfg(feature = "tree")]
+    #[test]
+    fn an_ie_without_a_display_is_shown_by_its_tree() {
+        use crate::nas_5gs as f;
+        let kind = f::RegistrationType::from_registration_type(
+            f::RegistrationTypeValue::InitialRegistration,
+        );
+        assert_eq!(
+            Shown(&kind).to_string(),
+            "{registration-type: initial-registration, follow-on-request: false}"
+        );
     }
 }

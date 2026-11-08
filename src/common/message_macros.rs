@@ -716,6 +716,23 @@ macro_rules! nas_message {
             }
         }
 
+        /// The name of the message, then each IE that it has, by its name, as
+        /// its type shows it.
+        impl core::fmt::Display for $name {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                f.write_str(stringify!($name))?;
+                #[allow(unused_mut)]
+                let mut items = crate::common::display::Items::new(f);
+                $( items.ie(crate::common::names::name!(stringify!($mfield)), &self.$mfield)?; )*
+                $(
+                    if let Some(ie) = &self.$ofield {
+                        items.ie(crate::common::names::name!(stringify!($ofield)), ie)?;
+                    }
+                )*
+                items.end()
+            }
+        }
+
         impl Encode for $name {
             fn encode_into(&self, buffer: &mut Vec<u8>) -> Result<()> {
                 $( nas_message!(@encode_mand buffer, self, $mfield $(, $mattr)?); )*
@@ -1058,6 +1075,23 @@ macro_rules! nas_messages {
                 }
             }
         )+)*
+
+        /// The message of the variant.
+        impl core::fmt::Display for $message {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                match self {
+                    $(Self::$variant(message) => message.fmt(f),)+
+                    $($(Self::$svariant(message) => message.fmt(f),)+)*
+                }
+            }
+        }
+
+        /// The name of the type.
+        impl core::fmt::Display for $kind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "{self:?}")
+            }
+        }
 
         impl $message {
             /// The type of the message.

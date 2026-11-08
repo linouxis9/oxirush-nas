@@ -54,11 +54,10 @@
 //! ```
 //!
 //! ```text
-//! EMM AttachRequest (type=EpsAttach, KSI=0, identity=imsi-208930000000001, UE-NetCap=EEA0 EEA1 EEA2 / EIA0 EIA1 EIA2, ESM-container=ESM (EBI=0, PTI=1) PdnConnectivityRequest (request=Initial, PDN=Ipv4v6))
-//! ESM (EBI=0, PTI=1) PdnConnectivityRequest (request=Initial, PDN=Ipv4v6)
+//! EMM AttachRequest (eps-attach-type: eps-attach, nas-key-set-identifier: 0, eps-mobile-identity: imsi-208930000000001, ue-network-capability: EEA0 EEA1 EEA2 / EIA0 EIA1 EIA2, esm-message-container: ESM (EBI=0, PTI=1) PdnConnectivityRequest (request-type: initial, pdn-type: ipv4v6))
+//! ESM (EBI=0, PTI=1) PdnConnectivityRequest (request-type: initial, pdn-type: ipv4v6)
 //! ```
 
-pub(crate) mod display;
 pub(crate) mod ie;
 pub(crate) mod message_types;
 pub(crate) mod messages;

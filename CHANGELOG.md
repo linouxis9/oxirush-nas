@@ -41,6 +41,11 @@ compatible with 0.5.0; the table below has the changes that a caller makes.
 - A message is decoded with `decode()`, `decode_with(octets, options)` or
   `decode_lenient(octets, options)`, in both systems; the direction that
   tells the two EPS DETACH REQUESTs apart is one of the `DecodeOptions`.
+- `Display` of a message is written from its table: its name, then each IE
+  that it has, by the name of its tree and as its type shows it, or else as
+  its tree on one line (its octets without the feature `tree`). An IE that
+  holds a key shows its length alone, the key of an AUN3 device too, whose
+  `Debug` now hides it as well.
 - `Error` writes its own text; `thiserror` is no dependency, and `hex` one of
   the tests alone. `validate()` takes the rules of each IE type from one table.
 - The README blocks are checked by the package of `readme/`.
@@ -105,6 +110,7 @@ compatible with 0.5.0; the table below has the changes that a caller makes.
 | `ctx.protect_bytes(octets, sht, dir)` | `ctx.protect(&Message::decode(&octets)?, sht, dir, ..)` |
 | `nas_eps::Message::decode_with_direction(octets, dir)` | `decode_with(octets, DecodeOptions::STRICT.with_direction(dir))` |
 | `decode_lenient(octets)` | `decode_lenient(octets, DecodeOptions::STRICT)` |
+| `5GMM RegistrationReject (cause=#22 (Congestion), T3346=10 min)` | `5GMM RegistrationReject (5gmm-cause: #22 (Congestion), t3346-value: 10 min)`: every IE, by the name of its tree |
 
 ## 0.5.0 - 2026-10-24
 

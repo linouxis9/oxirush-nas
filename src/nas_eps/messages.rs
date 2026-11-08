@@ -1364,6 +1364,58 @@ impl TryFrom<(EsmMessageType, &mut &[u8])> for EsmMessage {
     }
 }
 
+/// The system and the header of a message, then the message.
+impl core::fmt::Display for Message {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::Emm(_, message) => write!(f, "EMM {message}"),
+            Self::Esm(header, message) => write!(
+                f,
+                "ESM (EBI={}, PTI={}) {message}",
+                header.eps_bearer_identity, header.procedure_transaction_identity
+            ),
+            Self::SecurityProtected(header, inner) => write!(
+                f,
+                "SecurityProtected (SHT={:?}, MAC={:#010x}, SN={}) {inner}",
+                header.security_header_type,
+                header.message_authentication_code,
+                header.sequence_number
+            ),
+            Self::ServiceRequest(message) => write!(f, "EMM {message}"),
+            Self::EmmTransport(message) => write!(f, "EMM {message}"),
+            Self::Opaque(data) => write!(f, "Opaque ({} octets)", data.len()),
+        }
+    }
+}
+
+impl core::fmt::Display for ServiceRequest {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str("ServiceRequest")?;
+        let mut items = crate::common::display::Items::new(f);
+        items.item("KSI", self.ksi_and_sequence_number >> 5)?;
+        items.item("SN", self.ksi_and_sequence_number & 0x1f)?;
+        let mac = self.message_authentication_code;
+        items.item("short-MAC", format_args!("{mac:#06x}"))?;
+        items.end()
+    }
+}
+
+impl core::fmt::Display for EmmTransport {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str("Transport")?;
+        let mut items = crate::common::display::Items::new(f);
+        items.item("SN", self.security_header.sequence_number)?;
+        match &self.protected_payload {
+            Some(opaque) => items.item("protected", crate::common::display::Octets(opaque))?,
+            None => {
+                let container = self.data_container.as_deref().unwrap_or_default();
+                items.item("container", crate::common::display::Octets(container))?
+            }
+        }
+        items.end()
+    }
+}
+
 #[cfg(test)]
 mod table_round_trip_tests {
     use super::*;

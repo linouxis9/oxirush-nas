@@ -6022,6 +6022,284 @@ impl SsCode {
 
 // Raw value access for IEs whose counterpart in the other protocol has it.
 
+/// The `Display` of the IEs that have one of their own, which the `Display` of
+/// a message shows: a cause by its number and its name, `#22 (Congestion)`; a
+/// timer with its unit; RAND, AUTN and AUTS whole, as they travel in clear, and
+/// a key by its length alone; an identity whole, as the service based
+/// interfaces write it; the message that a container carries.
+mod shown {
+    use crate::common::display;
+    use crate::nas_eps::*;
+    use crate::prelude::*;
+    use core::fmt;
+
+    // ============================================================================
+    // IEs
+    // ============================================================================
+
+    /// An EMM cause by its number and its name: `#22 (Congestion)`.
+    impl fmt::Display for EmmCause {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            display::cause(f, self.value, self.cause().map(EmmCauseValue::description))
+        }
+    }
+
+    /// An ESM cause by its number and its name: `#26 (Insufficient resources)`.
+    impl fmt::Display for EsmCause {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            display::cause(f, self.value, self.cause().map(EsmCauseValue::description))
+        }
+    }
+
+    /// A NAS key set identifier: `0`, `mapped 3` or `no key`.
+    impl fmt::Display for KeySetIdentifier {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            self.key_set_identifier().fmt(f)
+        }
+    }
+
+    /// The selected algorithms: `EEA2 EIA2`.
+    impl fmt::Display for SecurityAlgorithms {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            let (ciphering, integrity) = (self.ciphering_raw(), self.integrity_raw());
+            let ciphering = Coded(CipheringAlgorithm::try_from(ciphering).ok(), ciphering);
+            let integrity = Coded(IntegrityAlgorithm::try_from(integrity).ok(), integrity);
+            write!(f, "{ciphering} {integrity}")
+        }
+    }
+
+    /// The EPS algorithms of a UE network capability: `EEA0 EEA2 / EIA2`.
+    impl fmt::Display for UeNetworkCapability {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            let eea = |number| self.supports_eea(number);
+            let eia = |number| self.supports_eia(number);
+            display::algorithms(f, ("EEA", "EIA"), eea, eia)
+        }
+    }
+
+    /// The EPS algorithms of a UE security capability: `EEA0 EEA2 / EIA2`.
+    impl fmt::Display for UeSecurityCapability {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            let eea = |number| self.supports_eea(number);
+            let eia = |number| self.supports_eia(number);
+            display::algorithms(f, ("EEA", "EIA"), eea, eia)
+        }
+    }
+
+    /// An EPS mobile identity, whole, as the service based interfaces write
+    /// it: `4g-guti-...`, `imsi-...` or `imei-...`. One whose octets do not
+    /// read as its type shows them.
+    impl fmt::Display for EpsMobileIdentity {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            if let Some(guti) = self.as_guti() {
+                guti.fmt(f)
+            } else if let Some(imsi) = self.as_imsi() {
+                write!(f, "imsi-{imsi}")
+            } else if let Some(imei) = self.as_imei() {
+                write!(f, "imei-{imei}")
+            } else {
+                let kind = match self.identity_type() {
+                    Some(MobileIdentityTypeEps::Guti) => "GUTI",
+                    Some(MobileIdentityTypeEps::Imsi) => "IMSI",
+                    Some(MobileIdentityTypeEps::Imei) => "IMEI",
+                    _ => "identity",
+                };
+                display::unread_identity(f, kind, &self.value)
+            }
+        }
+    }
+
+    /// A mobile identity of TS 24.008, whole: `imsi-...`, `imei-...`,
+    /// `imeisv-...`, `tmsi-c0000001` or `no identity`. One of another type, as
+    /// a TMGI, shows its octets.
+    impl fmt::Display for MobileIdentity {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            if let Some(imsi) = self.as_imsi() {
+                write!(f, "imsi-{imsi}")
+            } else if let Some(imei) = self.as_imei() {
+                write!(f, "imei-{imei}")
+            } else if let Some(imeisv) = self.as_imeisv() {
+                write!(f, "imeisv-{imeisv}")
+            } else if let Some(tmsi) = self.as_tmsi() {
+                write!(f, "tmsi-{tmsi:08x}")
+            } else if self.is_no_identity() {
+                f.write_str("no identity")
+            } else {
+                let kind = match self.identity_type_raw() {
+                    Some(1) => "IMSI",
+                    Some(2) => "IMEI",
+                    Some(3) => "IMEISV",
+                    Some(4) => "TMSI",
+                    Some(5) => "TMGI",
+                    _ => "identity",
+                };
+                display::unread_identity(f, kind, &self.value)
+            }
+        }
+    }
+
+    /// A list of tracking areas: `[208-93-0001, 208-93-0002]`.
+    impl fmt::Display for TrackingAreaIdentityList {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            let tais: Vec<TaiEps> = (self.entries().iter())
+                .flat_map(TaiListEntry::tracking_area_identities)
+                .collect();
+            match tais.is_empty() {
+                true => display::Octets(&self.value).fmt(f),
+                false => display::List(&tais).fmt(f),
+            }
+        }
+    }
+
+    /// A tracking area identity: `208-93-0001`.
+    impl fmt::Display for TrackingAreaIdentity {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            match self.tai() {
+                Some(tai) => tai.fmt(f),
+                None => display::Octets(&self.value).fmt(f),
+            }
+        }
+    }
+
+    /// A T3412 value: `9 min`, `deactivated`.
+    impl fmt::Display for T3412Value {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            self.value().fmt(f)
+        }
+    }
+
+    /// A T3412 extended value, as a UE reads it in an integrity protected
+    /// message: `54 min`, `deactivated`, or `not included` for unit 111.
+    impl fmt::Display for T3412ExtendedValue {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            match self.value_for_ue(true) {
+                Some(T3412ExtendedTimer::Seconds(seconds)) => display::Duration(seconds).fmt(f),
+                Some(T3412ExtendedTimer::Deactivated) => f.write_str("deactivated"),
+                Some(T3412ExtendedTimer::NotIncluded) => f.write_str("not included"),
+                None => display::Octets(&self.value).fmt(f),
+            }
+        }
+    }
+
+    /// An access point name: `internet`.
+    impl fmt::Display for AccessPointName {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            match self.as_string() {
+                Some(name) => f.write_str(&name),
+                None => display::Octets(&self.value).fmt(f),
+            }
+        }
+    }
+
+    /// A PDN address: `IPv4 10.0.0.1`, `non-IP`, `Ethernet`.
+    impl fmt::Display for PdnAddress {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            match self.pdn_address() {
+                Some(PdnAddressValue::Ipv4(ipv4)) => display::address(f, Some(ipv4), None),
+                Some(PdnAddressValue::Ipv6InterfaceId(identifier)) => {
+                    display::address(f, None, Some(identifier))
+                }
+                Some(PdnAddressValue::Ipv4v6 {
+                    ipv6_interface_id,
+                    ipv4,
+                }) => display::address(f, Some(ipv4), Some(ipv6_interface_id)),
+                Some(PdnAddressValue::NonIp) => f.write_str("non-IP"),
+                Some(PdnAddressValue::Ethernet) => f.write_str("Ethernet"),
+                None => display::Octets(&self.value).fmt(f),
+            }
+        }
+    }
+
+    /// An APN-AMBR: `DL 100 Mbps UL 50 Mbps`.
+    impl fmt::Display for ApnAggregateMaximumBitRate {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            display::rates(f, self.downlink_kbps(), self.uplink_kbps(), &self.value)
+        }
+    }
+
+    /// An EPS QoS by its QCI: `QCI 9`.
+    impl fmt::Display for EpsQualityOfService {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            match self.qos() {
+                Some(qos) => write!(f, "QCI {}", qos.qci),
+                None => display::Octets(&self.value).fmt(f),
+            }
+        }
+    }
+
+    /// A traffic flow template: its operation and its packet filters,
+    /// `Create, 2 filters`.
+    impl fmt::Display for TrafficFlowTemplate {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            match self.tft() {
+                Some(tft) => tft_shown(f, &tft),
+                None => display::Octets(&self.value).fmt(f),
+            }
+        }
+    }
+
+    /// A traffic flow aggregate: its operation and its packet filters.
+    impl fmt::Display for TrafficFlowAggregateDescription {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            match self.tft() {
+                Some(tft) => tft_shown(f, &tft),
+                None => display::Octets(&self.value).fmt(f),
+            }
+        }
+    }
+
+    fn tft_shown(f: &mut fmt::Formatter<'_>, tft: &Tft) -> fmt::Result {
+        match tft.packet_filters.len() {
+            0 => write!(f, "{:?}", tft.operation),
+            1 => write!(f, "{:?} 1 filter", tft.operation),
+            filters => write!(f, "{:?} {filters} filters", tft.operation),
+        }
+    }
+
+    /// A linked EPS bearer identity: `5`.
+    impl fmt::Display for LinkedEpsBearerIdentity {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            match self.ebi() {
+                Some(ebi) => ebi.fmt(f),
+                None => write!(f, "{:#04x}", self.bearer_identity()),
+            }
+        }
+    }
+
+    /// A coded value by its name, or its code when it has none.
+    struct Coded<T>(Option<T>, u8);
+
+    impl<T: fmt::Debug> fmt::Display for Coded<T> {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            match &self.0 {
+                Some(value) => write!(f, "{value:?}"),
+                None => write!(f, "{:#04x}", self.1),
+            }
+        }
+    }
+
+    /// What an ESM message container carries: the ESM message, or its octets.
+    impl fmt::Display for EsmMessageContainer {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            match self.decode_as_esm_message() {
+                Ok(message) => message.fmt(f),
+                Err(_) => display::Octets(&self.value).fmt(f),
+            }
+        }
+    }
+
+    /// What a replayed NAS message container carries: the ATTACH REQUEST or
+    /// the TRACKING AREA UPDATE REQUEST, or its octets.
+    impl fmt::Display for ReplayedNasMessageContainer {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            match self.decode_as_emm_message() {
+                Ok(message) => message.fmt(f),
+                Err(_) => display::Octets(&self.value).fmt(f),
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

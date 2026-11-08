@@ -39,10 +39,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 ```
 
 ```text
-5GMM RegistrationRequest (type=InitialRegistration, FOR, ngKSI=no key, identity=suci-0-208-93-0000-0-0-0000000120, UE-SecCap=EA0 EA2 / IA2)
+5GMM RegistrationRequest (5gs-registration-type: {registration-type: initial-registration, follow-on-request: true}, ngksi: no key, 5gs-mobile-identity: suci-0-208-93-0000-0-0-0000000120, ue-security-capability: EA0 EA2 / IA2)
 InitialRegistration in MCC 208, MNC 93
 0 findings, same octets: true
-5GMM RegistrationReject (cause=#22 (Congestion), T3346=10 min): 7e0044165f012a
+5GMM RegistrationReject (5gmm-cause: #22 (Congestion), t3346-value: 10 min): 7e0044165f012a
 ```
 
 Each example is followed by its output.
@@ -191,13 +191,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 ```
 
 ```text
-UE  5GMM RegistrationRequest (type=InitialRegistration, FOR, ngKSI=no key, identity=suci-0-208-93-0000-0-0-0000000120, UE-SecCap=EA0 EA2 / IA2)
+UE  5GMM RegistrationRequest (5gs-registration-type: {registration-type: initial-registration, follow-on-request: true}, ngksi: no key, 5gs-mobile-identity: suci-0-208-93-0000-0-0-0000000120, ue-security-capability: EA0 EA2 / IA2)
 AMF imsi-208930000000120
-AMF 5GMM AuthenticationRequest (ngKSI=0, ABBA=0000, RAND=23553cbe9637a89d218ae64dae47bf35, AUTN=55f328b43577b9b94a9ffac354dfafb3)
+AMF 5GMM AuthenticationRequest (ngksi: 0, abba: 0000, authentication-parameter-rand: 23553cbe9637a89d218ae64dae47bf35, authentication-parameter-autn: 55f328b43577b9b94a9ffac354dfafb3)
 UE  RES* accepted: true
-AMF 5GMM SecurityModeCommand (algorithms=NEA2 NIA2, ngKSI=0, Replayed-UE-SecCap=EA0 EA2 / IA2)
-UE  5GMM SecurityModeComplete (NAS-container=5GMM RegistrationRequest (type=InitialRegistration, FOR, ngKSI=no key, identity=suci-0-208-93-0000-0-0-0000000120, UE-SecCap=EA0 EA2 / IA2)), NAS COUNT 0
-AMF 5GMM RegistrationAccept (result=ThreeGppAccess, GUTI=5g-guti-20893caff8011223344, TAI-list=[208-93-000001, 208-93-000002], Allowed-NSSAI=[1])
+AMF 5GMM SecurityModeCommand (selected-nas-security-algorithms: NEA2 NIA2, ngksi: 0, replayed-ue-security-capabilities: EA0 EA2 / IA2)
+UE  5GMM SecurityModeComplete (nas-message-container: 5GMM RegistrationRequest (5gs-registration-type: {registration-type: initial-registration, follow-on-request: true}, ngksi: no key, 5gs-mobile-identity: suci-0-208-93-0000-0-0-0000000120, ue-security-capability: EA0 EA2 / IA2)), NAS COUNT 0
+AMF 5GMM RegistrationAccept (5gs-registration-result: {result: 3gpp-access, sms-allowed: false, nssaa-performed: false, emergency-registered: false, disaster-roaming: false}, 5g-guti: 5g-guti-20893caff8011223344, tai-list: [208-93-000001, 208-93-000002], allowed-nssai: [1])
     7e02818e2ede0169e2dfa47cf0a4a5ff3e8b5143585d5033635f8eebad491ccf140fb7eaa8bbe3b0d8e5
 ```
 
@@ -268,12 +268,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 ```
 
 ```text
-UE  EMM AttachRequest (type=EpsAttach, KSI=0, identity=imsi-208930000000001, UE-NetCap=EEA0 EEA1 EEA2 / EIA0 EIA1 EIA2, ESM-container=ESM (EBI=0, PTI=1) PdnConnectivityRequest (request=Initial, PDN=Ipv4v6))
-MME EMM AuthenticationRequest (KSI=0, RAND=23553cbe9637a89d218ae64dae47bf35, AUTN=aa689c648350b9b9a4a8043ac07aa7e0)
+UE  EMM AttachRequest (eps-attach-type: eps-attach, nas-key-set-identifier: 0, eps-mobile-identity: imsi-208930000000001, ue-network-capability: EEA0 EEA1 EEA2 / EIA0 EIA1 EIA2, esm-message-container: ESM (EBI=0, PTI=1) PdnConnectivityRequest (request-type: initial, pdn-type: ipv4v6))
+MME EMM AuthenticationRequest (nas-key-set-identifier-asme: 0, authentication-parameter-rand: 23553cbe9637a89d218ae64dae47bf35, authentication-parameter-autn: aa689c648350b9b9a4a8043ac07aa7e0)
 UE  RES accepted: true
-MME EMM SecurityModeCommand (algorithms=EEA2 EIA2, KSI=0, Replayed-UE-SecCap=EEA0 EEA1 EEA2 / EIA0 EIA1 EIA2)
+MME EMM SecurityModeCommand (selected-nas-security-algorithms: EEA2 EIA2, nas-key-set-identifier: 0, replayed-ue-security-capabilities: EEA0 EEA1 EEA2 / EIA0 EIA1 EIA2)
 UE  EMM SecurityModeComplete
-MME EMM AttachAccept (result=EpsOnly, T3412=1 min, TAI-list=[208-93-0001], ESM-container=ESM (EBI=5, PTI=1) ActivateDefaultEpsBearerContextRequest (QoS=QCI 9, APN=internet, PDN-address=IPv4 10.0.0.1))
+MME EMM AttachAccept (eps-attach-result: eps-only, t3412-value: 1 min, tai-list: [208-93-0001], esm-message-container: ESM (EBI=5, PTI=1) ActivateDefaultEpsBearerContextRequest (eps-qos: QCI 9, access-point-name: internet, pdn-address: IPv4 10.0.0.1))
 ```
 
 [`nas_5gs::security`](https://docs.rs/oxirush-nas/latest/oxirush_nas/nas_5gs/security/index.html)
@@ -323,7 +323,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ```text
 {"message":"DownlinkNASTransport","ies":[{"AMF-UE-NGAP-ID":1},{"RAN-UE-NGAP-ID":7},{"NAS-PDU":"7e0044165f012a"}]}
-5GMM RegistrationReject (cause=#22 (Congestion), T3346=10 min)
+5GMM RegistrationReject (5gmm-cause: #22 (Congestion), t3346-value: 10 min)
 {"message":"DownlinkNASTransport","ies":[{"MME-UE-S1AP-ID":1},{"eNB-UE-S1AP-ID":7},{"NAS-PDU":"074403"}]}
 ```
 
@@ -360,7 +360,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 ```
 
 ```text
-5GMM RegistrationReject (cause=#3 (Illegal UE), T3502=12 min)
+5GMM RegistrationReject (5gmm-cause: #3 (Illegal UE), t3502-value: 12 min)
 ```
 
 ## A 5GSM message in UL NAS TRANSPORT
@@ -403,7 +403,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ```text
 7e00670100062e0501c1ffff120581250908696e7465726e6574
-5GSM (PSI=5, PTI=1) PduSessionEstablishmentRequest
+5GSM (PSI=5, PTI=1) PduSessionEstablishmentRequest (integrity-protection-maximum-data-rate: {ul: full-rate, dl: full-rate})
 ```
 
 ## Validate a message, and answer a faulty one
@@ -477,8 +477,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ```text
 mandatory IE `5gs-mobile-identity` has a value that is syntactically incorrect: `5g-guti` has 10 octets, and must have 11
-5GMM Status (cause=#96 (Invalid mandatory information))
-5GMM RegistrationRequest (type=InitialRegistration, FOR, ngKSI=no key, identity=5G-GUTI (f202f839cafe00112233), UE-SecCap=EA0 EA2 / IA2)
+5GMM GmmStatus (5gmm-cause: #96 (Invalid mandatory information))
+5GMM RegistrationRequest (5gs-registration-type: {registration-type: initial-registration, follow-on-request: true}, ngksi: no key, 5gs-mobile-identity: 5G-GUTI (f202f839cafe00112233), ue-security-capability: EA0 EA2 / IA2)
 ```
 
 ## A message as JSON

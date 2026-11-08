@@ -105,13 +105,19 @@ fn a_key_set_identifier_is_displayed_alike_in_both_systems() {
         mapped,
         nas_5gs::UeSecurityCapability::new(vec![0xe0, 0xe0]),
     );
-    assert!(command.to_string().contains("ngKSI=mapped 3,"), "{command}");
+    assert!(
+        command.to_string().contains("ngksi: mapped 3,"),
+        "{command}"
+    );
     let eps = nas_eps::SecurityModeCommand::new(
         nas_eps::SecurityAlgorithms::new(0x22),
         nas_eps::KeySetIdentifier::new(0x07),
         nas_eps::UeSecurityCapability::new(vec![0xe0, 0xe0]),
     );
-    assert!(eps.to_string().contains("KSI=no key"), "{eps}");
+    assert!(
+        eps.to_string().contains("nas-key-set-identifier: no key"),
+        "{eps}"
+    );
 }
 
 #[test]

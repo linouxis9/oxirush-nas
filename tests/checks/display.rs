@@ -1,5 +1,6 @@
 //! The words of `Display`: an IE whose octets read shows its value, one that
-//! does not shows its type and its octets, and a message its IEs.
+//! does not shows its type and its octets, and a message each of its IEs by
+//! its name, as its type shows it or as its tree.
 
 use oxirush_nas::nas_5gs as f;
 use oxirush_nas::nas_eps as e;
@@ -26,6 +27,8 @@ fn an_eps_identity_that_does_not_read_shows_its_type_and_its_octets() {
     assert_eq!(identity("f50000"), "TMGI (f50000)");
 }
 
+// With the tree, which shows an IE whose type has no `Display` of its own.
+#[cfg(feature = "tree")]
 #[test]
 fn the_values_of_eps_ies_and_messages_are_shown() {
     assert_eq!(
@@ -54,14 +57,15 @@ fn the_values_of_eps_ies_and_messages_are_shown() {
         e::Message::new_emm(complete.clone())
             .to_string()
             .starts_with(
-                "EMM SecurityModeComplete (Replayed-NAS=EMM AttachRequest (type=EpsAttach"
+                "EMM SecurityModeComplete (replayed-nas-message-container: EMM AttachRequest \
+                 (eps-attach-type: eps-attach"
             )
     );
     complete.replayed_nas_message_container =
         Some(e::ReplayedNasMessageContainer::new(octets("0741")));
     assert_eq!(
         e::Message::new_emm(complete).to_string(),
-        "EMM SecurityModeComplete (Replayed-NAS=0741)"
+        "EMM SecurityModeComplete (replayed-nas-message-container: 0741)"
     );
 }
 
@@ -89,27 +93,32 @@ fn the_values_of_5gs_ies_are_shown() {
     );
 }
 
+// With the tree, which shows an IE whose type has no `Display` of its own.
+#[cfg(feature = "tree")]
 #[test]
 fn an_identity_request_shows_the_identity_by_its_name() {
+    // A code that the table does not name shows its number
     let names = [
-        "SUCI",
-        "SUCI",
-        "5G-GUTI",
-        "IMEI",
-        "5G-S-TMSI",
-        "IMEISV",
-        "MAC address",
-        "EUI-64",
+        "0",
+        "suci",
+        "guti",
+        "imei",
+        "s-tmsi",
+        "imeisv",
+        "mac-address",
+        "eui64",
     ];
     for (value, name) in names.into_iter().enumerate() {
         let request = f::IdentityRequest::new(f::IdentityType::new(value as u8));
         assert_eq!(
             f::Message::new_5gmm(request).to_string(),
-            format!("5GMM IdentityRequest (type={name})")
+            format!("5GMM IdentityRequest (identity-type: {name})")
         );
     }
 }
 
+// With the tree, which shows an IE whose type has no `Display` of its own.
+#[cfg(feature = "tree")]
 #[test]
 fn a_5gs_message_shows_its_payload_its_rules_and_its_flags() {
     let downlink = f::DlNasTransport::new(
@@ -118,7 +127,8 @@ fn a_5gs_message_shows_its_payload_its_rules_and_its_flags() {
     );
     assert_eq!(
         f::Message::new_5gmm(downlink).to_string(),
-        "5GMM DlNasTransport (type=UePolicy, payload=UPDS (PTI=0x01 (UE-initiated), type=0x02) ManageUePolicyComplete)"
+        "5GMM DlNasTransport (payload-container-type: ue-policy, payload-container: UPDS \
+         (PTI=0x01 (UE-initiated), type=0x02) ManageUePolicyComplete)"
     );
     // QoS rules that do not read, or none, show their octets
     let accept = |rules: Vec<u8>| {
@@ -135,11 +145,11 @@ fn a_5gs_message_shows_its_payload_its_rules_and_its_flags() {
         .to_string()
     };
     assert!(
-        accept(octets("01000631")).contains("QoS-rules=01000631"),
+        accept(octets("01000631")).contains("authorized-qos-rules: {octets: 01000631}"),
         "{}",
         accept(octets("01000631"))
     );
-    assert!(accept(Vec::new()).contains("QoS-rules=empty"));
+    assert!(accept(Vec::new()).contains("authorized-qos-rules: {octets: }"));
     let request = |requested: u8| {
         let mut request = f::PduSessionEstablishmentRequest::new(
             f::IntegrityProtectionMaximumDataRate::new(0xffff),
@@ -150,10 +160,24 @@ fn a_5gs_message_shows_its_payload_its_rules_and_its_flags() {
     };
     assert_eq!(
         request(1),
-        "5GSM (PSI=5, PTI=1) PduSessionEstablishmentRequest (always-on requested)"
+        "5GSM (PSI=5, PTI=1) PduSessionEstablishmentRequest (integrity-protection-maximum-\
+         data-rate: {ul: full-rate, dl: full-rate}, always-on-pdu-session-requested: {apsr: true})"
     );
     assert_eq!(
         request(0),
-        "5GSM (PSI=5, PTI=1) PduSessionEstablishmentRequest"
+        "5GSM (PSI=5, PTI=1) PduSessionEstablishmentRequest (integrity-protection-maximum-\
+         data-rate: {ul: full-rate, dl: full-rate}, always-on-pdu-session-requested: {apsr: false})"
+    );
+}
+
+/// Without the tree, an IE whose type has no `Display` of its own shows its
+/// octets.
+#[cfg(not(feature = "tree"))]
+#[test]
+fn without_the_tree_an_ie_shows_its_octets() {
+    let request = f::IdentityRequest::new(f::IdentityType::new(1));
+    assert_eq!(
+        f::Message::new_5gmm(request).to_string(),
+        "5GMM IdentityRequest (identity-type: 01)"
     );
 }

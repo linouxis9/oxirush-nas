@@ -21,7 +21,6 @@
 //! as [`crate::nas_eps`]. What both systems share is at the
 //! [root of the crate](crate).
 
-pub(crate) mod display;
 pub(crate) mod ie;
 pub(crate) mod message_types;
 pub(crate) mod messages;

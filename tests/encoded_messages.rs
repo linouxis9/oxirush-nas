@@ -249,6 +249,7 @@ fn nas_containers_recursively_decode_to_the_permitted_message_families() {
 }
 
 /// The name and the text of each line of a fixture of what the messages print.
+#[cfg(feature = "tree")]
 fn shown(lines: &str) -> impl Iterator<Item = (&str, &str)> {
     lines
         .lines()
@@ -259,6 +260,8 @@ fn shown(lines: &str) -> impl Iterator<Item = (&str, &str)> {
 /// Each message of the fixtures prints as its line of nas-5gs-display.tsv or
 /// nas-eps-display.tsv: its name, then each of its IEs with its value.
 /// `NAS_DISPLAY_WRITE=1` writes the two files from what the messages print.
+/// With the tree, which shows an IE whose type has no `Display` of its own.
+#[cfg(feature = "tree")]
 #[test]
 fn every_message_of_the_fixtures_prints_its_ies() {
     let fgs = rows(include_str!("fixtures/nas-5gs.tsv"))

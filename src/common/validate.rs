@@ -193,6 +193,11 @@ pub(crate) trait IeRules {
     fn receiver_fault(&self) -> Option<String> {
         None
     }
+
+    /// The IE as the `Display` of its message shows it: by its own `Display`,
+    /// or by the compact form of its tree, or of its octets without the
+    /// feature `tree`.
+    fn show(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result;
 }
 
 /// [`IeRules`] for IE types, one per row, with the rules that each has:
@@ -201,13 +206,39 @@ pub(crate) trait IeRules {
 /// - `sender`: what `is_well_formed()` checks, which `SENDER_RULE` says;
 ///   `sender(pattern)`: the values that a sender sets; `sender_own`: the
 ///   type's own `sender_check()` and `sender_rule()`;
-/// - `receiver`: the grammar of its [`ReceiverSyntaxCheck`].
+/// - `receiver`: the grammar of its [`ReceiverSyntaxCheck`];
+/// - `display`: its own `Display`, which the `Display` of a message shows; a
+///   type without one is shown by its tree. An IE that holds a key has one,
+///   which does not show the key.
 macro_rules! ie_rules {
     ($($name:ident $(: $($rule:ident $(($($argument:tt)*))?),+)?;)*) => {$(
         impl $crate::common::IeRules for $name {
             $($($crate::common::ie_rules!(@$rule $(($($argument)*))?);)+)?
+            $crate::common::ie_rules!(@show [$($($rule)+)?]);
         }
     )*};
+    (@show [display $($rule:ident)*]) => {
+        fn show(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            core::fmt::Display::fmt(self, f)
+        }
+    };
+    (@show [$first:ident $($rule:ident)*]) => {
+        $crate::common::ie_rules!(@show [$($rule)*]);
+    };
+    (@show []) => {
+        fn show(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            #[cfg(feature = "tree")]
+            {
+                #[allow(unused_imports)]
+                use $crate::common::view::{DecodedProbe, ViaDecoded, ViaNoDecoded};
+                let tree = $crate::common::view::ie_shown((&DecodedProbe(self)).decoded_ie(), &self.value);
+                $crate::common::display::compact(f, &tree)
+            }
+            #[cfg(not(feature = "tree"))]
+            $crate::common::display::ValueOctets::show(&self.value, f)
+        }
+    };
+    (@display) => {};
     (@lengths ($least:expr, $most:expr)) => {
         fn receiver_length_ok(&self) -> Option<bool> {
             Some(self.value.len().checked_sub($least).is_some())

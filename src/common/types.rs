@@ -167,6 +167,13 @@ impl core::fmt::Debug for AuthenticationResponseParameter {
         crate::common::display::hidden_octets(f, "AuthenticationResponseParameter", &self.value)
     }
 }
+
+/// A key by its length alone: `hidden (16 octets)`.
+impl core::fmt::Display for AuthenticationResponseParameter {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        core::fmt::Display::fmt(&crate::common::display::Hidden(self.value.len()), f)
+    }
+}
 nas_ie_lv!(
     /// EPS bearer context status (TS 24.301 §9.9.2.1; TS 24.501 §9.11.3.23A). LV format.
     EpsBearerContextStatus
@@ -274,23 +281,23 @@ impl Default for NetworkName {
 // their clauses, the values that a sender sets, and a receiver's grammar.
 crate::common::ie_rules! {
     AccessTechnologyUtilizationControl: lengths(0, 3), sender;
-    AuthenticationFailureParameter: lengths(14, 14);
-    AuthenticationParameterAutn: lengths(16, 16);
-    AuthenticationParameterRand;
-    AuthenticationResponseParameter: lengths(4, 16);
+    AuthenticationFailureParameter: lengths(14, 14), display;
+    AuthenticationParameterAutn: lengths(16, 16), display;
+    AuthenticationParameterRand: display;
+    AuthenticationResponseParameter: lengths(4, 16), display;
     DaylightSavingTime: lengths(1, 1), sender;
     EmergencyNumberList: lengths(3, 48), sender;
-    EpsBearerContextStatus: lengths(2, 2), sender;
+    EpsBearerContextStatus: lengths(2, 2), sender, display;
     ExtendedDrxParameters: lengths(1, 2), sender;
     ExtendedEmergencyNumberList: lengths(4, 65535), sender;
     ExtendedProtocolConfigurationOptions: lengths(1, 65535);
-    GprsTimer;
-    GprsTimer2: lengths(1, 1), sender;
-    GprsTimer3: lengths(1, 1), sender;
+    GprsTimer: display;
+    GprsTimer2: lengths(1, 1), sender, display;
+    GprsTimer3: lengths(1, 1), sender, display;
     ImeisvRequest: sender(0 | 1);
     ListOfPlmnsToBeUsedInDisasterCondition: lengths(0, usize::MAX), sender;
     MobileStationClassmark2: lengths(3, 3), sender;
-    NetworkName: lengths(1, usize::MAX), sender;
+    NetworkName: lengths(1, usize::MAX), sender, display;
     Non3GppNwProvidedPolicies: sender(0 | 1);
     PlmnIdentity: lengths(3, 3), sender;
     PlmnList: lengths(3, 45), sender;
@@ -298,7 +305,7 @@ crate::common::ie_rules! {
     ReleaseAssistanceIndication: sender(0..=2);
     ServingPlmnRateControl: lengths(2, 2), sender;
     SupportedCodecList: lengths(3, usize::MAX), sender;
-    TimeZone: sender;
+    TimeZone: sender, display;
     TimeZoneAndTime: sender;
     UeRadioCapabilityId: lengths(1, usize::MAX);
     UeRadioCapabilityIdDeletionIndication;

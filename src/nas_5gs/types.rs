@@ -516,6 +516,13 @@ impl core::fmt::Debug for CipheringKeyData {
         crate::common::display::hidden_octets(f, "CipheringKeyData", &self.value)
     }
 }
+
+/// A key by its length alone: `hidden (16 octets)`.
+impl core::fmt::Display for CipheringKeyData {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        core::fmt::Display::fmt(&crate::common::display::Hidden(self.value.len()), f)
+    }
+}
 nas_ie_lve!(
     /// EAP Message (TS 24.501 §9.11.2.2). LV-E format.
     ///
@@ -585,6 +592,13 @@ impl core::fmt::Debug for ReceivedMbsContainer {
         crate::common::display::hidden_octets(f, "ReceivedMbsContainer", &self.value)
     }
 }
+
+/// A key by its length alone: `hidden (16 octets)`.
+impl core::fmt::Display for ReceivedMbsContainer {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        core::fmt::Display::fmt(&crate::common::display::Hidden(self.value.len()), f)
+    }
+}
 nas_ie_lve!(
     /// Requested MBS Container (TS 24.501 §9.11.4.30). LV-E format.
     RequestedMbsContainer
@@ -618,8 +632,24 @@ nas_ie_lv!(
 );
 nas_ie_lv!(
     /// AUN3 device security key (TS 24.501 §9.11.3.107). LV format.
-    Aun3DeviceSecurityKey
+    ///
+    /// It holds a key: `Debug` and `Display` print the length of its octets
+    /// alone.
+    Aun3DeviceSecurityKey, own_debug
 );
+/// The key of an AUN3 device, by the length of its IE.
+impl core::fmt::Debug for Aun3DeviceSecurityKey {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        crate::common::display::hidden_octets(f, "Aun3DeviceSecurityKey", &self.value)
+    }
+}
+
+/// A key by its length alone: `hidden (16 octets)`.
+impl core::fmt::Display for Aun3DeviceSecurityKey {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        core::fmt::Display::fmt(&crate::common::display::Hidden(self.value.len()), f)
+    }
+}
 nas_ie_lv!(
     /// CIoT small data container (TS 24.501 §9.11.3.18B). LV format.
     CiotSmallDataContainer
@@ -678,6 +708,13 @@ nas_ie_lve!(
 impl core::fmt::Debug for RelayKeyResponseParameters {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         crate::common::display::hidden_octets(f, "RelayKeyResponseParameters", &self.value)
+    }
+}
+
+/// A key by its length alone: `hidden (16 octets)`.
+impl core::fmt::Display for RelayKeyResponseParameters {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        core::fmt::Display::fmt(&crate::common::display::Hidden(self.value.len()), f)
     }
 }
 nas_ie_lv!(

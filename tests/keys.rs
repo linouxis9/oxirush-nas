@@ -51,7 +51,8 @@ fn debug_of_a_5gs_authentication_response_shows_the_length_of_res_star_and_no_ea
     assert!(has_no_key(&printed), "{printed}");
     assert_eq!(
         printed,
-        "5GMM AuthenticationResponse (RES*=hidden (16 octets), EAP=Response)"
+        "5GMM AuthenticationResponse (authentication-response-parameter: hidden (16 octets), \
+         eap-message: Response)"
     );
 
     // The message keeps the octets, which encode back

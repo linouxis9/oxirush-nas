@@ -69,9 +69,9 @@
 //! ```
 //!
 //! ```text
-//! 5GMM RegistrationRequest (type=InitialRegistration, FOR, ngKSI=no key, identity=suci-0-208-93-0000-0-0-0000000120, UE-SecCap=EA0 EA2 / IA2)
+//! 5GMM RegistrationRequest (5gs-registration-type: {registration-type: initial-registration, follow-on-request: true}, ngksi: no key, 5gs-mobile-identity: suci-0-208-93-0000-0-0-0000000120, ue-security-capability: EA0 EA2 / IA2)
 //! MCC=208, MNC=93
-//! 5GMM RegistrationReject (cause=#22 (Congestion), T3346=10 min)
+//! 5GMM RegistrationReject (5gmm-cause: #22 (Congestion), t3346-value: 10 min)
 //! ```
 //!
 //! Each example is followed by its output.
@@ -151,7 +151,7 @@
 //!
 //! ```text
 //! 7e0042010177000bf202f839caff8011223344540a0102f839000001000002150701010401010203
-//! 5GMM RegistrationAccept (result=ThreeGppAccess, GUTI=5g-guti-20893caff8011223344, TAI-list=[208-93-000001, 208-93-000002], Allowed-NSSAI=[1, 1/010203])
+//! 5GMM RegistrationAccept (5gs-registration-result: {result: 3gpp-access, sms-allowed: false, nssaa-performed: false, emergency-registered: false, disaster-roaming: false}, 5g-guti: 5g-guti-20893caff8011223344, tai-list: [208-93-000001, 208-93-000002], allowed-nssai: [1, 1/010203])
 //! ```
 //!
 //! # Protect and unprotect
@@ -268,7 +268,7 @@
 //! | IEs | 169 5GS and 153 EPS types, each the value of its IE, which a message has in the V, LV, LV-E, TV, TLV and TLV-E formats of TS 24.007 §11.2 |
 //! | Typed accessors | Enums, value structs and `set_*`/`with_*` builders instead of bit manipulation. One implementation for the IEs that both specifications code alike: UE network capability, KSI, NAS security algorithms, GPRS timers, PCO/ePCO units, APN/DNN, PLMN lists, network name, time zone, eDRX and emergency numbers, for example |
 //! | Errors | `Error` separates the classes of clause 7: too-short messages, unknown protocol discriminators and message types, reserved security header types, invalid mandatory IEs |
-//! | Display | `fmt::Display` for every message and for the IEs that it shows, in these forms: a cause as `#22 (Congestion)`, a timer with its unit, an identity whole as the service based interfaces write it, a key never. `Debug` prints no key either: of RES, RES\*, the ciphering keys of positioning, an MSK and K_NR_ProSe, of the IEs that hold one and of an IE kept unread it shows the length, and of an EAP message its header |
+//! | Display | `fmt::Display` for every message: its name, then each IE that it has by its name, `5gmm-cause: #22 (Congestion)`, as the type of the IE shows it, or else as its tree on one line, `{registration-type: initial-registration, follow-on-request: true}` (its octets without the feature `tree`). An IE type shows a cause by its number and its name, a timer with its unit, an identity whole as the service based interfaces write it, the message of a container, and a key never: RES, RES\*, the ciphering keys of positioning, an MSK, K_NR_ProSe and the key of an AUN3 device by their length. `Debug` prints no key either, and of an EAP message its header |
 //! | Round trip | Decoding then encoding keeps unknown IEs, ignored repetitions, the order of the optional IEs and the spare half octet of a header |
 //! | `security` | Integrity and ciphering with NAS COUNT tracking and replay protection per TS 33.501 and TS 33.401, the EPS short MAC, partial ciphering of CONTROL PLANE SERVICE REQUEST containers and 5GS↔EPS mapped contexts |
 //! | `tree` | Each message as a tree: every IE by its name, with its value in the usual notation, or its octets; `Serialize` and `Deserialize` through the tree |

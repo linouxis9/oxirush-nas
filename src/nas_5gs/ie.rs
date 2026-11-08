@@ -17024,6 +17024,343 @@ impl EcnMarkingForL4sIndication {
 
 // Raw value access for IEs whose counterpart in the other protocol has it.
 
+/// The `Display` of the IEs that have one of their own, which the `Display` of
+/// a message shows: a cause by its number and its name, `#22 (Congestion)`; a
+/// timer with its unit; RAND, AUTN and AUTS whole, as they travel in clear, and
+/// a key by its length alone; an identity whole, as the service based
+/// interfaces write it; the message that a container carries.
+mod shown {
+    use crate::common::display;
+    use crate::nas_5gs::*;
+    use crate::prelude::*;
+    use core::fmt;
+
+    // ============================================================================
+    // IEs
+    // ============================================================================
+
+    /// A 5GMM cause by its number and its name: `#22 (Congestion)`.
+    impl fmt::Display for GmmCause {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            let name = self.cause().map(GmmCauseValue::description);
+            display::cause(f, self.value, name)
+        }
+    }
+
+    /// A 5GSM cause by its number and its name: `#26 (Insufficient resources)`.
+    impl fmt::Display for GsmCause {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            let name = self.cause().map(GsmCauseValue::description);
+            display::cause(f, self.value, name)
+        }
+    }
+
+    /// An ngKSI: `0`, `mapped 3` or `no key`.
+    impl fmt::Display for KeySetIdentifier {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            self.key_set_identifier().fmt(f)
+        }
+    }
+
+    /// The selected algorithms: `NEA2 NIA2`.
+    impl fmt::Display for SecurityAlgorithms {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            let (ciphering, integrity) = (self.ciphering_raw(), self.integrity_raw());
+            let ciphering = Coded(CipheringAlgorithm::try_from(ciphering).ok(), ciphering);
+            let integrity = Coded(IntegrityAlgorithm::try_from(integrity).ok(), integrity);
+            write!(f, "{ciphering} {integrity}")
+        }
+    }
+
+    /// The selected EPS algorithms of a SECURITY MODE COMMAND: `EEA2 EIA2`.
+    impl fmt::Display for EpsNasSecurityAlgorithms {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            use crate::common::ts24301::{CipheringAlgorithm, IntegrityAlgorithm};
+            let (ciphering, integrity) = (self.ciphering_raw(), self.integrity_raw());
+            let ciphering = Coded(CipheringAlgorithm::try_from(ciphering).ok(), ciphering);
+            let integrity = Coded(IntegrityAlgorithm::try_from(integrity).ok(), integrity);
+            write!(f, "{ciphering} {integrity}")
+        }
+    }
+
+    /// The algorithms of a UE security capability: `EA0 EA2 / IA2`, and those
+    /// of EPS after a `+` when it has one.
+    impl fmt::Display for UeSecurityCapability {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            let ea = |number| self.supports_ea(number);
+            let ia = |number| self.supports_ia(number);
+            display::algorithms(f, ("EA", "IA"), ea, ia)?;
+            if self.eea_byte() | self.eia_byte() != 0 {
+                f.write_str(" + ")?;
+                let eea = |number| self.supports_eea(number);
+                let eia = |number| self.supports_eia(number);
+                display::algorithms(f, ("EEA", "EIA"), eea, eia)?;
+            }
+            Ok(())
+        }
+    }
+
+    /// A 5GS mobile identity, whole, as the service based interfaces write
+    /// it: `suci-0-208-93-0-0-0-0000000001`, `5g-guti-...`, `5g-s-tmsi-...`,
+    /// `imei-...`, `imeisv-...`, `mac-...`, `eui-...` or `no identity`. One
+    /// whose octets do not read as its type shows them.
+    impl fmt::Display for MobileIdentity {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            let octets = &self.value[..];
+            let shown = match self.identity_type() {
+                Some(MobileIdentityType5gs::Suci) => self.as_suci().map(|suci| suci.fmt(f)),
+                Some(MobileIdentityType5gs::Guti) => self.as_guti().map(|guti| guti.fmt(f)),
+                Some(MobileIdentityType5gs::STmsi) => self.as_s_tmsi().map(|s_tmsi| s_tmsi.fmt(f)),
+                Some(MobileIdentityType5gs::Imei) => {
+                    self.as_imei().map(|imei| write!(f, "imei-{imei}"))
+                }
+                Some(MobileIdentityType5gs::Imeisv) => {
+                    self.as_imeisv().map(|imeisv| write!(f, "imeisv-{imeisv}"))
+                }
+                Some(MobileIdentityType5gs::MacAddress) => self.as_mac_address().map(|address| {
+                    let suffix = if self.mauri() == Some(true) {
+                        "-untrusted"
+                    } else {
+                        ""
+                    };
+                    display::hyphenated(f, "mac", &address, suffix)
+                }),
+                Some(MobileIdentityType5gs::Eui64) => self
+                    .as_eui64()
+                    .map(|identifier| display::hyphenated(f, "eui", &identifier, "")),
+                Some(MobileIdentityType5gs::NoIdentity) => Some(f.write_str("no identity")),
+                _ => None,
+            };
+            match (shown, self.identity_type()) {
+                (Some(shown), _) => shown,
+                (None, Some(kind)) => display::unread_identity(f, identity_type_name(kind), octets),
+                (None, None) => display::unread_identity(f, "identity", octets),
+            }
+        }
+    }
+
+    /// A list of tracking areas: `[208-93-000001, 208-93-000002]`.
+    impl fmt::Display for TrackingAreaIdentityList {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            let tais: Vec<Tai5gs> = (self.entries().iter())
+                .flat_map(TaiListEntry::tracking_area_identities)
+                .collect();
+            match tais.is_empty() {
+                true => display::Octets(&self.value).fmt(f),
+                false => display::List(&tais).fmt(f),
+            }
+        }
+    }
+
+    /// A tracking area identity: `208-93-000001`.
+    impl fmt::Display for TrackingAreaIdentity {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            match self.tai() {
+                Some(tai) => tai.fmt(f),
+                None if self.is_deleted() => f.write_str("deleted"),
+                None => display::Octets(&self.value).fmt(f),
+            }
+        }
+    }
+
+    /// An S-NSSAI: its SST, then `/` and its SD in hexadecimal when it has one,
+    /// `1/0000ff`, and the S-NSSAI of the HPLMN that it is mapped to.
+    impl fmt::Display for SNssaiContents {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            let s_nssai = |f: &mut fmt::Formatter<'_>, sst: u8, sd: Option<[u8; 3]>| match sd {
+                Some(sd) => write!(f, "{sst}/{}", display::Hex(&sd)),
+                None => write!(f, "{sst}"),
+            };
+            s_nssai(f, self.sst, self.sd)?;
+            if let Some(mapped) = self.mapped_sst {
+                f.write_str(" mapped to ")?;
+                s_nssai(f, mapped, self.mapped_sd)?;
+            }
+            Ok(())
+        }
+    }
+
+    /// An S-NSSAI: `1/0000ff`.
+    impl fmt::Display for SNssai {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            match self.parse() {
+                Some(s_nssai) => s_nssai.fmt(f),
+                None => display::Octets(&self.value).fmt(f),
+            }
+        }
+    }
+
+    /// An NSSAI: `[1, 1/000001]`.
+    impl fmt::Display for Nssai {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            match self.try_parse_all() {
+                Some(s_nssais) => display::List(&s_nssais).fmt(f),
+                None => display::Octets(&self.value).fmt(f),
+            }
+        }
+    }
+
+    /// A rejected NSSAI: each S-NSSAI with the cause of its rejection,
+    /// `[1/000001 NotAvailableInRegistrationArea]`.
+    impl fmt::Display for RejectedNssai {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            struct Rejected(RejectedNssaiCause, SNssaiContents);
+            impl fmt::Display for Rejected {
+                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                    write!(f, "{} {:?}", self.1, self.0)
+                }
+            }
+            let entries: Vec<Rejected> = (self.entries().into_iter())
+                .map(|(cause, s_nssai)| Rejected(cause, s_nssai))
+                .collect();
+            match entries.is_empty() {
+                true => display::Octets(&self.value).fmt(f),
+                false => display::List(&entries).fmt(f),
+            }
+        }
+    }
+
+    /// A T3512 value, as a UE reads it in an integrity protected message:
+    /// `54 min`.
+    impl fmt::Display for T3512Value {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            display::timer(f, self.value(), &self.value)
+        }
+    }
+
+    /// A DNN: `internet`.
+    impl fmt::Display for Dnn {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            match self.as_string() {
+                Some(name) => f.write_str(&name),
+                None => display::Octets(&self.value).fmt(f),
+            }
+        }
+    }
+
+    /// A PDU address: `IPv4 10.45.0.2`.
+    impl fmt::Display for PduAddress {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            match (self.ipv4(), self.ipv6_interface_id()) {
+                (None, None) => display::Octets(&self.value).fmt(f),
+                (ipv4, interface) => display::address(f, ipv4, interface),
+            }
+        }
+    }
+
+    /// A session-AMBR: `DL 100 Mbps UL 50 Mbps`.
+    impl fmt::Display for SessionAmbr {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            display::rates(f, self.downlink_kbps(), self.uplink_kbps(), &self.value)
+        }
+    }
+
+    /// An EAP message by its code: `Request`, `Success`.
+    impl fmt::Display for EapMessage {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            match self.eap_code() {
+                Some(code) => write!(f, "{code:?}"),
+                None => display::Octets(&self.value).fmt(f),
+            }
+        }
+    }
+
+    /// An ABBA in hexadecimal: `0000`.
+    impl fmt::Display for Abba {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            display::Hex(&self.value).fmt(f)
+        }
+    }
+
+    /// The type of an identity as TS 24.501 names it.
+    fn identity_type_name(kind: MobileIdentityType5gs) -> &'static str {
+        match kind {
+            MobileIdentityType5gs::NoIdentity => "no identity",
+            MobileIdentityType5gs::Suci => "SUCI",
+            MobileIdentityType5gs::Guti => "5G-GUTI",
+            MobileIdentityType5gs::Imei => "IMEI",
+            MobileIdentityType5gs::STmsi => "5G-S-TMSI",
+            MobileIdentityType5gs::Imeisv => "IMEISV",
+            MobileIdentityType5gs::MacAddress => "MAC address",
+            MobileIdentityType5gs::Eui64 => "EUI-64",
+            _ => "identity",
+        }
+    }
+
+    /// A coded value by its name, or its code when it has none.
+    struct Coded<T>(Option<T>, u8);
+
+    impl<T: fmt::Debug> fmt::Display for Coded<T> {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            match &self.0 {
+                Some(value) => write!(f, "{value:?}"),
+                None => write!(f, "{:#04x}", self.1),
+            }
+        }
+    }
+
+    /// The PDU sessions that a status IE says are active: `[1, 5]`.
+    impl fmt::Display for PduSessionStatus {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            display::List(&self.active_sessions()).fmt(f)
+        }
+    }
+
+    /// The PDU sessions that have uplink data: `[1]`.
+    impl fmt::Display for UplinkDataStatus {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            display::List(&self.sessions_with_data()).fmt(f)
+        }
+    }
+
+    /// The PDU sessions that are allowed over the other access: `[1]`.
+    impl fmt::Display for AllowedPduSessionStatus {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            display::List(&self.allowed_sessions()).fmt(f)
+        }
+    }
+
+    /// The PDU sessions whose user-plane resources failed to be set up: `[]`.
+    impl fmt::Display for PduSessionReactivationResult {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            display::List(&self.failed_sessions()).fmt(f)
+        }
+    }
+
+    /// What a payload container carries: the 5GSM message that it decodes
+    /// to, or the UE policy message, or its octets. The container is read as
+    /// either: its type is another IE.
+    impl fmt::Display for PayloadContainer {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            if let Ok(message) = self.decode_as_n1_sm_message() {
+                return message.fmt(f);
+            }
+            if let Ok(message) = self.decode_as_ue_policy_message() {
+                return message.fmt(f);
+            }
+            display::Octets(&self.value).fmt(f)
+        }
+    }
+
+    /// What a NAS message container carries: the message that it decodes to,
+    /// or its octets, as those of a message that is ciphered.
+    impl fmt::Display for MessageContainer {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            match self.decode_as_nas_message() {
+                Ok(message) => message.fmt(f),
+                Err(_) => display::Octets(&self.value).fmt(f),
+            }
+        }
+    }
+
+    /// A PDU session identity of a 5GMM message: `5`.
+    impl fmt::Display for PduSessionIdentity2 {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            self.pdu_session_id().fmt(f)
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::common::{Encode, IeName};

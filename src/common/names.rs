@@ -34,7 +34,6 @@ pub(crate) fn printed(name: &str) -> String {
 /// A name of the source of the crate as it prints, made when the crate is
 /// compiled: `name!(stringify!(fgs_mobile_identity))` is
 /// `"5gs-mobile-identity"`.
-#[cfg(feature = "tree")]
 macro_rules! name {
     ($name:expr) => {{
         const SOURCE: &str = $name;
@@ -50,12 +49,10 @@ macro_rules! name {
     }};
 }
 
-#[cfg(feature = "tree")]
 pub(crate) use name;
 
 /// The octets that `name` prints as, in `N` octets, twice those of `name`, and how
 /// many of them there are.
-#[cfg(feature = "tree")]
 pub(crate) const fn printed_into<const N: usize>(name: &str) -> ([u8; N], usize) {
     let (mut words, mut octets) = ([0; N], [0; N]);
     let length = print(name.as_bytes(), &mut words, &mut octets);
@@ -63,7 +60,6 @@ pub(crate) const fn printed_into<const N: usize>(name: &str) -> ([u8; N], usize)
 }
 
 /// The first `M` of `octets`.
-#[cfg(feature = "tree")]
 pub(crate) const fn first<const N: usize, const M: usize>(octets: &[u8; N]) -> [u8; M] {
     let mut first = [0; M];
     let mut at = 0;
@@ -343,7 +339,6 @@ mod tests {
 
     /// A name of the source prints when the crate is compiled as it prints
     /// when the program runs, without the `r#` of a raw identifier.
-    #[cfg(feature = "tree")]
     #[test]
     fn a_name_of_the_source_prints_as_the_program_prints_it() {
         assert_eq!(

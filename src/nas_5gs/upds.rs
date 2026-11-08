@@ -2649,6 +2649,91 @@ impl fmt::Display for UpdsProcedureTransactionIdentity {
     }
 }
 
+mod shown {
+    use super::*;
+    use crate::common::display::{self, Items};
+    use core::fmt;
+    // ============================================================================
+    // UPDS
+    // ============================================================================
+
+    impl fmt::Display for UpdsMessageType {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            match self {
+                Self::ManageUePolicyCommand => write!(f, "ManageUePolicyCommand"),
+                Self::ManageUePolicyComplete => write!(f, "ManageUePolicyComplete"),
+                Self::ManageUePolicyCommandReject => write!(f, "ManageUePolicyCommandReject"),
+                Self::UeStateIndication => write!(f, "UeStateIndication"),
+                Self::UePolicyProvisioningRequest => write!(f, "UePolicyProvisioningRequest"),
+                Self::UePolicyProvisioningReject => write!(f, "UePolicyProvisioningReject"),
+            }
+        }
+    }
+
+    impl fmt::Display for UpdsMessage {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            match self {
+                Self::ManageUePolicyCommand(message) => {
+                    UpdsMessageType::ManageUePolicyCommand.fmt(f)?;
+                    let mut items = Items::new(f);
+                    let sublists = message.ue_policy_section_management_list.sublists();
+                    items.item("sublists", sublists.len())?;
+                    let classmark = message.ue_policy_network_classmark.is_some();
+                    items.flag("network classmark", classmark)?;
+                    items.flag("VPS URSP", message.vps_ursp_configuration.is_some())?;
+                    items.end()
+                }
+                Self::ManageUePolicyComplete(_) => UpdsMessageType::ManageUePolicyComplete.fmt(f),
+                Self::ManageUePolicyCommandReject(message) => {
+                    UpdsMessageType::ManageUePolicyCommandReject.fmt(f)?;
+                    let mut items = Items::new(f);
+                    let result = &message.ue_policy_section_management_result;
+                    items.item("subresults", result.subresults().len())?;
+                    items.end()
+                }
+                Self::UeStateIndication(message) => {
+                    UpdsMessageType::UeStateIndication.fmt(f)?;
+                    let mut items = Items::new(f);
+                    items.item("UPSI-sublists", message.upsi_list.sublists().len())?;
+                    items.flag("UE OS id", message.ue_os_id.is_some())?;
+                    items.end()
+                }
+                Self::UePolicyProvisioningRequest(message) => {
+                    UpdsMessageType::UePolicyProvisioningRequest.fmt(f)?;
+                    let mut items = Items::new(f);
+                    items.item("payload", display::Octets(&message.payload))?;
+                    items.end()
+                }
+                Self::UePolicyProvisioningReject(message) => {
+                    UpdsMessageType::UePolicyProvisioningReject.fmt(f)?;
+                    let mut items = Items::new(f);
+                    items.item("payload", display::Octets(&message.payload))?;
+                    items.end()
+                }
+                Self::Unsupported(message) => {
+                    f.write_str("UnsupportedUpdsMessage")?;
+                    let mut items = Items::new(f);
+                    items.item("type", format_args!("{:#04x}", message.message_type))?;
+                    items.item("body", display::Octets(&message.body))?;
+                    items.end()
+                }
+            }
+        }
+    }
+
+    impl fmt::Display for UpdsEnvelope {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            write!(
+                f,
+                "UPDS (PTI={}, type={:#04x}) {}",
+                self.procedure_transaction_identity_value(),
+                self.message_type_code(),
+                self.message
+            )
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

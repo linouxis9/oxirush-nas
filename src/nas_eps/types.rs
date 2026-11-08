@@ -103,6 +103,13 @@ impl core::fmt::Debug for CipheringKeyData {
         crate::common::display::hidden_octets(f, "CipheringKeyData", &self.value)
     }
 }
+
+/// A key by its length alone: `hidden (16 octets)`.
+impl core::fmt::Display for CipheringKeyData {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        core::fmt::Display::fmt(&crate::common::display::Hidden(self.value.len()), f)
+    }
+}
 nas_ie_lv!(
     /// CLI (TS 24.301 §9.9.3.38). LV format.
     Cli
