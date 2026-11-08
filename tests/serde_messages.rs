@@ -165,7 +165,7 @@ fn every_fixture_is_shown_as_a_tree_and_written_from_it() {
         same_octets += usize::from(back.encode().unwrap() == wire);
     }
     // The numbers that the front page of the documentation gives.
-    assert_eq!((same_octets, all), (174, 191));
+    assert_eq!((same_octets, all), (183, 202));
 }
 
 /// A tree is one that a message is written from, whatever the message: one

@@ -281,7 +281,7 @@
 //! | Validity | `validate()` sees one message, not the state of a procedure. Encoding accepts every value a type can represent, so a message that encodes is not thereby valid. |
 //! | Security state | A context does not persist itself: the caller keeps the next COUNT values and restores it from them. |
 //! | JSON | 13 5GS and 19 EPS IE types have octets alone ([which][ie types with a value]). A tree computes no message authentication code. |
-//! | Serde form | It is the tree: a message read from it means what the message means, with its octets where its values decide them (174 of the 191 fixtures), and the order of its optional IEs is that of the table. |
+//! | Serde form | It is the tree: a message read from it means what the message means, with its octets where its values decide them (183 of the 202 fixtures), and the order of its optional IEs is that of the table. |
 //! | Release 19 | Two items follow Release 20 and differ from V19.8.0 on the wire ([Specification versions](#specification-versions)). |
 //! | Evidence | The tests of the crate itself ([Tests](#tests)), and 170 messages that two open-source cores and one UE simulator sent in a lab, with their source: no commercial UE, RAN or core, and no conformance test suite. The provenance of the 15 legacy 5GS wire values was not recorded. |
 //!
@@ -324,7 +324,7 @@
 //! | `tests/fixtures/captured.tsv`: 170 messages that Open5GS v2.8.0 (as AMF and as MME), free5GC v4.2.3 and PacketRusher sent in a lab run, with the source of each, the name that the dissector of the capture gives it, and for the 114 that were protected their keys and NAS COUNT | Each decodes to the message of that name and encodes to its octets, with no `validate()` finding but for one IMEISV; with `security`, a context of the crate verifies and deciphers each protected one as it was on the wire. The head of the file says how they were captured and what they are not. |
 //! | One constructed 5GS REGISTRATION REQUEST that carries a protected EPS ATTACH REQUEST | It round-trips. |
 //! | An embedded EPS corpus: the NAS PDUs of two S1AP-carried attach attempts | They round-trip octet for octet. Their envelopes use EEA0, so the inner messages are decoded too and, with `security`, the HashMME of the SECURITY MODE COMMAND is checked against the ATTACH REQUEST. |
-//! | `tests/fixtures`: 94 5GS and 97 EPS messages, at least one of each 5GMM, 5GSM, EMM and ESM message type of the codec | Each decodes, has no `validate()` error and encodes to its octets. Through its tree, which is its serde form, each is a message that means the same (`means_the_same()`), and 174 of the 191 have the same octets. |
+//! | `tests/fixtures`: 105 5GS and 97 EPS messages, at least one of each 5GMM, 5GSM, EMM and ESM message type of the codec | Each decodes, has no `validate()` error and encodes to its octets. Through its tree, which is its serde form, each is a message that means the same (`means_the_same()`), and 183 of the 202 have the same octets. |
 //! | The Rust blocks of the README, of this page and of the pages of [`paths`], [`nas_eps`] and the two `security` modules | They compile and run as documentation tests, with the `tree` and `security` features, and `tests/readme.rs` compares what each prints with the output shown under it. |
 //!
 //! ```sh
@@ -471,229 +471,15 @@ pub use oxirush_utils::tree;
 mod tests {
     use super::*;
     use crate::nas_5gs::*;
-    use base64::prelude::*;
-
-    // The fifteen wire values of the tests from here to
-    // `test_deregistration_request` came with the first version of the
-    // crate, and where they were captured was not recorded: they are
-    // regression vectors, not attributed evidence. The messages of
-    // `tests/fixtures/captured.tsv` have their source.
-
-    #[test]
-    fn test_registration_request_1() {
-        let payload =
-            hex::decode("7e004179000d0199f9070000000000000010022e08a020000000000000").unwrap();
-
-        let parsed_message = Message::decode(&payload).unwrap();
-        let encoded_message = parsed_message.encode().unwrap();
-
-        assert_eq!(payload, encoded_message);
-    }
-
-    #[test]
-    fn test_auth_request() {
-        let payload = hex::decode(
-            "7e00560002000021ab6f2a1cc5c5938d38cba14dfe26b0012010a820e67b8896800076a638e98eed4747",
-        )
-        .unwrap();
-
-        let parsed_message = Message::decode(&payload).unwrap();
-        let encoded_message = parsed_message.encode().unwrap();
-
-        assert_eq!(payload, encoded_message);
-    }
-
-    #[test]
-    fn test_security_mode_command() {
-        let payload = hex::decode("7e005d020002a020e1360102").unwrap();
-
-        let parsed_message = Message::decode(&payload).unwrap();
-        let encoded_message = parsed_message.encode().unwrap();
-
-        assert_eq!(payload, encoded_message);
-    }
-
-    #[test]
-    fn test_registration_request_2() {
-        let payload = BASE64_STANDARD
-            .decode("fgBedwAJFREAAAAAAAAAcQAgfgBBCQANAZn5BwAAAAAAAAAQAhABBy4IoCAAAAAAAAA=")
-            .unwrap();
-
-        let parsed_message = Message::decode(&payload).unwrap();
-        let encoded_message = parsed_message.encode().unwrap();
-
-        assert_eq!(payload, encoded_message);
-    }
-
-    #[test]
-    fn test_registration_accept() {
-        let payload = BASE64_STANDARD
-            .decode("fgBCAQF3AAvymfkHAgBAwAAC31QHQJn5BwAAARUCAQEhAgEAXgGp")
-            .unwrap();
-
-        let parsed_message = Message::decode(&payload).unwrap();
-        let encoded_message = parsed_message.encode().unwrap();
-
-        assert_eq!(payload, encoded_message);
-    }
-
-    #[test]
-    fn test_registration_complete() {
-        let payload = BASE64_STANDARD.decode("fgBD").unwrap();
-
-        let parsed_message = Message::decode(&payload).unwrap();
-        let encoded_message = parsed_message.encode().unwrap();
-
-        assert_eq!(payload, encoded_message);
-    }
-
-    #[test]
-    fn test_pdu_session_establishment_request() {
-        let payload = BASE64_STANDARD
-            .decode("fgBnAQAULgEBwf//kXsACoAACgAADQAAAwASAYEiAQElCQhpbnRlcm5ldA==")
-            .unwrap();
-
-        let parsed_message = Message::decode(&payload).unwrap();
-        let encoded_message = parsed_message.encode().unwrap();
-
-        assert_eq!(payload, encoded_message);
-    }
-
-    #[test]
-    fn test_configuration_update_command() {
-        let payload = BASE64_STANDARD
-            .decode("fgBUQw+QAE8AcABlAG4ANQBHAFNGAEdCMGICZHEASQEA")
-            .unwrap();
-
-        let parsed_message = Message::decode(&payload).unwrap();
-        let encoded_message = parsed_message.encode().unwrap();
-
-        assert_eq!(payload, encoded_message);
-    }
-
-    #[test]
-    fn test_configuration_update_complete() {
-        let payload = BASE64_STANDARD.decode("fgBV").unwrap();
-
-        let parsed_message = Message::decode(&payload).unwrap();
-        let encoded_message = parsed_message.encode().unwrap();
-
-        assert_eq!(payload, encoded_message);
-    }
-
-    #[test]
-    fn test_pdu_session_establishment_accept() {
-        let payload = BASE64_STANDARD.decode("fgBoAQBtLgEBwhEACQEABjExAQH/AQYD9CQD9CQpBQEKLQC9IgEBeQAGASBBAQEJewA1gAANBAgICAgADQQICAQEAAMQIAFIYEhgAAAAAAAAAACIiAADECABSGBIYAAAAAAAAAAAiEQlCQhpbnRlcm5ldBIB").unwrap();
-
-        let parsed_message = Message::decode(&payload).unwrap();
-        let encoded_message = parsed_message.encode().unwrap();
-
-        assert_eq!(payload, encoded_message);
-    }
-
-    #[test]
-    fn test_service_request() {
-        let payload = BASE64_STANDARD
-            .decode("fgBMEAAHBABAwAAC33EAFX4ATBAABwQAQMAAAt9AAgIAUAICAA==")
-            .unwrap();
-
-        let parsed_message = Message::decode(&payload).unwrap();
-        let encoded_message = parsed_message.encode().unwrap();
-
-        assert_eq!(payload, encoded_message);
-    }
-
-    #[test]
-    fn test_service_accept() {
-        let payload = BASE64_STANDARD.decode("fgBOUAICACYCAAA=").unwrap();
-
-        let parsed_message = Message::decode(&payload).unwrap();
-        let encoded_message = parsed_message.encode().unwrap();
-
-        assert_eq!(payload, encoded_message);
-    }
-
-    #[test]
-    fn test_pdu_session_release_request() {
-        let payload = BASE64_STANDARD.decode("fgBnAQAELgEB0RIB").unwrap();
-
-        let parsed_message = Message::decode(&payload).unwrap();
-        let encoded_message = parsed_message.encode().unwrap();
-
-        assert_eq!(payload, encoded_message);
-    }
-
-    #[test]
-    fn test_pdu_session_release_command() {
-        let payload = BASE64_STANDARD.decode("fgBoAQAFLgEB0yQSAQ==").unwrap();
-
-        let parsed_message = Message::decode(&payload).unwrap();
-        let encoded_message = parsed_message.encode().unwrap();
-
-        assert_eq!(payload, encoded_message);
-    }
-
-    #[test]
-    fn test_deregistration_request() {
-        let payload = BASE64_STANDARD.decode("fgBFCQAL8pn5BwIAQMAAAt8=").unwrap();
-
-        let parsed_message = Message::decode(&payload).unwrap();
-        let encoded_message = parsed_message.encode().unwrap();
-
-        assert_eq!(payload, encoded_message);
-    }
-
-    // Test Display formatting
-    #[test]
-    fn test_display_registration_request() {
-        let payload =
-            hex::decode("7e004179000d0199f9070000000000000010022e08a020000000000000").unwrap();
-        let msg = Message::decode(&payload).unwrap();
-        let display = format!("{msg}");
-        assert!(display.contains("RegistrationRequest"));
-        assert!(display.contains("Initial"));
-        assert!(display.contains("identity=suci-"));
-    }
-
-    #[test]
-    fn test_display_auth_request() {
-        let payload = hex::decode(
-            "7e00560002000021ab6f2a1cc5c5938d38cba14dfe26b0012010a820e67b8896800076a638e98eed4747",
-        )
-        .unwrap();
-        let msg = Message::decode(&payload).unwrap();
-        let display = format!("{msg}");
-        assert!(display.contains("AuthenticationRequest"));
-        assert!(display.contains("RAND="));
-    }
-
-    #[test]
-    fn test_display_security_mode_command() {
-        let payload = hex::decode("7e005d020002a020e1360102").unwrap();
-        let msg = Message::decode(&payload).unwrap();
-        let display = format!("{msg}");
-        assert!(display.contains("SecurityModeCommand"));
-        assert!(display.contains("NEA"));
-        assert!(display.contains("NIA"));
-    }
-
-    // Test validation
-    #[test]
-    fn test_validate_good_message() {
-        let payload =
-            hex::decode("7e004179000d0199f9070000000000000010022e08a020000000000000").unwrap();
-        let msg = Message::decode(&payload).unwrap();
-        let errs = msg.validate();
-        assert!(errs.is_empty(), "Unexpected errors: {errs:?}");
-    }
 
     // Test container recursive decode
     #[test]
     fn test_container_decode() {
         // SecurityModeComplete with NAS message container containing a RegistrationRequest
-        let payload = BASE64_STANDARD
-            .decode("fgBedwAJFREAAAAAAAAAcQAgfgBBCQANAZn5BwAAAAAAAAAQAhABBy4IoCAAAAAAAAA=")
-            .unwrap();
+        let payload = hex::decode(
+            "7e005e7700091511000000000000007100207e004109000d0199f9070000000000000010021001072e08a020000000000000",
+        )
+        .unwrap();
         let msg = Message::decode(&payload).unwrap();
         if let Message::Gmm(_, GmmMessage::SecurityModeComplete(smc)) = &msg {
             if let Some(ref container) = smc.nas_message_container {

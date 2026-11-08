@@ -2235,7 +2235,7 @@ macro_rules! named_ie {
 /// octets that the members do not give back have no value: those of digits
 /// that are no digits.
 macro_rules! fields_ie {
-    ($ie:ty { $($key:literal: $get:expr, $set:expr;)* } $($flags:ident)?) => {
+    ($ie:ident { $($key:literal: $get:expr, $set:expr;)* } $($flags:ident)?) => {
         impl $crate::common::view::Fields for $ie {
             fn octets(&mut self) -> &mut dyn $crate::common::view::FlagOctets {
                 &mut self.value
@@ -2320,6 +2320,27 @@ macro_rules! fields_ie {
                     return Err($crate::common::view::too_short(value, bits / 8));
                 }
                 Ok(ie)
+            }
+        }
+
+        #[cfg(test)]
+        pastey::paste! {
+            /// The IE is built from its value, with the octets of every
+            /// member: from nothing, and from each octet.
+            #[test]
+            fn [<$ie:snake _is_built_from_its_value>]() {
+                use $crate::common::view::tests::{Octet, built_from_nothing, built_from_value};
+                built_from_nothing(<$ie>::blank());
+                for octet in 0..=255_u8 {
+                    // The digits of a time are decimal.
+                    let decimal = octet & 0x0f <= 9 && octet >> 4 <= 9;
+                    if !decimal && stringify!($ie).contains("Time") {
+                        continue;
+                    }
+                    let mut ie = <$ie>::blank();
+                    ie.value = Octet::of(octet);
+                    built_from_value(<$ie>::blank(), ie);
+                }
             }
         }
     };
@@ -2926,16 +2947,6 @@ pub(crate) mod tests {
         }
     }
 
-    /// How many types of `source`, a view module, and of this one have the
-    /// value of `fields_ie!`.
-    pub(crate) fn fields_ies(source: &str) -> usize {
-        // Those of `shared_ies!`, and those of the types of both protocols.
-        let common = include_str!("view.rs");
-        let shared = common.matches("\n        fields_ie!(").count()
-            + common.matches("\n    fields_ie!(").count();
-        source.matches("\nfields_ie!(").count() + shared
-    }
-
     fn exercise_value<T: Decoded>(ie: T, value: Value) {
         let name = core::any::type_name::<T>();
         let encoded = (ie.with_decoded(&value, Scope::NONE))
@@ -3098,7 +3109,7 @@ pub(crate) mod tests {
         }
         assert_eq!(
             counts,
-            [236, 201, 19],
+            [279, 241, 22],
             "5GS: IEs, with a value, other octets"
         );
         let mut counts = [0; 3];

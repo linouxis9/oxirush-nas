@@ -93,3 +93,14 @@ ServiceLevelAuthenticationCommand	5GSM (PSI=1, PTI=1) ServiceLevelAuthentication
 ServiceLevelAuthenticationComplete	5GSM (PSI=1, PTI=1) ServiceLevelAuthenticationComplete
 RemoteUeReport	5GSM (PSI=1, PTI=1) RemoteUeReport
 RemoteUeReportResponse	5GSM (PSI=1, PTI=1) RemoteUeReportResponse
+RegistrationRequest-lab	5GMM RegistrationRequest (type=InitialRegistration, FOR, ngKSI=no key, identity=suci-0-999-70-0000-0-0-0000000120, UE-SecCap=EA0 EA2 / IA2)
+AuthenticationRequest-lab	5GMM AuthenticationRequest (ngKSI=0, ABBA=0000, RAND=ab6f2a1cc5c5938d38cba14dfe26b001, AUTN=a820e67b8896800076a638e98eed4747)
+SecurityModeCommand-lab	5GMM SecurityModeCommand (algorithms=NEA0 NIA2, ngKSI=0, Replayed-UE-SecCap=EA0 EA2 / IA2, IMEISV requested, RINMR)
+RegistrationAccept-lab	5GMM RegistrationAccept (result=ThreeGppAccess, GUTI=5g-guti-99970020040c00002df, TAI-list=[999-70-000001], Allowed-NSSAI=[1], T3512=9 min)
+UlNasTransport-lab	5GMM UlNasTransport (type=N1SmInformation, PSI=1, request=InitialRequest, S-NSSAI=1, DNN=internet, payload=5GSM (PSI=1, PTI=1) PduSessionEstablishmentRequest (type=Ipv4))
+ConfigurationUpdateCommand-lab	5GMM ConfigurationUpdateCommand (Network-name="Open5GS", Time-zone=+00:00)
+DlNasTransport-lab	5GMM DlNasTransport (type=N1SmInformation, PSI=1, payload=5GSM (PSI=1, PTI=1) PduSessionEstablishmentAccept (type=Ipv4, SSC=1, QoS-rules=1, S-AMBR=DL 1 Gbps UL 1 Gbps, PDU-address=IPv4 10.45.0.189, S-NSSAI=1, DNN=internet))
+ServiceAccept-lab	5GMM ServiceAccept (PDU-sessions=[1], Reactivation-failed=[])
+UlNasTransport-lab-release	5GMM UlNasTransport (type=N1SmInformation, PSI=1, payload=5GSM (PSI=1, PTI=1) PduSessionReleaseRequest)
+DlNasTransport-lab-release	5GMM DlNasTransport (type=N1SmInformation, PSI=1, payload=5GSM (PSI=1, PTI=1) PduSessionReleaseCommand (cause=#36 (Regular deactivation)))
+DeregistrationRequestUeOriginating-lab	5GMM DeregistrationRequestUeOriginating (switch off, access=ThreeGppAccess, ngKSI=0, identity=5g-guti-99970020040c00002df)

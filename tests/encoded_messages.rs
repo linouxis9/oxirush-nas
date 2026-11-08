@@ -156,10 +156,13 @@ fn nas_containers_recursively_decode_to_the_permitted_message_families() {
         assert_eq!(u8::from(header.message_type), message_type);
     }
     let mut f_nested = 0;
-    for (_, wire) in rows(include_str!("fixtures/nas-5gs.tsv")) {
+    for (name, wire) in rows(include_str!("fixtures/nas-5gs.tsv")) {
         let f::Message::Gmm(_, body) = f::Message::decode(&wire).unwrap() else {
             continue;
         };
+        // A transport carries a PDU SESSION ESTABLISHMENT REQUEST or ACCEPT,
+        // or the RELEASE REQUEST or COMMAND of a fixture that says so.
+        let release = name.ends_with("-release");
         let container = match body {
             f::GmmMessage::RegistrationRequest(m) => {
                 m.nas_message_container.map(|c| (c.value, 0x41))
@@ -185,11 +188,11 @@ fn nas_containers_recursively_decode_to_the_permitted_message_families() {
             }
             f::GmmMessage::UlNasTransport(m) => {
                 assert_eq!(m.payload_container_type.value, 1);
-                Some((m.payload_container.value, 0xc1))
+                Some((m.payload_container.value, if release { 0xd1 } else { 0xc1 }))
             }
             f::GmmMessage::DlNasTransport(m) => {
                 assert_eq!(m.payload_container_type.value, 1);
-                Some((m.payload_container.value, 0xc2))
+                Some((m.payload_container.value, if release { 0xd3 } else { 0xc2 }))
             }
             _ => None,
         };
@@ -198,7 +201,7 @@ fn nas_containers_recursively_decode_to_the_permitted_message_families() {
             f_nested += 1;
         }
     }
-    assert_eq!(f_nested, 9);
+    assert_eq!(f_nested, 13);
     let mut e_nested = 0;
     for (_, wire) in rows(include_str!("fixtures/nas-eps.tsv")) {
         let e::Message::Emm(_, body) = e::Message::decode(&wire).unwrap() else {
@@ -255,29 +258,52 @@ fn shown(lines: &str) -> impl Iterator<Item = (&str, &str)> {
 
 /// Each message of the fixtures prints as its line of nas-5gs-display.tsv or
 /// nas-eps-display.tsv: its name, then each of its IEs with its value.
+/// `NAS_DISPLAY_WRITE=1` writes the two files from what the messages print.
 #[test]
 fn every_message_of_the_fixtures_prints_its_ies() {
-    let messages = rows(include_str!("fixtures/nas-5gs.tsv"));
-    let mut lines = shown(include_str!("fixtures/nas-5gs-display.tsv"));
-    for (name, wire) in messages {
-        let message = f::Message::decode(&wire).unwrap();
-        assert_eq!(lines.next(), Some((name, message.to_string().as_str())));
-    }
-    assert_eq!(lines.next(), None);
-    let messages = rows(include_str!("fixtures/nas-eps.tsv"));
-    let mut lines = shown(include_str!("fixtures/nas-eps-display.tsv"));
-    for (name, wire) in messages {
+    let fgs = rows(include_str!("fixtures/nas-5gs.tsv"))
+        .map(|(name, wire)| (name, f::Message::decode(&wire).unwrap().to_string()));
+    let eps = rows(include_str!("fixtures/nas-eps.tsv")).map(|(name, wire)| {
         let direction = if name.starts_with("DetachRequestUeTerminated") {
             oxirush_nas::Direction::Downlink
         } else {
             oxirush_nas::Direction::Uplink
         };
-        let message = e::Message::decode_with(
-            &wire,
-            oxirush_nas::DecodeOptions::STRICT.with_direction(direction),
+        let options = oxirush_nas::DecodeOptions::STRICT.with_direction(direction);
+        (
+            name,
+            e::Message::decode_with(&wire, options).unwrap().to_string(),
         )
-        .unwrap();
-        assert_eq!(lines.next(), Some((name, message.to_string().as_str())));
+    });
+    let fixtures = [
+        (
+            "nas-5gs-display.tsv",
+            include_str!("fixtures/nas-5gs-display.tsv"),
+            fgs.collect::<Vec<_>>(),
+        ),
+        (
+            "nas-eps-display.tsv",
+            include_str!("fixtures/nas-eps-display.tsv"),
+            eps.collect(),
+        ),
+    ];
+    for (file, written, printed) in fixtures {
+        if std::env::var_os("NAS_DISPLAY_WRITE").is_some() {
+            let lines = printed
+                .iter()
+                .map(|(name, text)| format!("{name}\t{text}\n"));
+            let path = format!("{}/tests/fixtures/{file}", env!("CARGO_MANIFEST_DIR"));
+            std::fs::write(
+                path,
+                format!("# Message variant\tDisplay\n{}", lines.collect::<String>()),
+            )
+            .unwrap();
+            continue;
+        }
+        let mut lines = shown(written);
+        for (name, text) in &printed {
+            assert_eq!(lines.next(), Some((*name, text.as_str())), "{file}");
+        }
+        assert_eq!(lines.next(), None, "{file}");
     }
-    assert_eq!(lines.next(), None);
 }

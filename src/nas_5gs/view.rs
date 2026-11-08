@@ -2002,55 +2002,7 @@ listed_ie!(CipheringKeyData: CipheringDataSet, data_sets, Self::from_data_sets);
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::common::view::tests::{
-        Octet, built_from_nothing, built_from_value, exercise, fields_ies, replace_parts, sweep,
-    };
-
-    #[test]
-    fn an_ie_of_fields_is_built_from_its_value_with_the_octets_of_every_member() {
-        macro_rules! each {
-            ($($ie:ty),+ $(,)?) => {{
-                $(
-                    // Zeros have their octets too.
-                    built_from_nothing(<$ie>::blank());
-                    for octet in 0..=255_u8 {
-                        // The digits of a time are decimal.
-                        let decimal = octet & 0x0f <= 9 && octet >> 4 <= 9;
-                        if !decimal && stringify!($ie).contains("Time") {
-                            continue;
-                        }
-                        let mut ie = <$ie>::blank();
-                        ie.value = Octet::of(octet);
-                        built_from_value(<$ie>::blank(), ie);
-                    }
-                )+
-                [$(stringify!($ie)),+].len()
-            }};
-        }
-        let built = each!(
-            RegistrationType,
-            DeRegistrationType,
-            UpdateType,
-            RegistrationResult,
-            ControlPlaneServiceType,
-            SecurityAlgorithms,
-            EpsNasSecurityAlgorithms,
-            TimeZoneAndTime,
-            GmmCapability,
-            NetworkFeatureSupport,
-            GsmCapability,
-            S1UeNetworkCapability,
-            S1UeSecurityCapability,
-            ExtendedDrxParameters,
-            ReAttemptIndicator,
-            UeStatus,
-            Non3GppNwProvidedPolicies,
-            MobileStationClassmark2,
-            AccessTechnologyUtilizationControl,
-        );
-        // Every type that `fields_ie!` gives a value is in the list.
-        assert_eq!(built, fields_ies(include_str!("view.rs")));
-    }
+    use crate::common::view::tests::{exercise, replace_parts, sweep};
 
     #[test]
     fn values_encode_back_and_take_nothing_unchecked() {
