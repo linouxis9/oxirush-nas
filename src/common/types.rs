@@ -19,7 +19,6 @@
 //! one type for both protocols, which `nas_5gs` and `nas_eps` re-export.
 
 use crate::common::Plmn;
-use crate::common::ts24008::*;
 use crate::common::ts24301::*;
 use crate::common::ts24501::*;
 use crate::common::{
@@ -131,25 +130,8 @@ nas_ie_v_fixed!(
     NasTimeZoneAndTime, 7
 );
 crate::common::ts24008::gprs_timer_ie!(NasGprsTimer, false);
-crate::common::ts24008::gprs_timer_2_ie!(NasGprsTimer2);
-crate::common::ts24008::gprs_timer_3_ie!(NasGprsTimer3);
-crate::common::ts24008::plmn_list_ie!(NasPlmnList);
-crate::common::ts24008::network_name_ie!(NasNetworkName);
-crate::common::ts24008::time_zone_ie!(NasTimeZone);
+
 crate::common::ts24008::time_zone_and_time_ie!(NasTimeZoneAndTime);
-crate::common::ts24008::daylight_saving_time_ie!(NasDaylightSavingTime);
-crate::common::ts24008::emergency_number_list_ie!(NasEmergencyNumberList);
-crate::common::ts24008::extended_drx_parameters_ie!(NasExtendedDrxParameters);
-crate::common::ts24008::supported_codec_list_ie!(NasSupportedCodecList);
-crate::common::ts24008::extended_protocol_configuration_options_ie!(
-    NasExtendedProtocolConfigurationOptions
-);
-crate::common::ts24008::imeisv_request_ie!(NasImeisvRequest);
-crate::common::ts24008::non_3gpp_nw_provided_policies_ie!(NasNon3GppNwProvidedPolicies);
-crate::common::ts24008::authentication_parameter_rand_ie!(NasAuthenticationParameterRand);
-crate::common::ts24008::authentication_parameter_autn_ie!(NasAuthenticationParameterAutn);
-crate::common::ts24008::authentication_failure_parameter_ie!(NasAuthenticationFailureParameter);
-crate::common::ts24008::mobile_station_classmark_2_ie!(NasMobileStationClassmark2);
 
 // ── Defined in TS 24.301, which TS 24.501 refers to ──
 

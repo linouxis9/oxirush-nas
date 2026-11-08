@@ -5552,7 +5552,7 @@ impl NasReAttemptIndicator {
 }
 
 pub use crate::common::ts24008::{Pco, PcoDirection, PcoEntry};
-crate::common::ts24008::protocol_configuration_options_ie!(NasProtocolConfigurationOptions);
+
 pub use crate::common::ts24301::DownlinkDataExpected;
 pub use crate::common::ts24301::{IpHdrCompAdditionalSetupType, IpHdrCompProfiles};
 crate::common::ts24301::header_compression_configuration_ie!(NasHeaderCompressionConfiguration);

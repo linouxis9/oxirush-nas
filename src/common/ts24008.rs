@@ -23,98 +23,103 @@
 //! protocol that uses the grammar. Typed getters follow the receiver rules
 //! of TS 24.007 §11.1.4 and §11.4.2; `is_well_formed()` checks sender rules.
 
+use crate::common::types::NasAuthenticationFailureParameter;
+use crate::common::types::NasAuthenticationParameterAutn;
+use crate::common::types::NasAuthenticationParameterRand;
+use crate::common::types::NasDaylightSavingTime;
+use crate::common::types::NasEmergencyNumberList;
+use crate::common::types::NasExtendedDrxParameters;
+use crate::common::types::NasExtendedProtocolConfigurationOptions;
+use crate::common::types::NasGprsTimer2;
+use crate::common::types::NasGprsTimer3;
+use crate::common::types::NasImeisvRequest;
+use crate::common::types::NasMobileStationClassmark2;
+use crate::common::types::NasNetworkName;
+use crate::common::types::NasNon3GppNwProvidedPolicies;
+use crate::common::types::NasPlmnList;
+use crate::common::types::NasSupportedCodecList;
+use crate::common::types::NasTimeZone;
+use crate::nas_eps::types::NasProtocolConfigurationOptions;
 use crate::prelude::*;
 
 // ── Authentication parameters (§10.5.3.1, §10.5.3.1.1, §10.5.3.2.2) ─────────
 
 /// Authentication parameter RAND (TS 24.008 §10.5.3.1): a 128-bit value.
-macro_rules! authentication_parameter_rand_ie {
-    ($name:ident) => {
-        impl $name {
-            /// The 16 octets of RAND, which a `Rand` of oxirush-security takes,
-            /// or `None` for a value of another length, which only a program
-            /// writes: a decoded IE has 16.
-            pub fn rand(&self) -> Option<&[u8; 16]> {
-                self.value.as_slice().try_into().ok()
-            }
+impl NasAuthenticationParameterRand {
+    /// The 16 octets of RAND, which a `Rand` of oxirush-security takes,
+    /// or `None` for a value of another length, which only a program
+    /// writes: a decoded IE has 16.
+    pub fn rand(&self) -> Option<&[u8; 16]> {
+        self.value.as_slice().try_into().ok()
+    }
 
-            /// Build from a 16-octet RAND.
-            pub fn from_rand(rand: [u8; 16]) -> Self {
-                Self::new(rand)
-            }
-        }
-    };
+    /// Build from a 16-octet RAND.
+    pub fn from_rand(rand: [u8; 16]) -> Self {
+        Self::new(rand)
+    }
 }
 
 /// Authentication parameter AUTN (TS 24.008 §10.5.3.1.1):
 /// SQN ⊕ AK (6 octets) ‖ AMF (2 octets) ‖ MAC (8 octets).
-macro_rules! authentication_parameter_autn_ie {
-    ($name:ident) => {
-        impl $name {
-            /// The 16 octets of AUTN, which an `Autn` of oxirush-security
-            /// takes: octets beyond 16 are ignored, and a value of fewer is
-            /// `None`.
-            pub fn autn(&self) -> Option<&[u8; 16]> {
-                self.value.get(..16)?.try_into().ok()
-            }
+impl NasAuthenticationParameterAutn {
+    /// The 16 octets of AUTN, which an `Autn` of oxirush-security
+    /// takes: octets beyond 16 are ignored, and a value of fewer is
+    /// `None`.
+    pub fn autn(&self) -> Option<&[u8; 16]> {
+        self.value.get(..16)?.try_into().ok()
+    }
 
-            /// SQN ⊕ AK (AUTN octets 1 to 6).
-            pub fn sqn_xor_ak(&self) -> Option<&[u8]> {
-                self.value.get(..6)
-            }
+    /// SQN ⊕ AK (AUTN octets 1 to 6).
+    pub fn sqn_xor_ak(&self) -> Option<&[u8]> {
+        self.value.get(..6)
+    }
 
-            /// Authentication management field (AUTN octets 7 and 8).
-            pub fn amf_field(&self) -> Option<[u8; 2]> {
-                self.value.get(6..8)?.try_into().ok()
-            }
+    /// Authentication management field (AUTN octets 7 and 8).
+    pub fn amf_field(&self) -> Option<[u8; 2]> {
+        self.value.get(6..8)?.try_into().ok()
+    }
 
-            /// AMF separation bit (bit 8 of AUTN octet 7, TS 33.401 §6.1.1),
-            /// set for authentication vectors computed for E-UTRAN and 5GS.
-            pub fn amf_separation_bit(&self) -> Option<bool> {
-                self.value.get(6).map(|octet| octet & 0x80 != 0)
-            }
+    /// AMF separation bit (bit 8 of AUTN octet 7, TS 33.401 §6.1.1),
+    /// set for authentication vectors computed for E-UTRAN and 5GS.
+    pub fn amf_separation_bit(&self) -> Option<bool> {
+        self.value.get(6).map(|octet| octet & 0x80 != 0)
+    }
 
-            /// MAC (AUTN octets 9 to 16).
-            pub fn mac_a(&self) -> Option<&[u8]> {
-                self.value.get(8..16)
-            }
+    /// MAC (AUTN octets 9 to 16).
+    pub fn mac_a(&self) -> Option<&[u8]> {
+        self.value.get(8..16)
+    }
 
-            /// Build from a 16-octet AUTN.
-            pub fn from_autn(autn: [u8; 16]) -> Self {
-                Self::new(autn)
-            }
-        }
-    };
+    /// Build from a 16-octet AUTN.
+    pub fn from_autn(autn: [u8; 16]) -> Self {
+        Self::new(autn)
+    }
 }
 
 /// Authentication failure parameter (TS 24.008 §10.5.3.2.2):
 /// AUTS = SQN_MS ⊕ AK (6 octets) ‖ MAC-S (8 octets).
-macro_rules! authentication_failure_parameter_ie {
-    ($name:ident) => {
-        impl $name {
-            /// The 14 octets of AUTS, which an `Auts` of oxirush-security
-            /// takes: octets beyond 14 are ignored, and a value of fewer is
-            /// `None`.
-            pub fn auts(&self) -> Option<&[u8; 14]> {
-                self.value.get(..14)?.try_into().ok()
-            }
+impl NasAuthenticationFailureParameter {
+    /// The 14 octets of AUTS, which an `Auts` of oxirush-security
+    /// takes: octets beyond 14 are ignored, and a value of fewer is
+    /// `None`.
+    pub fn auts(&self) -> Option<&[u8; 14]> {
+        self.value.get(..14)?.try_into().ok()
+    }
 
-            /// SQN_MS ⊕ AK (AUTS octets 1 to 6).
-            pub fn sqn_xor_aks(&self) -> Option<&[u8]> {
-                self.value.get(..6)
-            }
+    /// SQN_MS ⊕ AK (AUTS octets 1 to 6).
+    pub fn sqn_xor_aks(&self) -> Option<&[u8]> {
+        self.value.get(..6)
+    }
 
-            /// MAC-S (AUTS octets 7 to 14).
-            pub fn mac_s(&self) -> Option<&[u8]> {
-                self.value.get(6..14)
-            }
+    /// MAC-S (AUTS octets 7 to 14).
+    pub fn mac_s(&self) -> Option<&[u8]> {
+        self.value.get(6..14)
+    }
 
-            /// Build from a 14-octet AUTS.
-            pub fn from_auts(auts: [u8; 14]) -> Self {
-                Self::new(auts)
-            }
-        }
-    };
+    /// Build from a 14-octet AUTS.
+    pub fn from_auts(auts: [u8; 14]) -> Self {
+        Self::new(auts)
+    }
 }
 
 // ── GPRS timers (§10.5.7.3, §10.5.7.4, §10.5.7.4a) ──────────────────────────
@@ -398,197 +403,184 @@ macro_rules! gprs_timer_ie {
 }
 
 /// GPRS timer 2 IEs (TS 24.008 §10.5.7.4), whose value is one GPRS timer octet.
-macro_rules! gprs_timer_2_ie {
-    ($name:ident) => {
-        impl $name {
-            /// Unit and value of the first value octet; extra octets are ignored.
-            pub fn timer(&self) -> Option<(crate::common::ts24008::GprsTimerUnit, u8)> {
-                let octet = *self.value.first()?;
-                Some((
-                    crate::common::ts24008::GprsTimerUnit::from_u8(octet >> 5)?,
-                    octet & 0x1f,
-                ))
-            }
+impl NasGprsTimer2 {
+    /// Unit and value of the first value octet; extra octets are ignored.
+    pub fn timer(&self) -> Option<(crate::common::ts24008::GprsTimerUnit, u8)> {
+        let octet = *self.value.first()?;
+        Some((
+            crate::common::ts24008::GprsTimerUnit::from_u8(octet >> 5)?,
+            octet & 0x1f,
+        ))
+    }
 
-            /// Timer unit with the receiver rule applied.
-            pub fn unit(&self) -> Option<crate::common::ts24008::GprsTimerUnit> {
-                self.timer().map(|(unit, _)| unit)
-            }
+    /// Timer unit with the receiver rule applied.
+    pub fn unit(&self) -> Option<crate::common::ts24008::GprsTimerUnit> {
+        self.timer().map(|(unit, _)| unit)
+    }
 
-            /// Raw timer unit code.
-            pub fn unit_raw(&self) -> Option<u8> {
-                self.value.first().map(|octet| octet >> 5)
-            }
+    /// Raw timer unit code.
+    pub fn unit_raw(&self) -> Option<u8> {
+        self.value.first().map(|octet| octet >> 5)
+    }
 
-            /// Timer value in bits 5-1.
-            pub fn timer_value(&self) -> Option<u8> {
-                self.value.first().map(|octet| octet & 0x1f)
-            }
+    /// Timer value in bits 5-1.
+    pub fn timer_value(&self) -> Option<u8> {
+        self.value.first().map(|octet| octet & 0x1f)
+    }
 
-            /// Whether the timer is deactivated.
-            pub fn is_deactivated(&self) -> bool {
-                self.unit() == Some(crate::common::ts24008::GprsTimerUnit::Deactivated)
-            }
+    /// Whether the timer is deactivated.
+    pub fn is_deactivated(&self) -> bool {
+        self.unit() == Some(crate::common::ts24008::GprsTimerUnit::Deactivated)
+    }
 
-            /// Decoded timer value; `None` when the value octet is missing.
-            pub fn value(&self) -> Option<crate::common::ts24008::GprsTimerValue> {
-                let (unit, value) = self.timer()?;
-                Some(
-                    if unit == crate::common::ts24008::GprsTimerUnit::Deactivated {
-                        crate::common::ts24008::GprsTimerValue::Deactivated
-                    } else {
-                        crate::common::ts24008::GprsTimerValue::Seconds(
-                            unit.seconds_multiplier() * u64::from(value),
-                        )
-                    },
+    /// Decoded timer value; `None` when the value octet is missing.
+    pub fn value(&self) -> Option<crate::common::ts24008::GprsTimerValue> {
+        let (unit, value) = self.timer()?;
+        Some(
+            if unit == crate::common::ts24008::GprsTimerUnit::Deactivated {
+                crate::common::ts24008::GprsTimerValue::Deactivated
+            } else {
+                crate::common::ts24008::GprsTimerValue::Seconds(
+                    unit.seconds_multiplier() * u64::from(value),
                 )
-            }
+            },
+        )
+    }
 
-            /// Duration in seconds, or `None` when deactivated or missing.
-            pub fn to_seconds(&self) -> Option<u64> {
-                match self.value()? {
-                    crate::common::ts24008::GprsTimerValue::Seconds(seconds) => Some(seconds),
-                    crate::common::ts24008::GprsTimerValue::Deactivated => None,
-                }
-            }
-
-            /// Build from a unit and a timer value of 0 to 31, as
-            /// [`Self::timer`] reads them. The value of a timer whose unit
-            /// is "deactivated" is kept as it is given: the clause gives
-            /// those bits no meaning.
-            pub fn from_unit_value(
-                unit: crate::common::ts24008::GprsTimerUnit,
-                value: u8,
-            ) -> core::result::Result<Self, crate::common::ValueError> {
-                crate::common::within("timer-value", value, 0, 31)?;
-                Ok(Self::new(vec![(unit as u8) << 5 | value]))
-            }
-
-            /// Build the smallest exact encoding of a duration.
-            pub fn from_seconds(
-                seconds: u64,
-            ) -> core::result::Result<Self, crate::common::ValueError> {
-                Ok(Self::new(vec![
-                    crate::common::ts24008::gprs_timer_octet_from_seconds("seconds", seconds)?,
-                ]))
-            }
-
-            /// Build a deactivated timer.
-            pub fn deactivated() -> Self {
-                Self::new(vec![
-                    (crate::common::ts24008::GprsTimerUnit::Deactivated as u8) << 5,
-                ])
-            }
-
-            /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
-            pub(crate) const SENDER_RULE: &'static str = "exactly one value octet";
-            /// Sender check: exactly one value octet.
-            pub fn is_well_formed(&self) -> bool {
-                self.value.len() == 1
-            }
+    /// Duration in seconds, or `None` when deactivated or missing.
+    pub fn to_seconds(&self) -> Option<u64> {
+        match self.value()? {
+            crate::common::ts24008::GprsTimerValue::Seconds(seconds) => Some(seconds),
+            crate::common::ts24008::GprsTimerValue::Deactivated => None,
         }
-    };
+    }
+
+    /// Build from a unit and a timer value of 0 to 31, as
+    /// [`Self::timer`] reads them. The value of a timer whose unit
+    /// is "deactivated" is kept as it is given: the clause gives
+    /// those bits no meaning.
+    pub fn from_unit_value(
+        unit: crate::common::ts24008::GprsTimerUnit,
+        value: u8,
+    ) -> core::result::Result<Self, crate::common::ValueError> {
+        crate::common::within("timer-value", value, 0, 31)?;
+        Ok(Self::new(vec![(unit as u8) << 5 | value]))
+    }
+
+    /// Build the smallest exact encoding of a duration.
+    pub fn from_seconds(seconds: u64) -> core::result::Result<Self, crate::common::ValueError> {
+        Ok(Self::new(vec![
+            crate::common::ts24008::gprs_timer_octet_from_seconds("seconds", seconds)?,
+        ]))
+    }
+
+    /// Build a deactivated timer.
+    pub fn deactivated() -> Self {
+        Self::new(vec![
+            (crate::common::ts24008::GprsTimerUnit::Deactivated as u8) << 5,
+        ])
+    }
+
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str = "exactly one value octet";
+    /// Sender check: exactly one value octet.
+    pub fn is_well_formed(&self) -> bool {
+        self.value.len() == 1
+    }
 }
 
 /// GPRS timer 3 IEs (TS 24.008 §10.5.7.4a). The 320-hour unit is read as
 /// undefined; the EPS T3412 extended value and the 5GS T3512 value provide
 /// their own accessors for it.
-macro_rules! gprs_timer_3_ie {
-    ($name:ident) => {
-        impl $name {
-            /// Unit and value of the first value octet; extra octets are ignored.
-            pub fn timer(&self) -> Option<(crate::common::ts24008::GprsTimer3Unit, u8)> {
-                let octet = *self.value.first()?;
-                Some((
-                    crate::common::ts24008::GprsTimer3Unit::from_u8(octet >> 5),
-                    octet & 0x1f,
-                ))
-            }
+impl NasGprsTimer3 {
+    /// Unit and value of the first value octet; extra octets are ignored.
+    pub fn timer(&self) -> Option<(crate::common::ts24008::GprsTimer3Unit, u8)> {
+        let octet = *self.value.first()?;
+        Some((
+            crate::common::ts24008::GprsTimer3Unit::from_u8(octet >> 5),
+            octet & 0x1f,
+        ))
+    }
 
-            /// Timer unit.
-            pub fn unit(&self) -> Option<crate::common::ts24008::GprsTimer3Unit> {
-                self.timer().map(|(unit, _)| unit)
-            }
+    /// Timer unit.
+    pub fn unit(&self) -> Option<crate::common::ts24008::GprsTimer3Unit> {
+        self.timer().map(|(unit, _)| unit)
+    }
 
-            /// Raw timer unit code.
-            pub fn unit_raw(&self) -> Option<u8> {
-                self.value.first().map(|octet| octet >> 5)
-            }
+    /// Raw timer unit code.
+    pub fn unit_raw(&self) -> Option<u8> {
+        self.value.first().map(|octet| octet >> 5)
+    }
 
-            /// Timer value in bits 5-1.
-            pub fn timer_value(&self) -> Option<u8> {
-                self.value.first().map(|octet| octet & 0x1f)
-            }
+    /// Timer value in bits 5-1.
+    pub fn timer_value(&self) -> Option<u8> {
+        self.value.first().map(|octet| octet & 0x1f)
+    }
 
-            /// Whether the timer is deactivated.
-            pub fn is_deactivated(&self) -> bool {
-                self.unit() == Some(crate::common::ts24008::GprsTimer3Unit::Deactivated)
-            }
+    /// Whether the timer is deactivated.
+    pub fn is_deactivated(&self) -> bool {
+        self.unit() == Some(crate::common::ts24008::GprsTimer3Unit::Deactivated)
+    }
 
-            /// Decoded timer value; `None` when the value octet is missing or
-            /// uses the 320-hour unit, which TS 24.008 Table 10.5.163a NOTE 1
-            /// does not define for this timer.
-            pub fn value(&self) -> Option<crate::common::ts24008::GprsTimerValue> {
-                let (unit, value) = self.timer()?;
-                match unit {
-                    crate::common::ts24008::GprsTimer3Unit::Deactivated => {
-                        Some(crate::common::ts24008::GprsTimerValue::Deactivated)
-                    }
-                    crate::common::ts24008::GprsTimer3Unit::ThreeHundredTwentyHours => None,
-                    unit => Some(crate::common::ts24008::GprsTimerValue::Seconds(
-                        unit.seconds_multiplier() * u64::from(value),
-                    )),
-                }
+    /// Decoded timer value; `None` when the value octet is missing or
+    /// uses the 320-hour unit, which TS 24.008 Table 10.5.163a NOTE 1
+    /// does not define for this timer.
+    pub fn value(&self) -> Option<crate::common::ts24008::GprsTimerValue> {
+        let (unit, value) = self.timer()?;
+        match unit {
+            crate::common::ts24008::GprsTimer3Unit::Deactivated => {
+                Some(crate::common::ts24008::GprsTimerValue::Deactivated)
             }
-
-            /// Duration in seconds, or `None` when deactivated, missing, or
-            /// using the undefined 320-hour unit.
-            pub fn to_seconds(&self) -> Option<u64> {
-                match self.value()? {
-                    crate::common::ts24008::GprsTimerValue::Seconds(seconds) => Some(seconds),
-                    crate::common::ts24008::GprsTimerValue::Deactivated => None,
-                }
-            }
-
-            /// Build from a unit and a timer value of 0 to 31, as
-            /// [`Self::timer`] reads them. The value of a timer whose unit
-            /// is "deactivated" is kept as it is given: the clause gives
-            /// those bits no meaning.
-            pub fn from_unit_value(
-                unit: crate::common::ts24008::GprsTimer3Unit,
-                value: u8,
-            ) -> core::result::Result<Self, crate::common::ValueError> {
-                crate::common::within("timer-value", value, 0, 31)?;
-                Ok(Self::new(vec![(unit as u8) << 5 | value]))
-            }
-
-            /// Build the smallest exact encoding of a duration.
-            pub fn from_seconds(
-                seconds: u64,
-            ) -> core::result::Result<Self, crate::common::ValueError> {
-                Ok(Self::new(vec![
-                    crate::common::ts24008::gprs_timer3_octet_from_seconds("seconds", seconds)?,
-                ]))
-            }
-
-            /// Build a deactivated timer.
-            pub fn deactivated() -> Self {
-                Self::new(vec![
-                    (crate::common::ts24008::GprsTimer3Unit::Deactivated as u8) << 5,
-                ])
-            }
-
-            /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
-            pub(crate) const SENDER_RULE: &'static str =
-                "exactly one value octet without the 320-hour unit";
-            /// Sender check: exactly one value octet without the 320-hour unit.
-            pub fn is_well_formed(&self) -> bool {
-                self.value.len() == 1
-                    && self.unit()
-                        != Some(crate::common::ts24008::GprsTimer3Unit::ThreeHundredTwentyHours)
-            }
+            crate::common::ts24008::GprsTimer3Unit::ThreeHundredTwentyHours => None,
+            unit => Some(crate::common::ts24008::GprsTimerValue::Seconds(
+                unit.seconds_multiplier() * u64::from(value),
+            )),
         }
-    };
+    }
+
+    /// Duration in seconds, or `None` when deactivated, missing, or
+    /// using the undefined 320-hour unit.
+    pub fn to_seconds(&self) -> Option<u64> {
+        match self.value()? {
+            crate::common::ts24008::GprsTimerValue::Seconds(seconds) => Some(seconds),
+            crate::common::ts24008::GprsTimerValue::Deactivated => None,
+        }
+    }
+
+    /// Build from a unit and a timer value of 0 to 31, as
+    /// [`Self::timer`] reads them. The value of a timer whose unit
+    /// is "deactivated" is kept as it is given: the clause gives
+    /// those bits no meaning.
+    pub fn from_unit_value(
+        unit: crate::common::ts24008::GprsTimer3Unit,
+        value: u8,
+    ) -> core::result::Result<Self, crate::common::ValueError> {
+        crate::common::within("timer-value", value, 0, 31)?;
+        Ok(Self::new(vec![(unit as u8) << 5 | value]))
+    }
+
+    /// Build the smallest exact encoding of a duration.
+    pub fn from_seconds(seconds: u64) -> core::result::Result<Self, crate::common::ValueError> {
+        Ok(Self::new(vec![
+            crate::common::ts24008::gprs_timer3_octet_from_seconds("seconds", seconds)?,
+        ]))
+    }
+
+    /// Build a deactivated timer.
+    pub fn deactivated() -> Self {
+        Self::new(vec![
+            (crate::common::ts24008::GprsTimer3Unit::Deactivated as u8) << 5,
+        ])
+    }
+
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str =
+        "exactly one value octet without the 320-hour unit";
+    /// Sender check: exactly one value octet without the 320-hour unit.
+    pub fn is_well_formed(&self) -> bool {
+        self.value.len() == 1
+            && self.unit() != Some(crate::common::ts24008::GprsTimer3Unit::ThreeHundredTwentyHours)
+    }
 }
 
 // ── IMEISV request (§10.5.5.10) ──────────────────────────────────────────────
@@ -636,77 +628,66 @@ impl ImeisvRequestValue {
 }
 
 /// IMEISV request (TS 24.008 §10.5.5.10), a type 1 IE.
-macro_rules! imeisv_request_ie {
-    ($name:ident) => {
-        impl $name {
-            /// Request value with the receiver rule applied.
-            pub fn request(&self) -> Option<crate::common::ts24008::ImeisvRequestValue> {
-                crate::common::ts24008::ImeisvRequestValue::from_u8(self.value)
-            }
+impl NasImeisvRequest {
+    /// Request value with the receiver rule applied.
+    pub fn request(&self) -> Option<crate::common::ts24008::ImeisvRequestValue> {
+        crate::common::ts24008::ImeisvRequestValue::from_u8(self.value)
+    }
 
-            /// Request value restricted to the defined codes.
-            pub fn request_strict(&self) -> Option<crate::common::ts24008::ImeisvRequestValue> {
-                crate::common::ts24008::ImeisvRequestValue::from_u8_strict(self.value)
-            }
+    /// Request value restricted to the defined codes.
+    pub fn request_strict(&self) -> Option<crate::common::ts24008::ImeisvRequestValue> {
+        crate::common::ts24008::ImeisvRequestValue::from_u8_strict(self.value)
+    }
 
-            /// Raw request value (bits 1-3).
-            pub fn request_raw(&self) -> u8 {
-                self.value & 0x07
-            }
+    /// Raw request value (bits 1-3).
+    pub fn request_raw(&self) -> u8 {
+        self.value & 0x07
+    }
 
-            /// Whether the IMEISV is requested.
-            pub fn is_requested(&self) -> bool {
-                self.request_raw() == 1
-            }
+    /// Whether the IMEISV is requested.
+    pub fn is_requested(&self) -> bool {
+        self.request_raw() == 1
+    }
 
-            /// Set the request value, clearing the spare bit.
-            pub fn set_request(
-                &mut self,
-                request: crate::common::ts24008::ImeisvRequestValue,
-            ) -> &mut Self {
-                self.value = request as u8;
-                self
-            }
+    /// Set the request value, clearing the spare bit.
+    pub fn set_request(
+        &mut self,
+        request: crate::common::ts24008::ImeisvRequestValue,
+    ) -> &mut Self {
+        self.value = request as u8;
+        self
+    }
 
-            /// Builder form of [`Self::set_request`].
-            pub fn with_request(
-                mut self,
-                request: crate::common::ts24008::ImeisvRequestValue,
-            ) -> Self {
-                self.set_request(request);
-                self
-            }
+    /// Builder form of [`Self::set_request`].
+    pub fn with_request(mut self, request: crate::common::ts24008::ImeisvRequestValue) -> Self {
+        self.set_request(request);
+        self
+    }
 
-            /// Build from a request value.
-            pub fn from_request(request: crate::common::ts24008::ImeisvRequestValue) -> Self {
-                Self::new(request as u8)
-            }
+    /// Build from a request value.
+    pub fn from_request(request: crate::common::ts24008::ImeisvRequestValue) -> Self {
+        Self::new(request as u8)
+    }
 
-            /// Build from a flag.
-            pub fn from_requested(requested: bool) -> Self {
-                Self::new(u8::from(requested))
-            }
-        }
-    };
+    /// Build from a flag.
+    pub fn from_requested(requested: bool) -> Self {
+        Self::new(u8::from(requested))
+    }
 }
 
 // ── Non-3GPP NW provided policies (§10.5.5.37) ───────────────────────────────
 
-/// Non-3GPP NW provided policies (TS 24.008 §10.5.5.37), a type 1 IE.
-macro_rules! non_3gpp_nw_provided_policies_ie {
-    ($name:ident) => {
-        crate::common::nas_ie_flags!($name half_octet {
-            /// N3EN: use of non-3GPP emergency numbers permitted (bit 1).
-            n3en: 1;
-        });
+// Non-3GPP NW provided policies (TS 24.008 §10.5.5.37), a type 1 IE.
+crate::common::nas_ie_flags!(NasNon3GppNwProvidedPolicies half_octet {
+    /// N3EN: use of non-3GPP emergency numbers permitted (bit 1).
+    n3en: 1;
+});
 
-        impl $name {
-            /// Build from the N3EN indicator with spare bits clear.
-            pub fn from_n3en(n3en: bool) -> Self {
-                Self::new(u8::from(n3en))
-            }
-        }
-    };
+impl NasNon3GppNwProvidedPolicies {
+    /// Build from the N3EN indicator with spare bits clear.
+    pub fn from_n3en(n3en: bool) -> Self {
+        Self::new(u8::from(n3en))
+    }
 }
 
 // ── Mobile station classmark 2 (§10.5.1.6) ───────────────────────────────────
@@ -757,74 +738,69 @@ impl MsRevisionLevel {
     }
 }
 
-/// Mobile station classmark 2 (TS 24.008 §10.5.1.6): three value octets.
-macro_rules! mobile_station_classmark_2_ie {
-    ($name:ident) => {
-        crate::common::nas_ie_flags!($name {
-            /// ES IND: controlled early classmark sending (octet 3, bit 5).
-            es_ind: 0, 5;
-            /// PS capability (octet 4, bit 7).
-            ps_capability: 1, 7;
-            /// SM capability: mobile terminated point-to-point SMS (octet 4, bit 4).
-            sm_capability: 1, 4;
-            /// VBS notification reception (octet 4, bit 3).
-            vbs: 1, 3;
-            /// VGCS notification reception (octet 4, bit 2).
-            vgcs: 1, 2;
-            /// Frequency capability (octet 4, bit 1).
-            fc: 1, 1;
-            /// Classmark 3 options are supported (octet 5, bit 8).
-            cm3: 2, 8;
-            /// LCS value added location request notification (octet 5, bit 6).
-            lcsva_cap: 2, 6;
-            /// UCS2 treatment (octet 5, bit 5); an absent octet reads as 0.
-            ucs2: 2, 5;
-            /// SoLSA (octet 5, bit 4).
-            solsa: 2, 4;
-            /// CM service prompt (octet 5, bit 3).
-            cmsp: 2, 3;
-            /// A5/3 available (octet 5, bit 2).
-            a53: 2, 2;
-            /// A5/2 bit as sent (octet 5, bit 1); the network accepts any value.
-            a52: 2, 1;
-        });
+// Mobile station classmark 2 (TS 24.008 §10.5.1.6): three value octets.
+crate::common::nas_ie_flags!(NasMobileStationClassmark2 {
+    /// ES IND: controlled early classmark sending (octet 3, bit 5).
+    es_ind: 0, 5;
+    /// PS capability (octet 4, bit 7).
+    ps_capability: 1, 7;
+    /// SM capability: mobile terminated point-to-point SMS (octet 4, bit 4).
+    sm_capability: 1, 4;
+    /// VBS notification reception (octet 4, bit 3).
+    vbs: 1, 3;
+    /// VGCS notification reception (octet 4, bit 2).
+    vgcs: 1, 2;
+    /// Frequency capability (octet 4, bit 1).
+    fc: 1, 1;
+    /// Classmark 3 options are supported (octet 5, bit 8).
+    cm3: 2, 8;
+    /// LCS value added location request notification (octet 5, bit 6).
+    lcsva_cap: 2, 6;
+    /// UCS2 treatment (octet 5, bit 5); an absent octet reads as 0.
+    ucs2: 2, 5;
+    /// SoLSA (octet 5, bit 4).
+    solsa: 2, 4;
+    /// CM service prompt (octet 5, bit 3).
+    cmsp: 2, 3;
+    /// A5/3 available (octet 5, bit 2).
+    a53: 2, 2;
+    /// A5/2 bit as sent (octet 5, bit 1); the network accepts any value.
+    a52: 2, 1;
+});
 
-        impl $name {
+impl NasMobileStationClassmark2 {
+    /// Revision level (octet 3, bits 7-6) with the receiver rule applied.
+    pub fn revision_level(&self) -> Option<crate::common::ts24008::MsRevisionLevel> {
+        crate::common::ts24008::MsRevisionLevel::from_u8(self.value.first()? >> 5)
+    }
 
-            /// Revision level (octet 3, bits 7-6) with the receiver rule applied.
-            pub fn revision_level(&self) -> Option<crate::common::ts24008::MsRevisionLevel> {
-                crate::common::ts24008::MsRevisionLevel::from_u8(self.value.first()? >> 5)
-            }
+    /// Raw revision level (octet 3, bits 7-6).
+    pub fn revision_level_raw(&self) -> Option<u8> {
+        self.value.first().map(|octet| (octet >> 5) & 0x03)
+    }
 
-            /// Raw revision level (octet 3, bits 7-6).
-            pub fn revision_level_raw(&self) -> Option<u8> {
-                self.value.first().map(|octet| (octet >> 5) & 0x03)
-            }
+    /// Whether A5/1 is available (octet 3, bit 4 is 0 when available).
+    pub fn a51_available(&self) -> Option<bool> {
+        self.value.first().map(|octet| octet & 0x08 == 0)
+    }
 
-            /// Whether A5/1 is available (octet 3, bit 4 is 0 when available).
-            pub fn a51_available(&self) -> Option<bool> {
-                self.value.first().map(|octet| octet & 0x08 == 0)
-            }
+    /// RF power capability (octet 3, bits 3-1).
+    pub fn rf_power_capability(&self) -> Option<u8> {
+        self.value.first().map(|octet| octet & 0x07)
+    }
 
-            /// RF power capability (octet 3, bits 3-1).
-            pub fn rf_power_capability(&self) -> Option<u8> {
-                self.value.first().map(|octet| octet & 0x07)
-            }
+    /// SS screening indicator (octet 4, bits 6-5).
+    pub fn ss_screening_indicator(&self) -> Option<u8> {
+        self.value.get(1).map(|octet| (octet >> 4) & 0x03)
+    }
 
-            /// SS screening indicator (octet 4, bits 6-5).
-            pub fn ss_screening_indicator(&self) -> Option<u8> {
-                self.value.get(1).map(|octet| (octet >> 4) & 0x03)
-            }
-
-            /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
-            pub(crate) const SENDER_RULE: &'static str = "three octets with the spare bits clear";
-            /// Sender check: three octets with the spare bits clear.
-            pub fn is_well_formed(&self) -> bool {
-                matches!(self.value.as_slice(), [octet3, octet4, octet5]
-                    if octet3 & 0x80 == 0 && octet4 & 0x80 == 0 && octet5 & 0x40 == 0)
-            }
-        }
-    };
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str = "three octets with the spare bits clear";
+    /// Sender check: three octets with the spare bits clear.
+    pub fn is_well_formed(&self) -> bool {
+        matches!(self.value.as_slice(), [octet3, octet4, octet5]
+            if octet3 & 0x80 == 0 && octet4 & 0x80 == 0 && octet5 & 0x40 == 0)
+    }
 }
 
 // ── Protocol configuration options (§10.5.6.3, §10.5.6.3A) ──────────────────
@@ -1112,74 +1088,63 @@ impl Pco {
 
 /// Protocol configuration options (TS 24.008 §10.5.6.3), at most 251 value
 /// octets.
-macro_rules! protocol_configuration_options_ie {
-    ($name:ident) => {
-        impl $name {
-            /// Parse the value sent in `direction` (receiver rules).
-            pub fn pco(&self, direction: PcoDirection) -> Option<Pco> {
-                Pco::from_bytes(&self.value, direction)
-            }
+impl NasProtocolConfigurationOptions {
+    /// Parse the value sent in `direction` (receiver rules).
+    pub fn pco(&self, direction: PcoDirection) -> Option<Pco> {
+        Pco::from_bytes(&self.value, direction)
+    }
 
-            /// Build from typed units, 251 octets at most.
-            pub fn from_pco(
-                pco: &Pco,
-                direction: PcoDirection,
-            ) -> core::result::Result<Self, crate::common::ValueError> {
-                let value = pco.to_bytes(direction)?;
-                let member = "protocol-configuration-options";
-                crate::common::sized(member, "octets", value.len(), 1, 251)?;
-                Ok(Self::new(value))
-            }
+    /// Build from typed units, 251 octets at most.
+    pub fn from_pco(
+        pco: &Pco,
+        direction: PcoDirection,
+    ) -> core::result::Result<Self, crate::common::ValueError> {
+        let value = pco.to_bytes(direction)?;
+        let member = "protocol-configuration-options";
+        crate::common::sized(member, "octets", value.len(), 1, 251)?;
+        Ok(Self::new(value))
+    }
 
-            /// Sender check for `direction`: at most 251 octets, octet 3 coded
-            /// as PPP with the extension bit set, and complete units without
-            /// a two-octet length, which needs ePCO (NOTE 2 to Table
-            /// 10.5.154).
-            pub fn is_well_formed(&self, direction: PcoDirection) -> bool {
-                self.value.len() <= 251
-                    && Pco::from_bytes_strict(&self.value, direction).is_some_and(|pco| {
-                        pco.configuration_protocol == 0
-                            && !pco.entries.iter().any(|entry| {
-                                crate::common::ts24008::pco_two_octet_length(
-                                    entry.identifier,
-                                    direction,
-                                )
-                            })
+    /// Sender check for `direction`: at most 251 octets, octet 3 coded
+    /// as PPP with the extension bit set, and complete units without
+    /// a two-octet length, which needs ePCO (NOTE 2 to Table
+    /// 10.5.154).
+    pub fn is_well_formed(&self, direction: PcoDirection) -> bool {
+        self.value.len() <= 251
+            && Pco::from_bytes_strict(&self.value, direction).is_some_and(|pco| {
+                pco.configuration_protocol == 0
+                    && !pco.entries.iter().any(|entry| {
+                        crate::common::ts24008::pco_two_octet_length(entry.identifier, direction)
                     })
-            }
-        }
-    };
+            })
+    }
 }
 
 /// Extended protocol configuration options (TS 24.008 §10.5.6.3A), coded
 /// as octet 3 onwards of the PCO IE.
-macro_rules! extended_protocol_configuration_options_ie {
-    ($name:ident) => {
-        impl $name {
-            /// Parse the value sent in `direction` (receiver rules).
-            pub fn pco(&self, direction: PcoDirection) -> Option<Pco> {
-                Pco::from_bytes(&self.value, direction)
-            }
+impl NasExtendedProtocolConfigurationOptions {
+    /// Parse the value sent in `direction` (receiver rules).
+    pub fn pco(&self, direction: PcoDirection) -> Option<Pco> {
+        Pco::from_bytes(&self.value, direction)
+    }
 
-            /// Build from typed units, 65535 octets at most.
-            pub fn from_pco(
-                pco: &Pco,
-                direction: PcoDirection,
-            ) -> core::result::Result<Self, crate::common::ValueError> {
-                let value = pco.to_bytes(direction)?;
-                let member = "extended-protocol-configuration-options";
-                crate::common::sized(member, "octets", value.len(), 1, usize::from(u16::MAX))?;
-                Ok(Self::new(value))
-            }
+    /// Build from typed units, 65535 octets at most.
+    pub fn from_pco(
+        pco: &Pco,
+        direction: PcoDirection,
+    ) -> core::result::Result<Self, crate::common::ValueError> {
+        let value = pco.to_bytes(direction)?;
+        let member = "extended-protocol-configuration-options";
+        crate::common::sized(member, "octets", value.len(), 1, usize::from(u16::MAX))?;
+        Ok(Self::new(value))
+    }
 
-            /// Sender check for `direction`: octet 3 coded as PPP with the
-            /// extension bit set, and complete units.
-            pub fn is_well_formed(&self, direction: PcoDirection) -> bool {
-                Pco::from_bytes_strict(&self.value, direction)
-                    .is_some_and(|pco| pco.configuration_protocol == 0)
-            }
-        }
-    };
+    /// Sender check for `direction`: octet 3 coded as PPP with the
+    /// extension bit set, and complete units.
+    pub fn is_well_formed(&self, direction: PcoDirection) -> bool {
+        Pco::from_bytes_strict(&self.value, direction)
+            .is_some_and(|pco| pco.configuration_protocol == 0)
+    }
 }
 
 // ── Network name, time zone, and emergency numbers (§10.5.3) ───────────────
@@ -1219,195 +1184,184 @@ impl NetworkNameCodingScheme {
 /// Network name (TS 24.008 §10.5.3.5a): a header octet with the coding
 /// scheme, the "Add CI" flag, and the number of spare bits in the last
 /// octet, then the text string.
-macro_rules! network_name_ie {
-    ($name:ident) => {
-        impl $name {
-            /// Coding scheme; reserved codes return `None`.
-            pub fn coding_scheme(&self) -> Option<NetworkNameCodingScheme> {
-                NetworkNameCodingScheme::from_u8(self.coding_scheme_raw())
-            }
+impl NasNetworkName {
+    /// Coding scheme; reserved codes return `None`.
+    pub fn coding_scheme(&self) -> Option<NetworkNameCodingScheme> {
+        NetworkNameCodingScheme::from_u8(self.coding_scheme_raw())
+    }
 
-            /// Raw coding scheme (bits 7-5 of the header octet).
-            pub fn coding_scheme_raw(&self) -> u8 {
-                self.value.first().map_or(0, |octet| (octet >> 4) & 0x07)
-            }
+    /// Raw coding scheme (bits 7-5 of the header octet).
+    pub fn coding_scheme_raw(&self) -> u8 {
+        self.value.first().map_or(0, |octet| (octet >> 4) & 0x07)
+    }
 
-            /// Whether the MS should add the country's initials (bit 4).
-            pub fn add_ci(&self) -> bool {
-                self.value.first().is_some_and(|octet| octet & 0x08 != 0)
-            }
+    /// Whether the MS should add the country's initials (bit 4).
+    pub fn add_ci(&self) -> bool {
+        self.value.first().is_some_and(|octet| octet & 0x08 != 0)
+    }
 
-            /// Number of spare bits in the last octet (bits 3-1); 0 carries
-            /// no information.
-            pub fn spare_bits(&self) -> u8 {
-                self.value.first().map_or(0, |octet| octet & 0x07)
-            }
+    /// Number of spare bits in the last octet (bits 3-1); 0 carries
+    /// no information.
+    pub fn spare_bits(&self) -> u8 {
+        self.value.first().map_or(0, |octet| octet & 0x07)
+    }
 
-            /// Encoded text string after the header octet.
-            pub fn name_data(&self) -> &[u8] {
-                self.value.get(1..).unwrap_or_default()
-            }
+    /// Encoded text string after the header octet.
+    pub fn name_data(&self) -> &[u8] {
+        self.value.get(1..).unwrap_or_default()
+    }
 
-            /// Decoded text. For UCS2 the spare-bit count carries no
-            /// information; for GSM 7-bit a count of 0 means the text fills
-            /// the octets, less a padding carriage return (TS 23.038
-            /// §6.1.2.3.1).
-            pub fn name(&self) -> Option<String> {
-                let data = self.name_data();
-                match self.coding_scheme()? {
-                    NetworkNameCodingScheme::Gsm7Bit => {
-                        let septets = match self.spare_bits() {
-                            0 => crate::common::gsm7::unpack_padded_septets(data),
-                            spare => {
-                                let bits = (data.len() * 8).checked_sub(usize::from(spare))?;
-                                crate::common::gsm7::unpack_septets(data, bits / 7)?
-                            }
-                        };
-                        Some(crate::common::gsm7::decode_septets(&septets))
-                    }
-                    NetworkNameCodingScheme::Ucs2 => char::decode_utf16(
-                        data.chunks_exact(2)
-                            .map(|pair| u16::from_be_bytes([pair[0], pair[1]])),
-                    )
-                    .collect::<core::result::Result<String, _>>()
-                    .ok(),
-                }
-            }
-
-            /// Encode text with the GSM 7-bit default alphabet when every
-            /// character is in it, otherwise as UCS2.
-            pub fn from_name(name: &str, add_ci: bool) -> Self {
-                let ci = u8::from(add_ci) << 3;
-                let value = match crate::common::gsm7::encode_septets(name) {
-                    Ok(septets) => {
-                        let spare = ((8 - septets.len() * 7 % 8) % 8) as u8;
-                        let mut value = vec![0x80 | ci | spare];
-                        value.extend(crate::common::gsm7::pack_septets(&septets));
-                        value
-                    }
-                    Err(_) => {
-                        let mut value =
-                            vec![0x80 | (NetworkNameCodingScheme::Ucs2 as u8) << 4 | ci];
-                        value.extend(name.encode_utf16().flat_map(u16::to_be_bytes));
-                        value
+    /// Decoded text. For UCS2 the spare-bit count carries no
+    /// information; for GSM 7-bit a count of 0 means the text fills
+    /// the octets, less a padding carriage return (TS 23.038
+    /// §6.1.2.3.1).
+    pub fn name(&self) -> Option<String> {
+        let data = self.name_data();
+        match self.coding_scheme()? {
+            NetworkNameCodingScheme::Gsm7Bit => {
+                let septets = match self.spare_bits() {
+                    0 => crate::common::gsm7::unpack_padded_septets(data),
+                    spare => {
+                        let bits = (data.len() * 8).checked_sub(usize::from(spare))?;
+                        crate::common::gsm7::unpack_septets(data, bits / 7)?
                     }
                 };
-                Self::new(value)
+                Some(crate::common::gsm7::decode_septets(&septets))
             }
-
-            fn update_header(&mut self, mask: u8, bits: u8) -> &mut Self {
-                if self.value.is_empty() {
-                    self.value.push(0x80);
-                }
-                self.value[0] = (self.value[0] & !mask) | (bits & mask);
-                self
-            }
-
-            /// Set the coding scheme; UCS2 also clears the spare-bit count.
-            pub fn set_coding_scheme(&mut self, scheme: NetworkNameCodingScheme) -> &mut Self {
-                self.update_header(0x70, (scheme as u8) << 4);
-                if scheme == NetworkNameCodingScheme::Ucs2 {
-                    self.update_header(0x07, 0);
-                }
-                self
-            }
-
-            /// Builder form of [`Self::set_coding_scheme`].
-            pub fn with_coding_scheme(mut self, scheme: NetworkNameCodingScheme) -> Self {
-                self.set_coding_scheme(scheme);
-                self
-            }
-
-            /// Set the "Add CI" flag.
-            pub fn set_add_ci(&mut self, add_ci: bool) -> &mut Self {
-                self.update_header(0x08, u8::from(add_ci) << 3)
-            }
-
-            /// Builder form of [`Self::set_add_ci`].
-            pub fn with_add_ci(mut self, add_ci: bool) -> Self {
-                self.set_add_ci(add_ci);
-                self
-            }
-
-            /// Set the number of spare bits in the last octet, 0 to 7: it
-            /// is 0 with UCS2, whose characters fill their octets.
-            pub fn set_spare_bits(
-                &mut self,
-                count: u8,
-            ) -> core::result::Result<&mut Self, crate::common::ValueError> {
-                crate::common::within("spare-bits", count, 0, 7)?;
-                if count != 0 && self.coding_scheme() == Some(NetworkNameCodingScheme::Ucs2) {
-                    let rule = "is 0 with the UCS2 coding scheme";
-                    return Err(crate::common::ValueError::combination("spare-bits", rule));
-                }
-                Ok(self.update_header(0x07, count))
-            }
-
-            /// Builder form of [`Self::set_spare_bits`].
-            pub fn with_spare_bits(
-                mut self,
-                count: u8,
-            ) -> core::result::Result<Self, crate::common::ValueError> {
-                self.set_spare_bits(count)?;
-                Ok(self)
-            }
-
-            /// Replace the encoded text string.
-            pub fn set_name_data(&mut self, data: &[u8]) -> &mut Self {
-                self.update_header(0, 0);
-                self.value.truncate(1);
-                self.value.extend_from_slice(data);
-                self
-            }
-
-            /// Builder form of [`Self::set_name_data`].
-            pub fn with_name_data(mut self, data: &[u8]) -> Self {
-                self.set_name_data(data);
-                self
-            }
-
-            /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
-            pub(crate) const SENDER_RULE: &'static str =
-                "the extension bit set and a defined coding scheme";
-            /// Sender check: the extension bit set and a defined coding scheme.
-            pub fn is_well_formed(&self) -> bool {
-                self.value.first().is_some_and(|octet| octet & 0x80 != 0)
-                    && self.coding_scheme().is_some()
-            }
+            NetworkNameCodingScheme::Ucs2 => char::decode_utf16(
+                (data.as_chunks::<2>().0.iter()).map(|pair| u16::from_be_bytes(*pair)),
+            )
+            .collect::<core::result::Result<String, _>>()
+            .ok(),
         }
-    };
+    }
+
+    /// Encode text with the GSM 7-bit default alphabet when every
+    /// character is in it, otherwise as UCS2.
+    pub fn from_name(name: &str, add_ci: bool) -> Self {
+        let ci = u8::from(add_ci) << 3;
+        let value = match crate::common::gsm7::encode_septets(name) {
+            Ok(septets) => {
+                let spare = ((8 - septets.len() * 7 % 8) % 8) as u8;
+                let mut value = vec![0x80 | ci | spare];
+                value.extend(crate::common::gsm7::pack_septets(&septets));
+                value
+            }
+            Err(_) => {
+                let mut value = vec![0x80 | (NetworkNameCodingScheme::Ucs2 as u8) << 4 | ci];
+                value.extend(name.encode_utf16().flat_map(u16::to_be_bytes));
+                value
+            }
+        };
+        Self::new(value)
+    }
+
+    fn update_header(&mut self, mask: u8, bits: u8) -> &mut Self {
+        if self.value.is_empty() {
+            self.value.push(0x80);
+        }
+        self.value[0] = (self.value[0] & !mask) | (bits & mask);
+        self
+    }
+
+    /// Set the coding scheme; UCS2 also clears the spare-bit count.
+    pub fn set_coding_scheme(&mut self, scheme: NetworkNameCodingScheme) -> &mut Self {
+        self.update_header(0x70, (scheme as u8) << 4);
+        if scheme == NetworkNameCodingScheme::Ucs2 {
+            self.update_header(0x07, 0);
+        }
+        self
+    }
+
+    /// Builder form of [`Self::set_coding_scheme`].
+    pub fn with_coding_scheme(mut self, scheme: NetworkNameCodingScheme) -> Self {
+        self.set_coding_scheme(scheme);
+        self
+    }
+
+    /// Set the "Add CI" flag.
+    pub fn set_add_ci(&mut self, add_ci: bool) -> &mut Self {
+        self.update_header(0x08, u8::from(add_ci) << 3)
+    }
+
+    /// Builder form of [`Self::set_add_ci`].
+    pub fn with_add_ci(mut self, add_ci: bool) -> Self {
+        self.set_add_ci(add_ci);
+        self
+    }
+
+    /// Set the number of spare bits in the last octet, 0 to 7: it
+    /// is 0 with UCS2, whose characters fill their octets.
+    pub fn set_spare_bits(
+        &mut self,
+        count: u8,
+    ) -> core::result::Result<&mut Self, crate::common::ValueError> {
+        crate::common::within("spare-bits", count, 0, 7)?;
+        if count != 0 && self.coding_scheme() == Some(NetworkNameCodingScheme::Ucs2) {
+            let rule = "is 0 with the UCS2 coding scheme";
+            return Err(crate::common::ValueError::combination("spare-bits", rule));
+        }
+        Ok(self.update_header(0x07, count))
+    }
+
+    /// Builder form of [`Self::set_spare_bits`].
+    pub fn with_spare_bits(
+        mut self,
+        count: u8,
+    ) -> core::result::Result<Self, crate::common::ValueError> {
+        self.set_spare_bits(count)?;
+        Ok(self)
+    }
+
+    /// Replace the encoded text string.
+    pub fn set_name_data(&mut self, data: &[u8]) -> &mut Self {
+        self.update_header(0, 0);
+        self.value.truncate(1);
+        self.value.extend_from_slice(data);
+        self
+    }
+
+    /// Builder form of [`Self::set_name_data`].
+    pub fn with_name_data(mut self, data: &[u8]) -> Self {
+        self.set_name_data(data);
+        self
+    }
+
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str =
+        "the extension bit set and a defined coding scheme";
+    /// Sender check: the extension bit set and a defined coding scheme.
+    pub fn is_well_formed(&self) -> bool {
+        self.value.first().is_some_and(|octet| octet & 0x80 != 0) && self.coding_scheme().is_some()
+    }
 }
 
 /// Time zone (TS 24.008 §10.5.3.8): quarter hours as two swapped BCD
 /// digits, with the sign in bit 4.
-macro_rules! time_zone_ie {
-    ($name:ident) => {
-        impl $name {
-            /// Raw time zone octet.
-            pub fn raw(&self) -> u8 {
-                self.value
-            }
+impl NasTimeZone {
+    /// Raw time zone octet.
+    pub fn raw(&self) -> u8 {
+        self.value
+    }
 
-            /// Signed offset from GMT in quarter hours.
-            pub fn quarter_hours(&self) -> i8 {
-                crate::common::ts24008::time_zone_quarter_hours(self.value)
-            }
+    /// Signed offset from GMT in quarter hours.
+    pub fn quarter_hours(&self) -> i8 {
+        crate::common::ts24008::time_zone_quarter_hours(self.value)
+    }
 
-            /// Build from a signed offset, at most 79 quarter hours either way.
-            pub fn from_quarter_hours(
-                quarter_hours: i8,
-            ) -> core::result::Result<Self, crate::common::ValueError> {
-                crate::common::ts24008::time_zone_octet("time-zone", quarter_hours).map(Self::new)
-            }
+    /// Build from a signed offset, at most 79 quarter hours either way.
+    pub fn from_quarter_hours(
+        quarter_hours: i8,
+    ) -> core::result::Result<Self, crate::common::ValueError> {
+        crate::common::ts24008::time_zone_octet("time-zone", quarter_hours).map(Self::new)
+    }
 
-            /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
-            pub(crate) const SENDER_RULE: &'static str = "the units digit is BCD";
-            /// Sender check: the units digit is BCD.
-            pub fn is_well_formed(&self) -> bool {
-                crate::common::ts24008::time_zone_octet_is_bcd(self.value)
-            }
-        }
-    };
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str = "the units digit is BCD";
+    /// Sender check: the units digit is BCD.
+    pub fn is_well_formed(&self) -> bool {
+        crate::common::ts24008::time_zone_octet_is_bcd(self.value)
+    }
 }
 
 /// Whether the units digit of a time zone octet (bits 8-5) is BCD; the
@@ -1562,32 +1516,29 @@ impl DaylightSavingAdjustment {
 }
 
 /// Daylight saving time (TS 24.008 §10.5.3.12).
-macro_rules! daylight_saving_time_ie {
-    ($name:ident) => {
-        impl $name {
-            /// Adjustment; spare bits are ignored and the reserved value is `None`.
-            pub fn adjustment(&self) -> Option<DaylightSavingAdjustment> {
-                DaylightSavingAdjustment::from_u8(*self.value.first()?)
-            }
+impl NasDaylightSavingTime {
+    /// Adjustment; spare bits are ignored and the reserved value is `None`.
+    pub fn adjustment(&self) -> Option<DaylightSavingAdjustment> {
+        DaylightSavingAdjustment::from_u8(*self.value.first()?)
+    }
 
-            /// Raw adjustment (bits 2-1), or 0 if the value is empty.
-            pub fn adjustment_raw(&self) -> u8 {
-                self.value.first().map_or(0, |octet| octet & 0x03)
-            }
+    /// Raw adjustment (bits 2-1), or 0 if the value is empty.
+    pub fn adjustment_raw(&self) -> u8 {
+        self.value.first().map_or(0, |octet| octet & 0x03)
+    }
 
-            /// Build from an adjustment with the spare bits clear.
-            pub fn from_adjustment(adjustment: DaylightSavingAdjustment) -> Self {
-                Self::new(vec![adjustment as u8])
-            }
+    /// Build from an adjustment with the spare bits clear.
+    pub fn from_adjustment(adjustment: DaylightSavingAdjustment) -> Self {
+        Self::new(vec![adjustment as u8])
+    }
 
-            /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
-            pub(crate) const SENDER_RULE: &'static str = "one octet with a defined value and spare bits clear";
-            /// Sender check: one octet with a defined value and spare bits clear.
-            pub fn is_well_formed(&self) -> bool {
-                matches!(self.value.as_slice(), [octet] if *octet <= 2)
-            }
-        }
-    };
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str =
+        "one octet with a defined value and spare bits clear";
+    /// Sender check: one octet with a defined value and spare bits clear.
+    pub fn is_well_formed(&self) -> bool {
+        matches!(self.value.as_slice(), [octet] if *octet <= 2)
+    }
 }
 
 /// One local emergency number (TS 24.008 §10.5.3.13).
@@ -1651,75 +1602,70 @@ pub(crate) fn number_digits_are_well_formed(octets: &[u8]) -> bool {
 }
 
 /// Emergency number list (TS 24.008 §10.5.3.13), 3 to 48 value octets.
-macro_rules! emergency_number_list_ie {
-    ($name:ident) => {
-        impl $name {
-            /// Emergency numbers in wire order; spare bits are ignored.
-            /// `None` if an entry overruns the value or is empty.
-            pub fn numbers(&self) -> Option<Vec<EmergencyNumber>> {
-                let mut numbers = Vec::new();
-                let mut remaining = self.value.as_slice();
-                while let Some((&length, rest)) = remaining.split_first() {
-                    let entry = rest.get(..usize::from(length))?;
-                    let (&categories, digits) = entry.split_first()?;
-                    numbers.push(EmergencyNumber {
-                        categories: categories & 0x1f,
-                        digits: crate::common::ts24008::decode_number_digits(digits),
-                    });
-                    remaining = &rest[entry.len()..];
-                }
-                Some(numbers)
-            }
-
-            /// Build from emergency numbers: digits of Table 10.5.118, five
-            /// bits of categories, and 3 to 48 octets in all.
-            pub fn from_numbers(
-                numbers: &[EmergencyNumber],
-            ) -> core::result::Result<Self, crate::common::ValueError> {
-                use crate::common::{ValueError, sized, within};
-                let mut value = Vec::new();
-                for (entry, number) in numbers.iter().enumerate() {
-                    let entry = |error: ValueError| error.at(entry);
-                    let digits =
-                        crate::common::ts24008::encode_number_digits("digits", &number.digits)
-                            .map_err(entry)?;
-                    within("categories", number.categories, 0, 0x1f).map_err(entry)?;
-                    sized("digits", "octets", digits.len(), 1, 254).map_err(entry)?;
-                    value.push(digits.len() as u8 + 1);
-                    value.push(number.categories);
-                    value.extend(digits);
-                }
-                sized("emergency-number-list", "octets", value.len(), 3, 48)?;
-                Ok(Self::new(value))
-            }
-
-            /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
-            pub(crate) const SENDER_RULE: &'static str = "3 to 48 octets of complete entries with spare bits clear, at least one digit, and canonical digits";
-            /// Sender check: 3 to 48 octets of complete entries with spare
-            /// bits clear, at least one digit, and canonical digits.
-            pub fn is_well_formed(&self) -> bool {
-                let mut remaining = self.value.as_slice();
-                if !(3..=48).contains(&remaining.len()) {
-                    return false;
-                }
-                while let Some((&length, rest)) = remaining.split_first() {
-                    let Some(entry) = rest.get(..usize::from(length)) else {
-                        return false;
-                    };
-                    let [categories, digits @ ..] = entry else {
-                        return false;
-                    };
-                    if categories & 0xe0 != 0
-                        || !crate::common::ts24008::number_digits_are_well_formed(digits)
-                    {
-                        return false;
-                    }
-                    remaining = &rest[entry.len()..];
-                }
-                true
-            }
+impl NasEmergencyNumberList {
+    /// Emergency numbers in wire order; spare bits are ignored.
+    /// `None` if an entry overruns the value or is empty.
+    pub fn numbers(&self) -> Option<Vec<EmergencyNumber>> {
+        let mut numbers = Vec::new();
+        let mut remaining = self.value.as_slice();
+        while let Some((&length, rest)) = remaining.split_first() {
+            let entry = rest.get(..usize::from(length))?;
+            let (&categories, digits) = entry.split_first()?;
+            numbers.push(EmergencyNumber {
+                categories: categories & 0x1f,
+                digits: crate::common::ts24008::decode_number_digits(digits),
+            });
+            remaining = &rest[entry.len()..];
         }
-    };
+        Some(numbers)
+    }
+
+    /// Build from emergency numbers: digits of Table 10.5.118, five
+    /// bits of categories, and 3 to 48 octets in all.
+    pub fn from_numbers(
+        numbers: &[EmergencyNumber],
+    ) -> core::result::Result<Self, crate::common::ValueError> {
+        use crate::common::{ValueError, sized, within};
+        let mut value = Vec::new();
+        for (entry, number) in numbers.iter().enumerate() {
+            let entry = |error: ValueError| error.at(entry);
+            let digits = crate::common::ts24008::encode_number_digits("digits", &number.digits)
+                .map_err(entry)?;
+            within("categories", number.categories, 0, 0x1f).map_err(entry)?;
+            sized("digits", "octets", digits.len(), 1, 254).map_err(entry)?;
+            value.push(digits.len() as u8 + 1);
+            value.push(number.categories);
+            value.extend(digits);
+        }
+        sized("emergency-number-list", "octets", value.len(), 3, 48)?;
+        Ok(Self::new(value))
+    }
+
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str = "3 to 48 octets of complete entries with spare bits clear, at least one digit, and canonical digits";
+    /// Sender check: 3 to 48 octets of complete entries with spare
+    /// bits clear, at least one digit, and canonical digits.
+    pub fn is_well_formed(&self) -> bool {
+        let mut remaining = self.value.as_slice();
+        if !(3..=48).contains(&remaining.len()) {
+            return false;
+        }
+        while let Some((&length, rest)) = remaining.split_first() {
+            let Some(entry) = rest.get(..usize::from(length)) else {
+                return false;
+            };
+            let [categories, digits @ ..] = entry else {
+                return false;
+            };
+            if categories & 0xe0 != 0
+                || !crate::common::ts24008::number_digits_are_well_formed(digits)
+            {
+                return false;
+            }
+            remaining = &rest[entry.len()..];
+        }
+        true
+    }
 }
 
 // ── Extended DRX parameters (§10.5.5.32) and supported codecs (§10.5.4.32) ──
@@ -1746,172 +1692,160 @@ crate::common::readable::serde_by_readable!(EutraMode);
 
 /// Extended DRX parameters (TS 24.008 §10.5.5.32): Paging Time Window and
 /// eDRX value in octet 3, and the NR Extended Paging Time Window in octet 4.
-macro_rules! extended_drx_parameters_ie {
-    ($name:ident) => {
-        impl $name {
-            /// Paging Time Window code (octet 3, bits 8-5).
-            pub fn paging_time_window(&self) -> u8 {
-                self.value.first().map_or(0, |octet| octet >> 4)
-            }
+impl NasExtendedDrxParameters {
+    /// Paging Time Window code (octet 3, bits 8-5).
+    pub fn paging_time_window(&self) -> u8 {
+        self.value.first().map_or(0, |octet| octet >> 4)
+    }
 
-            /// Set the Paging Time Window code of 0 to 15, keeping the eDRX
-            /// value.
-            pub fn set_paging_time_window(
-                &mut self,
-                ptw: u8,
-            ) -> core::result::Result<&mut Self, crate::common::ValueError> {
-                crate::common::within("paging-time-window", ptw, 0, 15)?;
-                if self.value.is_empty() {
-                    self.value.push(0);
-                }
-                self.value[0] = (self.value[0] & 0x0f) | (ptw << 4);
-                Ok(self)
-            }
-
-            /// Builder form of [`Self::set_paging_time_window`].
-            pub fn with_paging_time_window(
-                mut self,
-                ptw: u8,
-            ) -> core::result::Result<Self, crate::common::ValueError> {
-                self.set_paging_time_window(ptw)?;
-                Ok(self)
-            }
-
-            /// eDRX value code (octet 3, bits 4-1).
-            pub fn edrx_value(&self) -> u8 {
-                self.value.first().map_or(0, |octet| octet & 0x0f)
-            }
-
-            /// Set the eDRX value code of 0 to 15, keeping the Paging Time
-            /// Window.
-            pub fn set_edrx_value(
-                &mut self,
-                value: u8,
-            ) -> core::result::Result<&mut Self, crate::common::ValueError> {
-                crate::common::within("edrx-value", value, 0, 15)?;
-                if self.value.is_empty() {
-                    self.value.push(0);
-                }
-                self.value[0] = (self.value[0] & 0xf0) | value;
-                Ok(self)
-            }
-
-            /// Builder form of [`Self::set_edrx_value`].
-            pub fn with_edrx_value(
-                mut self,
-                value: u8,
-            ) -> core::result::Result<Self, crate::common::ValueError> {
-                self.set_edrx_value(value)?;
-                Ok(self)
-            }
-
-            /// Extended Paging Time Window (octet 4), used in NR.
-            pub fn extended_paging_time_window(&self) -> Option<u8> {
-                self.value.get(1).copied()
-            }
-
-            /// eDRX value as read in E-UTRA: 0000 and 0001 in narrowband
-            /// mean the IE is treated as absent (`None`), 0100 and 0110 to
-            /// 1000 in narrowband are read as 0010, and 1110 and 1111 in
-            /// wideband are read as 1101 (NOTES 4 to 6).
-            pub fn effective_eutra_edrx_value(&self, mode: EutraMode) -> Option<u8> {
-                let value = self.edrx_value();
-                Some(match (mode, value) {
-                    (EutraMode::Narrowband, 0 | 1) => return None,
-                    (EutraMode::Narrowband, 4 | 6..=8) => 2,
-                    (EutraMode::Wideband, 14 | 15) => 13,
-                    _ => value,
-                })
-            }
-
-            /// E-UTRA eDRX cycle length in milliseconds, after
-            /// [`Self::effective_eutra_edrx_value`].
-            pub fn eutra_edrx_cycle_ms(&self, mode: EutraMode) -> Option<u32> {
-                const CYCLES_MS: [u32; 16] = [
-                    5_120, 10_240, 20_480, 40_960, 61_440, 81_920, 102_400, 122_880, 143_360,
-                    163_840, 327_680, 655_360, 1_310_720, 2_621_440, 5_242_880, 10_485_760,
-                ];
-                Some(CYCLES_MS[usize::from(self.effective_eutra_edrx_value(mode)?)])
-            }
-
-            /// E-UTRA Paging Time Window in milliseconds: (n + 1) × 1.28 s in
-            /// wideband and (n + 1) × 2.56 s in narrowband.
-            pub fn eutra_paging_time_window_ms(&self, mode: EutraMode) -> u32 {
-                let step = match mode {
-                    EutraMode::Wideband => 1_280,
-                    EutraMode::Narrowband => 2_560,
-                };
-                (u32::from(self.paging_time_window()) + 1) * step
-            }
-
-            /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
-            pub(crate) const SENDER_RULE: &'static str = "one or two octets";
-            /// Sender check: one or two octets.
-            pub fn is_well_formed(&self) -> bool {
-                matches!(self.value.len(), 1 | 2)
-            }
+    /// Set the Paging Time Window code of 0 to 15, keeping the eDRX
+    /// value.
+    pub fn set_paging_time_window(
+        &mut self,
+        ptw: u8,
+    ) -> core::result::Result<&mut Self, crate::common::ValueError> {
+        crate::common::within("paging-time-window", ptw, 0, 15)?;
+        if self.value.is_empty() {
+            self.value.push(0);
         }
-    };
+        self.value[0] = (self.value[0] & 0x0f) | (ptw << 4);
+        Ok(self)
+    }
+
+    /// Builder form of [`Self::set_paging_time_window`].
+    pub fn with_paging_time_window(
+        mut self,
+        ptw: u8,
+    ) -> core::result::Result<Self, crate::common::ValueError> {
+        self.set_paging_time_window(ptw)?;
+        Ok(self)
+    }
+
+    /// eDRX value code (octet 3, bits 4-1).
+    pub fn edrx_value(&self) -> u8 {
+        self.value.first().map_or(0, |octet| octet & 0x0f)
+    }
+
+    /// Set the eDRX value code of 0 to 15, keeping the Paging Time
+    /// Window.
+    pub fn set_edrx_value(
+        &mut self,
+        value: u8,
+    ) -> core::result::Result<&mut Self, crate::common::ValueError> {
+        crate::common::within("edrx-value", value, 0, 15)?;
+        if self.value.is_empty() {
+            self.value.push(0);
+        }
+        self.value[0] = (self.value[0] & 0xf0) | value;
+        Ok(self)
+    }
+
+    /// Builder form of [`Self::set_edrx_value`].
+    pub fn with_edrx_value(
+        mut self,
+        value: u8,
+    ) -> core::result::Result<Self, crate::common::ValueError> {
+        self.set_edrx_value(value)?;
+        Ok(self)
+    }
+
+    /// Extended Paging Time Window (octet 4), used in NR.
+    pub fn extended_paging_time_window(&self) -> Option<u8> {
+        self.value.get(1).copied()
+    }
+
+    /// eDRX value as read in E-UTRA: 0000 and 0001 in narrowband
+    /// mean the IE is treated as absent (`None`), 0100 and 0110 to
+    /// 1000 in narrowband are read as 0010, and 1110 and 1111 in
+    /// wideband are read as 1101 (NOTES 4 to 6).
+    pub fn effective_eutra_edrx_value(&self, mode: EutraMode) -> Option<u8> {
+        let value = self.edrx_value();
+        Some(match (mode, value) {
+            (EutraMode::Narrowband, 0 | 1) => return None,
+            (EutraMode::Narrowband, 4 | 6..=8) => 2,
+            (EutraMode::Wideband, 14 | 15) => 13,
+            _ => value,
+        })
+    }
+
+    /// E-UTRA eDRX cycle length in milliseconds, after
+    /// [`Self::effective_eutra_edrx_value`].
+    pub fn eutra_edrx_cycle_ms(&self, mode: EutraMode) -> Option<u32> {
+        const CYCLES_MS: [u32; 16] = [
+            5_120, 10_240, 20_480, 40_960, 61_440, 81_920, 102_400, 122_880, 143_360, 163_840,
+            327_680, 655_360, 1_310_720, 2_621_440, 5_242_880, 10_485_760,
+        ];
+        Some(CYCLES_MS[usize::from(self.effective_eutra_edrx_value(mode)?)])
+    }
+
+    /// E-UTRA Paging Time Window in milliseconds: (n + 1) × 1.28 s in
+    /// wideband and (n + 1) × 2.56 s in narrowband.
+    pub fn eutra_paging_time_window_ms(&self, mode: EutraMode) -> u32 {
+        let step = match mode {
+            EutraMode::Wideband => 1_280,
+            EutraMode::Narrowband => 2_560,
+        };
+        (u32::from(self.paging_time_window()) + 1) * step
+    }
+
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str = "one or two octets";
+    /// Sender check: one or two octets.
+    pub fn is_well_formed(&self) -> bool {
+        matches!(self.value.len(), 1 | 2)
+    }
 }
 
 /// Supported codec list (TS 24.008 §10.5.4.32): system identifications, each
 /// followed by a codec bitmap (TS 26.103).
-macro_rules! supported_codec_list_ie {
-    ($name:ident) => {
-        impl $name {
-            /// System identifications and codec bitmaps; `None` if an entry
-            /// overruns the value or has an empty bitmap.
-            pub fn codec_bitmaps(&self) -> Option<Vec<(u8, Vec<u8>)>> {
-                let mut remaining = self.value.as_slice();
-                let mut bitmaps = Vec::new();
-                while let Some((&system, rest)) = remaining.split_first() {
-                    let (&length, rest) = rest.split_first()?;
-                    let bitmap = rest
-                        .get(..usize::from(length))
-                        .filter(|bitmap| !bitmap.is_empty())?;
-                    bitmaps.push((system, bitmap.to_vec()));
-                    remaining = &rest[bitmap.len()..];
-                }
-                Some(bitmaps)
-            }
-
-            /// Build from system identifications and codec bitmaps: at least
-            /// one, each bitmap of 1 to 255 octets.
-            pub fn from_codec_bitmaps(
-                bitmaps: &[(u8, Vec<u8>)],
-            ) -> core::result::Result<Self, crate::common::ValueError> {
-                use crate::common::{counted, sized};
-                counted("supported-codecs", bitmaps.len(), 1, usize::MAX)?;
-                let mut value = Vec::new();
-                for (entry, (system, bitmap)) in bitmaps.iter().enumerate() {
-                    sized("codec-bitmap", "octets", bitmap.len(), 1, 255)
-                        .map_err(|error| error.at(entry))?;
-                    value.push(*system);
-                    value.push(bitmap.len() as u8);
-                    value.extend_from_slice(bitmap);
-                }
-                Ok(Self::new(value))
-            }
-
-            /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
-            pub(crate) const SENDER_RULE: &'static str = "at least one complete entry";
-            /// Sender check: at least one complete entry.
-            pub fn is_well_formed(&self) -> bool {
-                self.codec_bitmaps()
-                    .is_some_and(|bitmaps| !bitmaps.is_empty())
-            }
+impl NasSupportedCodecList {
+    /// System identifications and codec bitmaps; `None` if an entry
+    /// overruns the value or has an empty bitmap.
+    pub fn codec_bitmaps(&self) -> Option<Vec<(u8, Vec<u8>)>> {
+        let mut remaining = self.value.as_slice();
+        let mut bitmaps = Vec::new();
+        while let Some((&system, rest)) = remaining.split_first() {
+            let (&length, rest) = rest.split_first()?;
+            let bitmap = rest
+                .get(..usize::from(length))
+                .filter(|bitmap| !bitmap.is_empty())?;
+            bitmaps.push((system, bitmap.to_vec()));
+            remaining = &rest[bitmap.len()..];
         }
-    };
+        Some(bitmaps)
+    }
+
+    /// Build from system identifications and codec bitmaps: at least
+    /// one, each bitmap of 1 to 255 octets.
+    pub fn from_codec_bitmaps(
+        bitmaps: &[(u8, Vec<u8>)],
+    ) -> core::result::Result<Self, crate::common::ValueError> {
+        use crate::common::{counted, sized};
+        counted("supported-codecs", bitmaps.len(), 1, usize::MAX)?;
+        let mut value = Vec::new();
+        for (entry, (system, bitmap)) in bitmaps.iter().enumerate() {
+            sized("codec-bitmap", "octets", bitmap.len(), 1, 255)
+                .map_err(|error| error.at(entry))?;
+            value.push(*system);
+            value.push(bitmap.len() as u8);
+            value.extend_from_slice(bitmap);
+        }
+        Ok(Self::new(value))
+    }
+
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str = "at least one complete entry";
+    /// Sender check: at least one complete entry.
+    pub fn is_well_formed(&self) -> bool {
+        self.codec_bitmaps()
+            .is_some_and(|bitmaps| !bitmaps.is_empty())
+    }
 }
 
 // ── PLMN list (§10.5.1.13) ────────────────────────────────────────────────────
 
-/// PLMN list (TS 24.008 §10.5.1.13): one to fifteen PLMN identities.
-macro_rules! plmn_list_ie {
-    ($name:ident) => {
-        crate::common::plmn_sequence_ie!($name, 1, 15);
-    };
-}
+// PLMN list (TS 24.008 §10.5.1.13): one to fifteen PLMN identities.
+crate::common::plmn_sequence_ie!(NasPlmnList, 1, 15);
 
 // ── Access point name (§10.5.6.1, TS 23.003 §9.1) ────────────────────────────
 
@@ -1965,15 +1899,7 @@ macro_rules! access_point_name_ie {
     };
 }
 
-pub(crate) use {
-    access_point_name_ie, authentication_failure_parameter_ie, authentication_parameter_autn_ie,
-    authentication_parameter_rand_ie, daylight_saving_time_ie, emergency_number_list_ie,
-    extended_drx_parameters_ie, extended_protocol_configuration_options_ie, gprs_timer_2_ie,
-    gprs_timer_3_ie, gprs_timer_ie, imeisv_request_ie, mobile_station_classmark_2_ie,
-    network_name_ie, non_3gpp_nw_provided_policies_ie, plmn_list_ie,
-    protocol_configuration_options_ie, supported_codec_list_ie, time_zone_and_time_ie,
-    time_zone_ie,
-};
+pub(crate) use {access_point_name_ie, gprs_timer_ie, time_zone_and_time_ie};
 
 #[cfg(test)]
 mod tests {
