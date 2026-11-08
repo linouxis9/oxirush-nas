@@ -304,17 +304,17 @@ macro_rules! nas_ie_flags {
         #[cfg(feature = "tree")]
         impl crate::common::view::Flags for $name {
             fn flags(&self) -> Vec<(&'static str, bool)> {
-                vec![$((stringify!($flag), self.$flag())),*]
+                vec![$((crate::common::names::name!(stringify!($flag)), self.$flag())),*]
             }
 
             fn set_flag(&mut self, name: &str, value: bool) -> bool {
-                pastey::paste! {
-                    match name {
-                        $(stringify!($flag) => self.[<set_ $flag>](value),)*
-                        _ => return false,
+                pastey::paste! { $(
+                    if name == crate::common::names::name!(stringify!($flag)) {
+                        self.[<set_ $flag>](value);
+                        return true;
                     }
-                }
-                true
+                )* }
+                false
             }
 
             fn is_empty(&self) -> bool {

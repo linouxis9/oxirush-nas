@@ -26,174 +26,30 @@
 //! octets also as a list of numbers. A member or a name that a value does
 //! not have is an error.
 
-use crate::common::names::Names;
 use crate::prelude::*;
 use core::net::{Ipv4Addr, Ipv6Addr};
 use oxirush_utils::tree::{Map, Value};
 
-pub(crate) use crate::common::names::{printed, printed_static};
+pub(crate) use crate::common::names::printed;
 
-/// Whether two names are the same letter for letter, but for their case
-/// and for which separator they have.
-fn alike(one: &str, other: &str) -> bool {
-    let separator = |c: u8| matches!(c, b'-' | b'_' | b' ');
-    one.len() == other.len()
-        && (one.bytes().zip(other.bytes()))
-            .all(|(a, b)| a.eq_ignore_ascii_case(&b) || (separator(a) && separator(b)))
-}
-
-/// What two names that are [`alike`] have in common: the name in lower case
-/// with one separator. `with` gets it, from where a short name is kept
-/// without an allocation.
-fn alike_key<T>(name: &str, with: impl FnOnce(&[u8]) -> T) -> T {
-    let common = |c: u8| match c {
-        b'-' | b'_' | b' ' => b'-',
-        other => other.to_ascii_lowercase(),
-    };
-    let mut short = [0_u8; 64];
-    match short.get_mut(..name.len()) {
-        Some(key) => {
-            (key.iter_mut().zip(name.bytes())).for_each(|(to, c)| *to = common(c));
-            with(key)
-        }
-        None => with(&name.bytes().map(common).collect::<Vec<_>>()),
-    }
-}
-
-/// Names in their order, to find the one that a name is without going
-/// through them: the one that [`named`] finds.
-pub(crate) struct Index {
-    /// The first name that is [`alike`], by what such names have in common.
-    alike: Names<Box<[u8]>, usize>,
-    /// The first name with the same letters, by the letters, and by a name
-    /// as it prints, which is how a view writes it.
-    letters: Names<String, usize>,
-    printed: Names<String, usize>,
-}
-
-impl Index {
-    /// The index of `names`.
-    pub(crate) fn new<'a>(names: impl IntoIterator<Item = &'a str>) -> Self {
-        let (mut alike, mut by_letters, mut by_printed) =
-            (Names::new(), Names::new(), Names::new());
-        for (at, name) in names.into_iter().enumerate() {
-            alike_key(name, |key| alike.entry(key.into()).or_insert(at));
-            let (printed, letters_of) = (printed(name), letters(name));
-            let first = *by_letters.entry(letters_of).or_insert(at);
-            // A name that prints as it is has the letters of what it prints.
-            if letters(&printed) == letters(name) {
-                by_printed.entry(printed).or_insert(first);
-            }
-        }
-        Self {
-            alike,
-            letters: by_letters,
-            printed: by_printed,
-        }
-    }
-
-    /// The place of the name that `name` is: the first one written like it,
-    /// or else the first one with its letters.
-    pub(crate) fn find(&self, name: &str) -> Option<usize> {
-        alike_key(name, |key| self.alike.get(key).copied()).or_else(|| self.same(name))
-    }
-
-    /// The place of the first name with the letters of `name`.
-    fn same(&self, name: &str) -> Option<usize> {
-        (self.printed.get(name).copied()).or_else(|| self.letters.get(&letters(name)).copied())
-    }
-
-    /// The place of the first name that is the same as `name`, written like
-    /// it or not.
-    pub(crate) fn first(&self, name: &str) -> Option<usize> {
-        let alike = alike_key(name, |key| self.alike.get(key).copied());
-        match (alike, self.same(name)) {
-            (Some(one), Some(other)) => Some(one.min(other)),
-            (one, other) => one.or(other),
-        }
-    }
-}
-
-/// The index of the names of the members of a struct or of the variants of
-/// an enum of the crate. It is made once and kept for as long as the program runs: there
-/// are as many as the crate has structs and enums.
-fn index(names: &'static [&'static str]) -> &'static Index {
-    type Known = std::sync::RwLock<Names<(usize, usize), &'static Index>>;
-    static KNOWN: std::sync::OnceLock<Known> = std::sync::OnceLock::new();
-    let known = KNOWN.get_or_init(Default::default);
-    // The names of a type are one slice of the program.
-    let key = (names.as_ptr() as usize, names.len());
-    if let Some(found) = known
-        .read()
-        .unwrap_or_else(|held| held.into_inner())
-        .get(&key)
-        .copied()
-    {
-        return found;
-    }
-    let new: &'static Index = Box::leak(Box::new(Index::new(names.iter().copied())));
-    known
-        .write()
-        .unwrap_or_else(|held| held.into_inner())
-        .entry(key)
-        .or_insert(new)
-}
-
-/// Names in groups, to find the first group that has a name and the place
-/// of the name in it: what [`same_name`] finds by going through the groups
-/// in their order, without going through them.
-pub(crate) struct Groups {
-    index: Index,
-    /// The group of each name, and its place in the group.
-    places: Vec<(usize, usize)>,
-}
-
-impl Groups {
-    /// The groups of the names that `groups` gives, in their order.
-    pub(crate) fn new<I: IntoIterator<Item = String>>(groups: impl IntoIterator<Item = I>) -> Self {
-        let (mut names, mut places) = (Vec::new(), Vec::new());
-        for (group, of_group) in groups.into_iter().enumerate() {
-            for (place, name) in of_group.into_iter().enumerate() {
-                names.push(name);
-                places.push((group, place));
-            }
-        }
-        Self {
-            index: Index::new(names.iter().map(String::as_str)),
-            places,
-        }
-    }
-
-    /// The first group that has a name which is the same as `name`, and the
-    /// place in the group of the first such name.
-    pub(crate) fn find(&self, name: &str) -> Option<(usize, usize)> {
-        let first = self.index.first(name)?;
-        self.places.get(first).copied()
-    }
-}
-
-/// The letters and the digits of a name as it prints: those of any way to
-/// write the name.
+/// The letters and the digits of a name, in lower case: those of any way to
+/// write it.
 pub(crate) fn letters(name: &str) -> String {
-    // A name as a view writes it is one that was printed already.
-    if let Some(known) = crate::common::names::letters_of_printed(name) {
-        return known.to_owned();
-    }
-    let mut printed = printed(name);
-    printed.retain(|c| c.is_ascii_alphanumeric());
-    printed
+    (name.chars())
+        .filter(char::is_ascii_alphanumeric)
+        .map(|c| c.to_ascii_lowercase())
+        .collect()
 }
 
-/// Whether two names are the same: they have the same letters and digits,
-/// whatever their case and whatever is between them.
+/// Whether two names are the same: they are written alike, but for their
+/// case and their separators, or they have the same letters and digits.
 pub(crate) fn same_name(one: &str, other: &str) -> bool {
-    alike(one, other) || letters(one) == letters(other)
+    oxirush_utils::tree::named(&[one], other).is_some()
 }
 
 /// The one of `names` that `name` is: the one written like it, if any.
 pub(crate) fn named<'a, T: AsRef<str>>(names: &'a [T], name: &str) -> Option<&'a T> {
-    (names.iter().find(|known| alike(known.as_ref(), name)))
-        .or_else(|| names.iter().find(|known| same_name(known.as_ref(), name)))
+    oxirush_utils::tree::named(names, name).map(|at| &names[at])
 }
 
 /// The one of `names` that `name` is, or an error that lists them.
@@ -202,9 +58,7 @@ pub(crate) fn known(
     names: &'static [&'static str],
     what: &str,
 ) -> Result<usize, String> {
-    index(names)
-        .find(name)
-        .ok_or_else(|| none_of(name, names, what))
+    oxirush_utils::tree::named(names, name).ok_or_else(|| none_of(name, names, what))
 }
 
 /// The error for `name`, which is none of `names`: it lists them, or of
@@ -215,24 +69,23 @@ pub(crate) fn none_of(name: &str, names: &[&str], what: &str) -> String {
     if names.is_empty() {
         return format!("no {what} `{name}`: there is none");
     }
-    let printed: Vec<String> = names.iter().map(|name| printed(name)).collect();
-    let count = printed.len();
+    let count = names.len();
     if count <= LISTED {
-        return format!("no {what} `{name}`, expected one of {}", printed.join(", "));
+        return format!("no {what} `{name}`, expected one of {}", names.join(", "));
     }
-    let mut near = oxirush_utils::tree::nearest(&printed, name, 3);
+    let mut near = oxirush_utils::tree::nearest(names, name, 3);
     if near.is_empty() {
         let written = letters(name);
-        near = (printed.iter())
+        near = (names.iter())
             .filter(|known| !written.is_empty() && letters(known).starts_with(&written))
-            .map(String::as_str)
+            .copied()
             .take(3)
             .collect();
     }
     match near[..] {
         [] => format!(
             "no {what} `{name}`, expected one of {}, and {} more",
-            printed[..8].join(", "),
+            names[..8].join(", "),
             count - 8
         ),
         [one] => format!("no {what} `{name}`; the nearest of its {count} is {one}"),
@@ -362,32 +215,59 @@ pub(crate) fn invalid_type(value: &Value, expected: &str) -> String {
 
 /// Octets as the member or the variant `name` shows them.
 pub(crate) fn octets_of(name: &'static str, octets: &[u8]) -> Value {
-    match (printed_static(name).letters, octets.len()) {
+    let is = |names: &[&str]| {
+        let letters =
+            || (name.bytes().filter(u8::is_ascii_alphanumeric)).map(|c| c.to_ascii_lowercase());
+        names.iter().any(|known| letters().eq(known.bytes()))
+    };
+    let length = octets.len();
+    if is(&["mcc", "mnc"]) {
         // The digits of a PLMN identity, without the filler.
-        ("mcc" | "mnc", _) => (octets.iter().filter(|digit| **digit <= 9))
+        (octets.iter().filter(|digit| **digit <= 9))
             .map(|digit| char::from(b'0' + digit))
             .collect::<String>()
-            .into(),
-        ("tac" | "tacs" | "firsttac", 1..=8) => octets
-            .iter()
+            .into()
+    } else if is(&["tac", "tacs", "firsttac"]) && (1..=8).contains(&length) {
+        (octets.iter())
             .fold(0_u64, |number, octet| number << 8 | u64::from(*octet))
-            .into(),
-        ("address" | "addr" | "mask" | "ipv4" | "ipv4address" | "source" | "destination", 4) => {
-            Ipv4Addr::from(<[u8; 4]>::try_from(octets).unwrap_or_default())
-                .to_string()
-                .into()
-        }
-        (
-            "address" | "mask" | "ipv6" | "source" | "destination" | "smfipv6linklocaladdress",
-            16,
-        ) => Ipv6Addr::from(<[u8; 16]>::try_from(octets).unwrap_or_default())
+            .into()
+    } else if length == 4
+        && is(&[
+            "address",
+            "addr",
+            "mask",
+            "ipv4",
+            "ipv4address",
+            "source",
+            "destination",
+        ])
+    {
+        (Ipv4Addr::from(<[u8; 4]>::try_from(octets).unwrap_or_default()))
             .to_string()
-            .into(),
+            .into()
+    } else if length == 16
+        && is(&[
+            "address",
+            "mask",
+            "ipv6",
+            "source",
+            "destination",
+            "smfipv6linklocaladdress",
+        ])
+    {
+        (Ipv6Addr::from(<[u8; 16]>::try_from(octets).unwrap_or_default()))
+            .to_string()
+            .into()
+    } else if is(&[
+        "qfis",
+        "payloadtypes",
+        "nssrgvalues",
+        "connectioncapabilityidentifiers",
+    ]) {
         // Identifiers that are a list of numbers and not a string of octets.
-        ("qfis" | "payloadtypes" | "nssrgvalues" | "connectioncapabilityidentifiers", _) => {
-            octets.to_vec().into()
-        }
-        _ => oxirush_utils::tree::hex(octets).into(),
+        octets.to_vec().into()
+    } else {
+        oxirush_utils::tree::hex(octets).into()
     }
 }
 
@@ -451,8 +331,7 @@ pub(crate) fn pair_items<A: Readable, B: Readable>(value: &Value) -> Result<(A, 
 
 /// The variant `variant` with what it holds, `contents`.
 pub(crate) fn tagged(variant: &'static str, contents: Value) -> Value {
-    let name = printed_static(variant).name.to_owned();
-    Map::from_iter([(name, contents)]).into()
+    Map::from_iter([(variant.to_owned(), contents)]).into()
 }
 
 /// The members of a struct, by the names that they print as.
@@ -475,19 +354,17 @@ impl Members {
         }
     }
 
-    /// The member `key` of the struct, with its value.
-    pub(crate) fn put<T: Readable>(&mut self, key: &'static str, value: &T) {
-        let key = unraw(key);
-        if matches!(key, "unknown_ies" | "optional_ie_order") && self.viewed {
+    /// The member `name` of the struct, with its value.
+    pub(crate) fn put<T: Readable>(&mut self, name: &'static str, value: &T) {
+        if matches!(name, "unknown-ies" | "optional-ie-order") && self.viewed {
             return;
         }
-        let name = printed_static(key).name.to_owned();
-        self.members.insert(name, value.shown(key));
+        self.members.insert(name.to_owned(), value.shown(name));
     }
 
-    /// The member `key` of the struct, with the value `shown` in its form.
-    pub(crate) fn put_shown(&mut self, key: &'static str, shown: Value) {
-        (self.members).insert(printed_static(key).name.to_owned(), shown);
+    /// The member `name` of the struct, with the value `shown` in its form.
+    pub(crate) fn put_shown(&mut self, name: &'static str, shown: Value) {
+        self.members.insert(name.to_owned(), shown);
     }
 
     pub(crate) fn finish(self) -> Value {
@@ -554,7 +431,7 @@ pub(crate) fn members_into<'v>(
 pub(crate) fn member<T: Readable>(value: Option<&Value>, field: &str) -> Result<T, String> {
     match value {
         Some(value) => T::read(value),
-        None => T::missing().ok_or_else(|| format!("`{}` is not written", printed(field))),
+        None => T::missing().ok_or_else(|| format!("`{field}` is not written")),
     }
 }
 
@@ -583,18 +460,21 @@ pub(crate) fn variant<'v>(
 pub(crate) fn unit_variant(name: &str, contents: Option<&Value>) -> Result<(), String> {
     match contents {
         None | Some(Value::Null) => Ok(()),
-        Some(contents) => Err(format!(
-            "`{}` has no contents, and {contents} is given",
-            printed(name)
-        )),
+        Some(contents) => Err(format!("`{name}` has no contents, and {contents} is given")),
     }
 }
 
-/// The place among `variants` of the first that one of `wanted` names, or
-/// that of the first variant.
-pub(crate) fn blank_variant(variants: &'static [&'static str], wanted: &[&str]) -> Option<usize> {
-    let index = index(variants);
-    let named = (wanted.iter().filter_map(|wanted| index.first(wanted))).min();
+/// The place among `variants`, which print as `names`, of the first that
+/// one of `wanted` names, or that of the first variant.
+pub(crate) fn blank_variant(
+    variants: &'static [&'static str],
+    names: &'static [&'static str],
+    wanted: &[&str],
+) -> Option<usize> {
+    let named = (wanted
+        .iter()
+        .filter_map(|wanted| index_of(variants, names, wanted)))
+    .min();
     named.or((!variants.is_empty()).then_some(0))
 }
 
@@ -949,7 +829,7 @@ macro_rules! readable {
             #[allow(unused_variables)]
 
             fn read(value: &oxirush_utils::tree::Value) -> core::result::Result<Self, alloc::string::String> {
-                const FIELDS: &[&str] = &[$($crate::common::readable::unraw(stringify!($member))),*];
+                const FIELDS: &[&str] = &[$($crate::common::names::name!(stringify!($member))),*];
                 #[allow(unused_variables, unused_mut)]
                 let mut slots = [None; FIELDS.len()];
                 $crate::common::readable::members_into(value, stringify!($name), FIELDS, &mut slots)?;
@@ -972,7 +852,7 @@ macro_rules! readable {
             #[allow(unused_variables)]
 
             fn fields(_: &str) -> Option<&'static [&'static str]> {
-                { const FIELDS: &[&str] = &[$($crate::common::readable::unraw(stringify!($member))),*]; Some(FIELDS) }
+                { const FIELDS: &[&str] = &[$($crate::common::names::name!(stringify!($member))),*]; Some(FIELDS) }
             }
         }
     };
@@ -1024,10 +904,10 @@ macro_rules! readable {
             [$($show)* Self::$variant { $($member),* } => {
                 let mut members = $crate::common::readable::Members::new();
                 $($crate::common::readable::readable!(@put members, *$member, $member $(as $form)?);)*
-                $crate::common::readable::tagged($rename, members.finish())
+                $crate::common::readable::tagged($crate::common::names::name!($rename), members.finish())
             }]
             [$($read)* $rename => {
-                const FIELDS: &[&str] = &[$($crate::common::readable::unraw(stringify!($member))),*];
+                const FIELDS: &[&str] = &[$($crate::common::names::name!(stringify!($member))),*];
                 let $contents = $contents.unwrap_or(&oxirush_utils::tree::Value::Null);
                 #[allow(unused_variables, unused_mut)]
                 let mut slots = [None; FIELDS.len()];
@@ -1044,8 +924,8 @@ macro_rules! readable {
                     $($member: $crate::common::readable::readable!(@blank $variants, $depth $(as $form)?),)*
                 })
             }]
-            [$($names)* $rename,]
-            [$($fields)* $rename => { const FIELDS: &[&str] = &[$($crate::common::readable::unraw(stringify!($member))),*]; Some(FIELDS) },]
+            [$($names)* ($rename)]
+            [$($fields)* $rename => { const FIELDS: &[&str] = &[$($crate::common::names::name!(stringify!($member))),*]; Some(FIELDS) },]
             $($($rest)*)?);
     };
     (@enum $name:ident ($contents:ident, $variants:ident, $depth:ident, $variant_name:ident, $held:ident) [$($show:tt)*] [$($read:tt)*] [$($blank:tt)*] [$($names:tt)*] [$($fields:tt)*]
@@ -1054,10 +934,10 @@ macro_rules! readable {
             [$($show)* Self::$variant { $($member),* } => {
                 let mut members = $crate::common::readable::Members::new();
                 $($crate::common::readable::readable!(@put members, *$member, $member $(as $form)?);)*
-                $crate::common::readable::tagged(stringify!($variant), members.finish())
+                $crate::common::readable::tagged($crate::common::names::name!(stringify!($variant)), members.finish())
             }]
             [$($read)* stringify!($variant) => {
-                const FIELDS: &[&str] = &[$($crate::common::readable::unraw(stringify!($member))),*];
+                const FIELDS: &[&str] = &[$($crate::common::names::name!(stringify!($member))),*];
                 let $contents = $contents.unwrap_or(&oxirush_utils::tree::Value::Null);
                 #[allow(unused_variables, unused_mut)]
                 let mut slots = [None; FIELDS.len()];
@@ -1074,17 +954,17 @@ macro_rules! readable {
                     $($member: $crate::common::readable::readable!(@blank $variants, $depth $(as $form)?),)*
                 })
             }]
-            [$($names)* stringify!($variant),]
-            [$($fields)* stringify!($variant) => { const FIELDS: &[&str] = &[$($crate::common::readable::unraw(stringify!($member))),*]; Some(FIELDS) },]
+            [$($names)* (stringify!($variant))]
+            [$($fields)* stringify!($variant) => { const FIELDS: &[&str] = &[$($crate::common::names::name!(stringify!($member))),*]; Some(FIELDS) },]
             $($($rest)*)?);
     };
     (@enum $name:ident ($contents:ident, $variants:ident, $depth:ident, $variant_name:ident, $held:ident) [$($show:tt)*] [$($read:tt)*] [$($blank:tt)*] [$($names:tt)*] [$($fields:tt)*]
         $variant:ident ($ty:ty $(as $form:ident)? $(,)?) $(, $($rest:tt)*)?) => {
         $crate::common::readable::readable!(@enum $name ($contents, $variants, $depth, $variant_name, $held)
             [$($show)* Self::$variant(value) => $crate::common::readable::tagged(
-                stringify!($variant),
+                $crate::common::names::name!(stringify!($variant)),
                 $crate::common::readable::readable!(
-                    @show $crate::common::readable::given_on($held, stringify!($variant)),
+                    @show $crate::common::readable::given_on($held, $crate::common::names::name!(stringify!($variant))),
                     [$($form)?] *value
                 ),
             ),]
@@ -1096,7 +976,7 @@ macro_rules! readable {
                 let $depth = $crate::common::readable::blank_at($depth)?;
                 Some(Self::$variant($crate::common::readable::readable!(@blank $variants, $depth $(as $form)?)))
             }]
-            [$($names)* stringify!($variant),]
+            [$($names)* (stringify!($variant))]
             [$($fields)* stringify!($variant) => $crate::common::readable::readable!(@fields $variant_name, $ty $(as $form)?),]
             $($($rest)*)?);
     };
@@ -1104,9 +984,9 @@ macro_rules! readable {
         $variant:ident ($first:ty, $second:ty $(,)?) $(, $($rest:tt)*)?) => {
         $crate::common::readable::readable!(@enum $name ($contents, $variants, $depth, $variant_name, $held)
             [$($show)* Self::$variant(first, second) => $crate::common::readable::tagged(
-                stringify!($variant),
+                $crate::common::names::name!(stringify!($variant)),
                 $crate::common::readable::pair(
-                    $crate::common::readable::given_on($held, stringify!($variant)),
+                    $crate::common::readable::given_on($held, $crate::common::names::name!(stringify!($variant))),
                     first,
                     second,
                 ),
@@ -1124,7 +1004,7 @@ macro_rules! readable {
                     <$second as $crate::common::readable::Readable>::blank($variants, $depth)?,
                 ))
             }]
-            [$($names)* stringify!($variant),]
+            [$($names)* (stringify!($variant))]
             [$($fields)*]
             $($($rest)*)?);
     };
@@ -1132,18 +1012,18 @@ macro_rules! readable {
         $variant:ident $(, $($rest:tt)*)?) => {
         $crate::common::readable::readable!(@enum $name ($contents, $variants, $depth, $variant_name, $held)
             [$($show)* Self::$variant => oxirush_utils::tree::Value::from(
-                $crate::common::names::printed_static(stringify!($variant)).name,
+                $crate::common::names::name!(stringify!($variant)),
             ),]
             [$($read)* stringify!($variant) => {
-                $crate::common::readable::unit_variant(stringify!($variant), $contents)?;
+                $crate::common::readable::unit_variant($crate::common::names::name!(stringify!($variant)), $contents)?;
                 Ok(Self::$variant)
             }]
             [$($blank)* stringify!($variant) => Some(Self::$variant),]
-            [$($names)* stringify!($variant),]
+            [$($names)* (stringify!($variant))]
             [$($fields)*]
             $($($rest)*)?);
     };
-    (@enum $name:ident ($contents:ident, $variants:ident, $depth:ident, $variant_name:ident, $held:ident) [$($show:tt)*] [$($read:tt)*] [$($blank:tt)*] [$($names:tt)*] [$($fields:tt)*]) => {
+    (@enum $name:ident ($contents:ident, $variants:ident, $depth:ident, $variant_name:ident, $held:ident) [$($show:tt)*] [$($read:tt)*] [$($blank:tt)*] [$(($names:expr))*] [$($fields:tt)*]) => {
         impl $crate::common::readable::Readable for $name {
             #[allow(unused_variables)]
             fn shown(&self, $held: &'static str) -> oxirush_utils::tree::Value {
@@ -1155,8 +1035,9 @@ macro_rules! readable {
             #[allow(unused_variables)]
 
             fn read(value: &oxirush_utils::tree::Value) -> core::result::Result<Self, alloc::string::String> {
-                const VARIANTS: &[&str] = &[$($names)*];
-                let (at, $contents) = $crate::common::readable::variant(value, VARIANTS)?;
+                const VARIANTS: &[&str] = &[$($names),*];
+                const NAMES: &[&str] = &[$($crate::common::names::name!($names)),*];
+                let (at, $contents) = $crate::common::readable::variant(value, NAMES)?;
                 match VARIANTS[at] {
                     $($read)*
                     _ => unreachable!(),
@@ -1165,8 +1046,9 @@ macro_rules! readable {
 
             #[allow(unused_variables)]
             fn blank($variants: &[&str], $depth: usize) -> Option<Self> {
-                const VARIANTS: &[&str] = &[$($names)*];
-                let at = $crate::common::readable::blank_variant(VARIANTS, $variants)?;
+                const VARIANTS: &[&str] = &[$($names),*];
+                const NAMES: &[&str] = &[$($crate::common::names::name!($names)),*];
+                let at = $crate::common::readable::blank_variant(VARIANTS, NAMES, $variants)?;
                 #[allow(unused_variables)]
                 match VARIANTS[at] {
                     $($blank)*
@@ -1177,8 +1059,9 @@ macro_rules! readable {
             #[allow(unused_variables)]
 
             fn fields($variant_name: &str) -> Option<&'static [&'static str]> {
-                const VARIANTS: &[&str] = &[$($names)*];
-                let at = $crate::common::readable::index_of(VARIANTS, $variant_name)?;
+                const VARIANTS: &[&str] = &[$($names),*];
+                const NAMES: &[&str] = &[$($crate::common::names::name!($names)),*];
+                let at = $crate::common::readable::index_of(VARIANTS, NAMES, $variant_name)?;
                 #[allow(unused_variables)]
                 match VARIANTS[at] {
                     $($fields)*
@@ -1190,28 +1073,25 @@ macro_rules! readable {
 
     // A member of a struct: shown, read and made blank, by its form.
     (@put $members:ident, $value:expr, $member:ident) => {
-        $members.put(stringify!($member), &$value)
+        $members.put($crate::common::names::name!(stringify!($member)), &$value)
     };
     (@put $members:ident, $value:expr, $member:ident as $form:ident) => {
-        $members.put_shown(stringify!($member), $crate::common::forms::$form::shown(&$value))
+        $members.put_shown($crate::common::names::name!(stringify!($member)), $crate::common::forms::$form::shown(&$value))
     };
     (@put $members:ident, $value:expr, $member:ident = default) => {
-        $members.put(stringify!($member), &$value)
+        $members.put($crate::common::names::name!(stringify!($member)), &$value)
     };
     (@put $members:ident, $value:expr, $member:ident = skip) => {
         let _ = &$value;
     };
     (@read $read:ident, $member:ident) => {
-        $crate::common::readable::member($read.next().flatten(), stringify!($member))?
+        $crate::common::readable::member($read.next().flatten(), $crate::common::names::name!(stringify!($member)))?
     };
     (@read $read:ident, $member:ident as $form:ident) => {
         match $read.next().flatten() {
             Some(value) => $crate::common::forms::$form::read(value)?,
             None => $crate::common::forms::$form::missing()
-                .ok_or_else(|| format!(
-                    "`{}` is not written",
-                    $crate::common::names::printed(stringify!($member))
-                ))?,
+                .ok_or_else(|| format!("`{}` is not written", $crate::common::names::name!(stringify!($member))))?,
         }
     };
     (@read $read:ident, $member:ident = default) => {
@@ -1292,21 +1172,16 @@ macro_rules! serde_by_readable {
 
 pub(crate) use serde_by_readable;
 
-/// The name of a member as Rust writes it, without the `r#` of a raw
-/// identifier: `r#type` is the member `type`.
-pub(crate) const fn unraw(name: &'static str) -> &'static str {
-    match name.as_bytes() {
-        [b'r', b'#', rest @ ..] => match core::str::from_utf8(rest) {
-            Ok(name) => name,
-            Err(_) => name,
-        },
-        _ => name,
-    }
-}
-
-/// The place among `names` of the one that `name` is, however it is written.
-pub(crate) fn index_of(names: &'static [&'static str], name: &str) -> Option<usize> {
-    index(names).find(name)
+/// The place among `variants`, which print as `names`, of the one that
+/// `name` is: the variant itself, or the name it prints as, however it is
+/// written.
+pub(crate) fn index_of(
+    variants: &'static [&'static str],
+    names: &'static [&'static str],
+    name: &str,
+) -> Option<usize> {
+    (variants.iter().position(|variant| *variant == name))
+        .or_else(|| oxirush_utils::tree::named(names, name))
 }
 
 /// Two values that a variant holds: the two octets they are, or a list.
@@ -1359,58 +1234,6 @@ mod tests {
         assert_eq!(from_value::<(u8, u16)>(&tree!([1, 2])), Ok((1, 2)));
     }
 
-    /// The index of names finds the name that going through them finds, for
-    /// names and for ways to write them that are alike, that print alike,
-    /// and that are neither.
-    #[test]
-    fn an_index_finds_the_name_that_going_through_the_names_finds() {
-        let parts = [
-            "F", "g", "Gs", "5", "_", "-", "three", "Gpp", "a", "B", "status",
-        ];
-        let mut seed = 0x9e37_79b9_7f4a_7c15_u64;
-        let mut name = || {
-            let mut name = String::new();
-            for _ in 0..1 + seed % 4 {
-                seed ^= seed << 13;
-                seed ^= seed >> 7;
-                seed ^= seed << 17;
-                name.push_str(parts[(seed % parts.len() as u64) as usize]);
-            }
-            name
-        };
-        for _ in 0..300 {
-            let names: Vec<String> = (0..12).map(|_| name()).collect();
-            let index = Index::new(names.iter().map(String::as_str));
-            let groups = Groups::new([names[..5].to_vec(), names[5..].to_vec()]);
-            let written: Vec<String> = (names.iter())
-                .flat_map(|name| {
-                    [
-                        name.clone(),
-                        printed(name),
-                        name.to_uppercase(),
-                        letters(name),
-                    ]
-                })
-                .chain((0..12).map(|_| name()))
-                .collect();
-            for written in written {
-                let found = named(&names, &written);
-                let at = found.and_then(|found| names.iter().position(|name| name == found));
-                assert_eq!(index.find(&written), at, "{written} in {names:?}");
-                // The first group that has the name, and the first such name
-                // of the group.
-                let same = |name: &&String| same_name(name, &written);
-                let place = (names[..5].iter().position(|name| same(&name)))
-                    .map(|place| (0, place))
-                    .or_else(|| {
-                        let place = names[5..].iter().position(|name| same(&name));
-                        place.map(|place| (1, place))
-                    });
-                assert_eq!(groups.find(&written), place, "{written} in {names:?}");
-            }
-        }
-    }
-
     #[test]
     fn names_print_in_lower_case_with_hyphens() {
         for (name, expected) in [
@@ -1449,7 +1272,8 @@ mod tests {
         }
         assert!(same_name("Initial_Registration", "initial registration"));
         assert!(same_name("INITIAL-REGISTRATION", "InitialRegistration"));
-        assert!(same_name("fgmm_cause", "5GMM cause"));
+        assert!(same_name("5gmm_cause", "5GMM cause"));
+        assert!(!same_name("fgmm_cause", "5GMM cause"));
         assert!(!same_name("initial-registration", "registration"));
     }
 
@@ -1639,11 +1463,11 @@ mod tests {
     #[test]
     fn a_struct_that_a_view_shows_leaves_out_how_it_was_received() {
         let mut shown = Members::of(VIEWED);
-        shown.put("unknown_ies", &vec![1u8]);
+        shown.put("unknown-ies", &vec![1u8]);
         shown.put("value", &1u8);
         assert_eq!(shown.finish(), tree!({"value": 1}));
         let mut read = Members::of("");
-        read.put("unknown_ies", &vec![1u8]);
+        read.put("unknown-ies", &vec![1u8]);
         assert_eq!(read.finish(), tree!({"unknown-ies": "01"}));
     }
 

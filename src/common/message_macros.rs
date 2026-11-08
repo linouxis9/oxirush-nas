@@ -623,18 +623,11 @@ macro_rules! nas_message {
         #[cfg(feature = "tree")]
         impl $name {
             /// The names of the fields as a view prints them, mandatory
-            /// ones first: they are printed once.
-            fn printed_fields() -> &'static [&'static str] {
-                static PRINTED: std::sync::OnceLock<Box<[&'static str]>> =
-                    std::sync::OnceLock::new();
-                PRINTED.get_or_init(|| {
-                    let fields: &[&'static str] =
-                        &[$(stringify!($mfield),)* $(stringify!($ofield),)*];
-                    (fields.iter())
-                        .map(|field| crate::common::readable::printed_static(field).name)
-                        .collect()
-                })
-            }
+            /// ones first.
+            const PRINTED_FIELDS: &[&str] = &[
+                $(crate::common::names::name!(stringify!($mfield)),)*
+                $(crate::common::names::name!(stringify!($ofield)),)*
+            ];
         }
 
         impl crate::common::MessageBody for $name {
@@ -652,7 +645,7 @@ macro_rules! nas_message {
             fn ies(&self, scope: crate::common::view::Scope, visit: &mut crate::common::view::Visit<'_>) {
                 #[allow(unused_imports)]
                 use crate::common::view::{DecodedProbe, Field, ViaDecoded, ViaNoDecoded};
-                let printed = Self::printed_fields();
+                let printed = Self::PRINTED_FIELDS;
                 let mut place = 0;
                 $(
                     visit(Field {
@@ -684,7 +677,7 @@ macro_rules! nas_message {
             #[cfg(feature = "tree")]
             #[allow(unused_variables, unused_mut, unused_assignments)]
             fn absent(&self, visit: &mut dyn FnMut(&'static str, usize)) {
-                let printed = Self::printed_fields();
+                let printed = Self::PRINTED_FIELDS;
                 let mut place = 0;
                 $(
                     let _ = stringify!($mfield);
@@ -714,10 +707,10 @@ macro_rules! nas_message {
             #[allow(unused_variables)]
             fn blank(&self, name: &str) -> Option<oxirush_utils::tree::Value> {
                 #[allow(unused_imports)]
-                use crate::common::readable::{printed_static, to_value};
+                use crate::common::readable::to_value;
                 $(
                     if self.$ofield.is_none()
-                        && printed_static(stringify!($ofield)).name == name
+                        && crate::common::names::name!(stringify!($ofield)) == name
                     {
                         return to_value(&<$otype>::blank()).ok();
                     }
@@ -1029,6 +1022,13 @@ macro_rules! nas_messages {
             /// The types of the table, then those that several messages share.
             #[cfg(feature = "tree")]
             pub(crate) const ALL: &[Self] = &[$(Self::$variant,)+ $(Self::$shared,)*];
+
+            /// The names of the types of [`Self::ALL`], in its order.
+            #[cfg(feature = "tree")]
+            pub(crate) const NAMES: &[&str] = &[
+                $(crate::common::names::name!(stringify!($variant)),)+
+                $(crate::common::names::name!(stringify!($shared)),)*
+            ];
         }
 
         impl From<u8> for $kind {

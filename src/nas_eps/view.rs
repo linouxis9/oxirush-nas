@@ -263,7 +263,7 @@ impl Message {
                 )),
             };
         };
-        match message_types().find(&named) {
+        match message_type_place(&named) {
             Some((0, place)) => match emm_types().nth(place) {
                 Some(kind) => kind.message_from_view(view),
                 None => Err(Error::EncodingError(format!("no message `{named}`"))),
@@ -287,17 +287,12 @@ fn esm_types() -> impl Iterator<Item = EsmMessageType> {
     EsmMessageType::ALL.iter().copied()
 }
 
-/// The message types of EMM, then those of ESM, by their names.
-fn message_types() -> &'static crate::common::readable::Groups {
-    static TYPES: std::sync::OnceLock<crate::common::readable::Groups> = std::sync::OnceLock::new();
-    TYPES.get_or_init(|| {
-        crate::common::readable::Groups::new([
-            emm_types()
-                .map(|known| format!("{known:?}"))
-                .collect::<Vec<_>>(),
-            esm_types().map(|known| format!("{known:?}")).collect(),
-        ])
-    })
+/// The family of the message type that `kind` names, EMM (0) or ESM (1), and
+/// its place among the types of the family.
+fn message_type_place(kind: &str) -> Option<(usize, usize)> {
+    let families = [EmmMessageType::NAMES, EsmMessageType::NAMES];
+    (families.iter().enumerate())
+        .find_map(|(family, names)| Some((family, oxirush_utils::tree::named(names, kind)?)))
 }
 
 impl EmmTransport {
@@ -594,7 +589,7 @@ pub(crate) fn decided(
         ]);
     };
     let kind = &view::type_named::<Message>(kind)?;
-    match message_types().find(kind).map(|(family, _)| family) {
+    match message_type_place(kind).map(|(family, _)| family) {
         Some(0) => Ok(vec![
             ("protocol-discriminator", tree!(7)),
             (
@@ -609,7 +604,7 @@ pub(crate) fn decided(
 
 /// Whether `kind` names an EPS message.
 pub(crate) fn is_message(kind: &str) -> bool {
-    message_types().find(kind).is_some()
+    message_type_place(kind).is_some()
 }
 
 /// The error for `kind`, which names no EPS message: the 5GS message that
@@ -618,12 +613,9 @@ fn no_message(kind: &str) -> String {
     if crate::nas_5gs::view::is_message(kind) {
         return format!("no EPS message `{kind}`: it is a 5GS message, which `nas_5gs` reads");
     }
-    // The types that have a message, without the unknown ones
-    let kinds: Vec<_> = (emm_types().map(|known| format!("{known:?}")))
-        .chain(esm_types().map(|known| format!("{known:?}")))
-        .filter(|kind| !kind.contains('('))
+    let kinds: Vec<&str> = (EmmMessageType::NAMES.iter().chain(EsmMessageType::NAMES))
+        .copied()
         .collect();
-    let kinds: Vec<_> = kinds.iter().map(String::as_str).collect();
     crate::common::readable::none_of(kind, &kinds, "message")
 }
 

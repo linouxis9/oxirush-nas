@@ -20,7 +20,7 @@
 //! `octets` in hexadecimal.
 
 use crate::common::ppp::{Chap, Ipcp, Lcp, Packet, Pap};
-use crate::common::readable::{self, letters, printed, printed_static, same_name};
+use crate::common::readable::{self, letters, printed, same_name};
 use crate::common::ts24008::{Pco, PcoDirection, PcoEntry};
 use crate::common::{Plmn, ValueError, within};
 use crate::nas_5gs::{
@@ -381,14 +381,10 @@ pub(crate) fn names<H: Readable, M: Readable>(kinds: &[&str]) -> Vec<String> {
         else {
             continue;
         };
-        let ies = (ies.iter()).filter(|ie| !["unknown_ies", "optional_ie_order"].contains(ie));
-        for name in header
-            .iter()
-            .chain(ies)
-            .map(|field| printed_static(field).name)
-        {
+        let ies = (ies.iter()).filter(|ie| !["unknown-ies", "optional-ie-order"].contains(ie));
+        for name in header.iter().chain(ies) {
             if !names.iter().any(|known| known == name) {
-                names.push(name.to_owned());
+                names.push((*name).to_owned());
             }
         }
     }
@@ -1072,7 +1068,7 @@ pub(crate) fn from_view<M: Viewed>(
         let tree = readable::to_value(&blank)?;
         let body = tree.as_object().and_then(|tree| tree.values().next());
         let named = (body.and_then(|parts| parts.as_array()?.get(1)?.as_object()?.keys().next()))
-            .is_some_and(|name| same_name(name, kind));
+            .is_some_and(|name| same_name(name, &printed(kind)));
         if named {
             return written(&blank.prepared(entries), view, true, scope);
         }
@@ -1100,7 +1096,7 @@ pub(crate) fn message_type<M: Viewed>(view: &Value) -> Option<String> {
 /// of the message that it is to describe alone: the header says what the
 /// message is.
 pub(crate) fn typed<M: Viewed>(kind: &str, view: &Value) -> Result<(), String> {
-    match message_type::<M>(view).filter(|named| !same_name(named, kind)) {
+    match message_type::<M>(view).filter(|named| !same_name(named, &printed(kind))) {
         Some(named) => Err(format!(
             "`message-type` is {named}: the view is that of a message `{}`",
             printed(kind)
@@ -2089,10 +2085,9 @@ pub(crate) fn set_flag<T: Flags>(
     let flags = ie.flags();
     let names: Vec<_> = flags.iter().map(|(flag, _)| *flag).collect();
     let Some(flag) = readable::named(&names, name) else {
-        let flags: Vec<_> = names.iter().map(|flag| printed(flag)).collect();
         return Err(format!(
             "no member `{name}`, expected one of {}",
-            flags.join(", ")
+            names.join(", ")
         ));
     };
     let current = flags.contains(&(*flag, true));
@@ -2366,7 +2361,7 @@ macro_rules! fields_ie {
     (@flags $ie:ident, $members:ident, exact) => {};
     (@flags $ie:ident, $members:ident, flags) => {
         for (flag, value) in $crate::common::view::Flags::flags($ie) {
-            $members.insert($crate::common::readable::printed_static(flag).name.to_owned(), value.into());
+            $members.insert(flag.to_owned(), value.into());
         }
     };
     (@shown $ie:ident, $members:ident) => {
@@ -2425,7 +2420,7 @@ macro_rules! built_ie {
                     $(
                         let $key: $ty = $crate::common::view::built_ie!(@get ie, $key $(, $get)?)?;
                         let member = $crate::common::readable::to_value(&$key).ok()?;
-                        let name = $crate::common::readable::printed_static(stringify!($key)).name;
+                        let name = $crate::common::names::name!(stringify!($key));
                         members.insert(name.to_owned(), member);
                     )+
                     let from: fn(
@@ -2444,9 +2439,9 @@ macro_rules! built_ie {
                 value: &oxirush_utils::tree::Value,
                 scope: $crate::common::view::Scope,
             ) -> core::result::Result<Self, String> {
-                use $crate::common::readable::{from_value, printed_static, same_name, to_value};
+                use $crate::common::readable::{from_value, same_name, to_value};
                 let written = $crate::common::view::members(value)?;
-                const NAMES: &[&str] = &[$(stringify!($key)),+];
+                const NAMES: &[&str] = &[$($crate::common::names::name!(stringify!($key))),+];
                 if let Some(name) = (written.keys())
                     .find(|name| !NAMES.iter().any(|known| same_name(known, name)))
                 {
@@ -2455,7 +2450,7 @@ macro_rules! built_ie {
                 let mut members = oxirush_utils::tree::Map::new();
                 $(
                     let $key: $ty = match (written.iter())
-                        .find(|(name, _)| same_name(name, stringify!($key)))
+                        .find(|(name, _)| same_name(name, $crate::common::names::name!(stringify!($key))))
                     {
                         Some((name, member)) => {
                             from_value(member).map_err(|error| format!("{name}: {error}"))?
@@ -2466,7 +2461,7 @@ macro_rules! built_ie {
                             .or_else(<$ty as $crate::common::readable::Readable>::missing)
                             .ok_or(concat!(stringify!($key), " is not written"))?,
                     };
-                    let name = printed_static(stringify!($key)).name;
+                    let name = $crate::common::names::name!(stringify!($key));
                     members.insert(name.to_owned(), to_value(&$key)?);
                 )+
                 let from: fn(

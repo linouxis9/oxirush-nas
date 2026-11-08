@@ -291,7 +291,7 @@ impl Message {
         let named = view::message_type::<Self>(&view).ok_or_else(|| {
             Error::EncodingError("the `message-type` of the view names the message".into())
         })?;
-        match message_types().find(&named) {
+        match message_type_place(&named) {
             Some((0, place)) => match gmm_types().nth(place) {
                 Some(kind) => kind.message_from_view(view),
                 None => Err(Error::EncodingError(format!("no message `{named}`"))),
@@ -338,17 +338,12 @@ fn gsm_types() -> impl Iterator<Item = GsmMessageType> {
     GsmMessageType::ALL.iter().copied()
 }
 
-/// The message types of 5GMM, then those of 5GSM, by their names.
-fn message_types() -> &'static readable::Groups {
-    static TYPES: std::sync::OnceLock<readable::Groups> = std::sync::OnceLock::new();
-    TYPES.get_or_init(|| {
-        readable::Groups::new([
-            gmm_types()
-                .map(|known| format!("{known:?}"))
-                .collect::<Vec<_>>(),
-            gsm_types().map(|known| format!("{known:?}")).collect(),
-        ])
-    })
+/// The family of the message type that `kind` names, 5GMM (0) or 5GSM (1), and
+/// its place among the types of the family.
+fn message_type_place(kind: &str) -> Option<(usize, usize)> {
+    let families = [GmmMessageType::NAMES, GsmMessageType::NAMES];
+    (families.iter().enumerate())
+        .find_map(|(family, names)| Some((family, oxirush_utils::tree::named(names, kind)?)))
 }
 
 /// What the type of a 5GS message decides of its header, as a tree leaves it
@@ -372,7 +367,7 @@ fn decided(
     }
     let kind = kind.ok_or("the `message-type` of a message names it")?;
     let kind = &view::type_named::<Message>(kind)?;
-    match message_types().find(kind).map(|(family, _)| family) {
+    match message_type_place(kind).map(|(family, _)| family) {
         Some(0) => Ok(vec![
             ("extended-protocol-discriminator", tree!(126)),
             (
@@ -388,7 +383,7 @@ fn decided(
 
 /// Whether `kind` names a 5GS message.
 pub(crate) fn is_message(kind: &str) -> bool {
-    message_types().find(kind).is_some()
+    message_type_place(kind).is_some()
 }
 
 /// The error for `kind`, which names no 5GS message: the EPS message that
@@ -397,12 +392,9 @@ fn no_message(kind: &str) -> String {
     if crate::nas_eps::view::is_message(kind) {
         return format!("no 5GS message `{kind}`: it is an EPS message, which `nas_eps` reads");
     }
-    // The types that have a message, without the unknown ones
-    let kinds: Vec<_> = (gmm_types().map(|known| format!("{known:?}")))
-        .chain(gsm_types().map(|known| format!("{known:?}")))
-        .filter(|kind| !kind.contains('('))
+    let kinds: Vec<&str> = (GmmMessageType::NAMES.iter().chain(GsmMessageType::NAMES))
+        .copied()
         .collect();
-    let kinds: Vec<_> = kinds.iter().map(String::as_str).collect();
     readable::none_of(kind, &kinds, "message")
 }
 

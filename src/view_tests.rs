@@ -462,7 +462,7 @@ fn an_ie_is_taken_out_and_none_is_made_up() {
         .unwrap()
         .shift_remove("5g-guti")
         .unwrap();
-    view["fg_guti"] = guti;
+    view["5G_GUTI"] = guti;
     assert_eq!(accept.with_view(view).unwrap(), accept);
     // The fields of the header are written by their value.
     let request = fgs("2e0101c1ffff91");
