@@ -170,6 +170,21 @@ jobs:
       - run: cargo fuzz run security_5gs -- -max_total_time=60 -max_len=1024 -len_control=0
       - run: cargo fuzz run security_eps -- -max_total_time=60 -max_len=1024 -len_control=0
 
+  # The targets beside those of the codec, in a job of their own: the paths of a
+  # message, a minute each.
+  fuzz-more:
+    name: Fuzz the paths (2 minutes)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: fuzz
+      - run: cargo install cargo-fuzz --locked
+      - run: cargo fuzz run paths_5gs -- -max_total_time=60 -max_len=512 -len_control=0
+      - run: cargo fuzz run paths_eps -- -max_total_time=60 -max_len=512 -len_control=0
+
   fmt:
     name: Format
     runs-on: ubuntu-latest

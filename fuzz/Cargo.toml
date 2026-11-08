@@ -95,3 +95,18 @@ path = "fuzz_targets/security_eps.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "paths_5gs"
+path = "fuzz_targets/paths_5gs.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "paths_eps"
+path = "fuzz_targets/paths_eps.rs"
+test = false
+doc = false
+bench = false
+
