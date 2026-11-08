@@ -343,8 +343,8 @@
 //! | `security_5gs`, `security_eps` | Two security contexts of one link, at any NAS COUNT and with any replay window, and messages protected, delivered, replayed, reordered, changed or cut short: each COUNT, code and refusal is the one that TS 24.501 and TS 24.301 §4.4.3 give, as a model of them written apart and oxirush-security compute it. |
 //!
 //! The continuous integration runs each for a minute at each commit, an hour
-//! each night and four hours on Sunday, when it also minimizes each corpus
-//! and keeps the coverage of the crate by it.
+//! each day but Sunday and four hours on Tuesday, when it also minimizes each
+//! corpus and keeps the coverage of the crate by it.
 //!
 //! ```sh
 //! ./fuzz/seed.sh                 # a corpus from tests/fixtures and fuzz/seeds-*.tsv

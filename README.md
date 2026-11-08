@@ -640,8 +640,8 @@ through its tree, which is its serde form. `key_wiping` searches the memory of i
 own process for the keys of a dropped security context, in an optimized
 build. Thirteen fuzz targets decode, edit and build messages, take any path
 of their trees, protect them and decode the UE policy delivery messages, for
-a minute each at each commit, an hour each night and four hours on Sunday. `examples/` has six programs, each for
-5GS and for EPS.
+a minute each at each commit, an hour each day but Sunday and four hours on
+Tuesday. `examples/` has six programs, each for 5GS and for EPS.
 
 Each Rust block of this page is checked with what it prints, by the
 package of [`readme/`](readme/), which has oxirush-ngap and oxirush-s1ap

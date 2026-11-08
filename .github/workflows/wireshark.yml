@@ -1,6 +1,6 @@
 name: Wireshark
 
-# The comparison of the crate with Wireshark, every night and when the workflow is started
+# The comparison of the crate with Wireshark, every day and when the workflow is started
 # by hand: tshark dissects the messages of tests/wireshark/corpus.tsv, of tests/fixtures and
 # of the seeds of fuzz/, src/wireshark_tests.rs writes what the crate reads of them, and
 # tests/wireshark/compare.py compares the two field by field. tshark is 4.6.4, the version
@@ -10,7 +10,7 @@ name: Wireshark
 # kept for 30 days.
 on:
   schedule:
-    - cron: "3 10 * * *"
+    - cron: "33 9 * * *"
   workflow_dispatch:
 
 permissions:

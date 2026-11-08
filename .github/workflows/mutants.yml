@@ -1,21 +1,22 @@
 name: Mutants
 
-# cargo-mutants changes the code of the crate at one place at a time, a mutant, and
-# runs the tests on each: a mutant that every test passes is code that no test checks.
-# .cargo/mutants.toml says what it leaves alone, and why. Every mutant runs each Saturday
-# evening, and when the run is started by hand with `full`; on the other nights after a
-# day with a commit, and when it is started by hand without `full`, the mutants of the
-# code that the commits of the last day changed; started by hand with `recheck`, the
-# mutants that a file of the repository names, as a missed.txt has them, again at the
-# head. Each job keeps its mutants.out, with the commit that it ran at, and a missed
-# mutant fails it. The crates of the family start at times of their own, the
-# longest first, and few jobs of each run at once, to leave runners to the other CI;
-# started by hand, `parallel` says how many. A shard takes every n-th mutant, so that
-# the shards of a job last alike, and they are as many as keep each to 2 hours or less.
+# cargo-mutants changes the code of the crate at one place at a time, a mutant, and runs
+# the tests on each: a mutant that every test passes is code that no test checks.
+# .cargo/mutants.toml says what it leaves alone, and why. Every mutant runs each Sunday,
+# the day of the week without fuzzing, and when the run is started by hand with `full`;
+# on the other nights after a day with a commit, and when it is started by hand without
+# `full`, the mutants of the code that the commits of the last day changed; started by
+# hand with `recheck`, the mutants that a file of the repository names, as a missed.txt
+# has them, again at the head. Each job keeps its mutants.out, with the commit that it
+# ran at, and a missed mutant fails it. The crates of the family start at times of their
+# own, and few jobs of each run at once, to leave runners to the other CI: five shards
+# at a time on Sunday, and two shards at a time when the run is started by hand, unless
+# `parallel` says how many. A shard takes every n-th mutant, so that the shards of a job
+# last alike, and they are as many as keep each to 2 hours or less.
 on:
   schedule:
-    - cron: "3 21 * * 6"
-    - cron: "23 23 * * 0-5"
+    - cron: "13 0 * * 0"
+    - cron: "33 23 * * 1-6"
   workflow_dispatch:
     inputs:
       full:
@@ -62,7 +63,7 @@ jobs:
       - id: plan
         env:
           GH_TOKEN: ${{ github.token }}
-          WEEKLY: "3 21 * * 6"
+          WEEKLY: "13 0 * * 0"
           SCHEDULE: ${{ github.event.schedule }}
           FULL: ${{ inputs.full }}
           RECHECK: ${{ inputs.recheck }}
@@ -141,7 +142,7 @@ jobs:
     timeout-minutes: 300
     strategy:
       fail-fast: false
-      max-parallel: ${{ fromJSON(inputs.parallel || '6') }}
+      max-parallel: ${{ fromJSON(inputs.parallel || (github.event_name == 'schedule' && '5' || '2')) }}
       matrix:
         shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
           20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38,
@@ -181,7 +182,7 @@ jobs:
     timeout-minutes: 300
     strategy:
       fail-fast: false
-      max-parallel: ${{ fromJSON(inputs.parallel || '6') }}
+      max-parallel: ${{ fromJSON(inputs.parallel || '2') }}
       matrix:
         shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
           20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38,
