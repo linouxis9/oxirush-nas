@@ -46,7 +46,7 @@ oxirush-security = { version = "0.4.0", default-features = false, features = ["a
 [dev-dependencies]
 serde_json = "1.0.154"
 hex = "0.4.3"
-zeroize = "1.8"
+zeroize = "1.9"
 
 # A program of its own, which reads the memory of its processes. It holds
 # only in an optimized build, which `cargo test` does not make: run it with
