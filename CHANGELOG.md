@@ -2,7 +2,7 @@
 
 All notable changes to `oxirush-nas` are recorded here.
 
-## 0.6.0 - Unreleased
+## 0.6.0 - 2026-11-08
 
 A lighter crate: each item has one path and one name, a message has one
 JSON form, its tree, and each thing is written once. It is not source
