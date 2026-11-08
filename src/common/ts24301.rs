@@ -140,15 +140,6 @@ macro_rules! key_set_identifier_ie {
                 self.value = (self.value & 0xf0) | value.as_u8()?;
                 Ok(())
             }
-
-            /// Builder form of [`Self::set_key_set_identifier`].
-            pub fn with_key_set_identifier(
-                mut self,
-                value: crate::common::ts24301::KeySetIdentifierValue,
-            ) -> core::result::Result<Self, crate::common::ValueError> {
-                self.set_key_set_identifier(value)?;
-                Ok(self)
-            }
         }
     };
     ($name:ident) => {
@@ -169,15 +160,6 @@ macro_rules! key_set_identifier_ie {
                 Ok(self)
             }
 
-            /// Builder form of [`Self::set_ksi`].
-            pub fn with_ksi(
-                mut self,
-                ksi: u8,
-            ) -> core::result::Result<Self, crate::common::ValueError> {
-                self.set_ksi(ksi)?;
-                Ok(self)
-            }
-
             /// Type of security context (bit 4): `true` for a mapped context.
             /// The flag does not apply when no key is available.
             pub fn tsc(&self) -> bool {
@@ -187,12 +169,6 @@ macro_rules! key_set_identifier_ie {
             /// Set the type of security context, preserving the other bits.
             pub fn set_tsc(&mut self, mapped: bool) {
                 self.value = (self.value & !0x08) | (u8::from(mapped) << 3);
-            }
-
-            /// Builder form of [`Self::set_tsc`].
-            pub fn with_tsc(mut self, mapped: bool) -> Self {
-                self.set_tsc(mapped);
-                self
             }
 
             /// Whether the identifier is 111: no key available from the UE,
@@ -304,21 +280,9 @@ macro_rules! nas_security_algorithms_ie {
                 self.set_ciphering_raw(u8::from(ciphering));
             }
 
-            /// Builder form of [`Self::set_ciphering`].
-            pub fn with_ciphering(mut self, ciphering: oxirush_utils::identity::Algorithm) -> Self {
-                self.set_ciphering(ciphering);
-                self
-            }
-
             /// Replace the integrity algorithm.
             pub fn set_integrity(&mut self, integrity: oxirush_utils::identity::Algorithm) {
                 self.set_integrity_raw(u8::from(integrity));
-            }
-
-            /// Builder form of [`Self::set_integrity`].
-            pub fn with_integrity(mut self, integrity: oxirush_utils::identity::Algorithm) -> Self {
-                self.set_integrity(integrity);
-                self
             }
 
             /// Replace the code of the ciphering algorithm, a reserved one too.
@@ -1027,12 +991,6 @@ impl ReleaseAssistanceIndication {
     /// Set the downlink data expected value and clear the spare bits.
     pub fn set_ddx(&mut self, ddx: DownlinkDataExpected) -> &mut Self {
         self.value = ddx as u8;
-        self
-    }
-
-    /// Builder form of [`Self::set_ddx`].
-    pub fn with_ddx(mut self, ddx: DownlinkDataExpected) -> Self {
-        self.set_ddx(ddx);
         self
     }
 }
@@ -2391,9 +2349,9 @@ mod tests {
 
     #[test]
     fn capability_setters_keep_declared_length_in_sync() {
-        let mut capability = UeNetworkCapability::new(Vec::new())
-            .with_racs(true)
-            .with_non_sat_lsp(true);
+        let mut capability = UeNetworkCapability::new(Vec::new());
+        capability.set_racs(true);
+        capability.set_non_sat_lsp(true);
         capability.set_eea(2, true).unwrap();
         // Bit 1 of the octet is EPS-UPIP: there is no EIA7 to set
         assert!(capability.set_eia(7, true).is_err());
@@ -2576,27 +2534,12 @@ mod tests {
         use super::KeySetIdentifierValue;
         use crate::{nas_5gs, nas_eps};
         // Setters preserve bits 8-5 on both sides.
-        assert_eq!(
-            nas_5gs::KeySetIdentifier::new(0xf8)
-                .with_ksi(2)
-                .unwrap()
-                .value,
-            0xfa
-        );
-        assert_eq!(
-            nas_eps::KeySetIdentifier::new(0xf8)
-                .with_ksi(2)
-                .unwrap()
-                .value,
-            0xfa
-        );
-        assert_eq!(
-            nas_5gs::KeySetIdentifier::new(0xf8)
-                .with_ksi(2)
-                .unwrap()
-                .value,
-            0xfa
-        );
+        let mut fgs = nas_5gs::KeySetIdentifier::new(0xf8);
+        fgs.set_ksi(2).unwrap();
+        assert_eq!(fgs.value, 0xfa);
+        let mut eps = nas_eps::KeySetIdentifier::new(0xf8);
+        eps.set_ksi(2).unwrap();
+        assert_eq!(eps.value, 0xfa);
         let mapped = nas_5gs::KeySetIdentifier::new(0x0b);
         assert_eq!(
             mapped.key_set_identifier(),

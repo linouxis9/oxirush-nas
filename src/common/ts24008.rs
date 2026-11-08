@@ -576,12 +576,6 @@ impl ImeisvRequest {
         self
     }
 
-    /// Builder form of [`Self::set_request`].
-    pub fn with_request(mut self, request: crate::common::ts24008::ImeisvRequestValue) -> Self {
-        self.set_request(request);
-        self
-    }
-
     /// Build from a request value.
     pub fn from_request(request: crate::common::ts24008::ImeisvRequestValue) -> Self {
         Self::new(request as u8)
@@ -1142,21 +1136,9 @@ impl NetworkName {
         self
     }
 
-    /// Builder form of [`Self::set_coding_scheme`].
-    pub fn with_coding_scheme(mut self, scheme: NetworkNameCodingScheme) -> Self {
-        self.set_coding_scheme(scheme);
-        self
-    }
-
     /// Set the "Add CI" flag.
     pub fn set_add_ci(&mut self, add_ci: bool) -> &mut Self {
         self.update_header(0x08, u8::from(add_ci) << 3)
-    }
-
-    /// Builder form of [`Self::set_add_ci`].
-    pub fn with_add_ci(mut self, add_ci: bool) -> Self {
-        self.set_add_ci(add_ci);
-        self
     }
 
     /// Set the number of spare bits in the last octet, 0 to 7: it
@@ -1173,26 +1155,11 @@ impl NetworkName {
         Ok(self.update_header(0x07, count))
     }
 
-    /// Builder form of [`Self::set_spare_bits`].
-    pub fn with_spare_bits(
-        mut self,
-        count: u8,
-    ) -> core::result::Result<Self, crate::common::ValueError> {
-        self.set_spare_bits(count)?;
-        Ok(self)
-    }
-
     /// Replace the encoded text string.
     pub fn set_name_data(&mut self, data: &[u8]) -> &mut Self {
         self.update_header(0, 0);
         self.value.truncate(1);
         self.value.extend_from_slice(data);
-        self
-    }
-
-    /// Builder form of [`Self::set_name_data`].
-    pub fn with_name_data(mut self, data: &[u8]) -> Self {
-        self.set_name_data(data);
         self
     }
 
@@ -1289,12 +1256,6 @@ macro_rules! time_zone_and_time_ie {
                     Ok(self)
                 }
 
-                /// Builder form of [`Self::set_timezone_quarter_hours`].
-                pub fn with_timezone_quarter_hours(mut self, quarter_hours: i8) -> core::result::Result<Self, crate::common::ValueError> {
-                    self.set_timezone_quarter_hours(quarter_hours)?;
-                    Ok(self)
-                }
-
                 /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
                 pub(crate) const SENDER_RULE: &'static str = "seven octets of BCD digits with a month of 1 to 12, a day of 1 to 31, and a time of day within range (TS 23.040 §9.2.3.11)";
                 /// Sender check: seven octets of BCD digits with a month of 1
@@ -1326,12 +1287,6 @@ macro_rules! time_zone_and_time_ie {
             pub fn [<set_ $field>](&mut self, value: u8) -> &mut Self {
                 self.value.resize(self.value.len().max(7), 0);
                 self.value[$index] = crate::common::ts24008::to_swapped_bcd_value(value);
-                self
-            }
-
-            #[doc = concat!("Builder form of [`Self::set_", stringify!($field), "`].")]
-            pub fn [<with_ $field>](mut self, value: u8) -> Self {
-                self.[<set_ $field>](value);
                 self
             }
         }
@@ -1558,15 +1513,6 @@ impl ExtendedDrxParameters {
         Ok(self)
     }
 
-    /// Builder form of [`Self::set_paging_time_window`].
-    pub fn with_paging_time_window(
-        mut self,
-        ptw: u8,
-    ) -> core::result::Result<Self, crate::common::ValueError> {
-        self.set_paging_time_window(ptw)?;
-        Ok(self)
-    }
-
     /// eDRX value code (octet 3, bits 4-1).
     pub fn edrx_value(&self) -> u8 {
         self.value.first().map_or(0, |octet| octet & 0x0f)
@@ -1583,15 +1529,6 @@ impl ExtendedDrxParameters {
             self.value.push(0);
         }
         self.value[0] = (self.value[0] & 0xf0) | value;
-        Ok(self)
-    }
-
-    /// Builder form of [`Self::set_edrx_value`].
-    pub fn with_edrx_value(
-        mut self,
-        value: u8,
-    ) -> core::result::Result<Self, crate::common::ValueError> {
-        self.set_edrx_value(value)?;
         Ok(self)
     }
 
@@ -1798,17 +1735,18 @@ mod tests {
         }
         let request = ImeisvRequest::new(0x09);
         assert!(request.is_requested());
-        assert_eq!(
-            request.with_request(ImeisvRequestValue::NotRequested).value,
-            0
-        );
+        let mut request = request;
+        request.set_request(ImeisvRequestValue::NotRequested);
+        assert_eq!(request.value, 0);
     }
 
     #[test]
     fn non_3gpp_policies_and_classmark_2_share_both_codecs() {
         assert!(Non3GppNwProvidedPolicies::from_n3en(true).n3en());
         assert!(!Non3GppNwProvidedPolicies::new(0x0e).n3en());
-        assert_eq!(Non3GppNwProvidedPolicies::new(0).with_n3en(true).value, 1);
+        let mut policies = Non3GppNwProvidedPolicies::new(0);
+        policies.set_n3en(true);
+        assert_eq!(policies.value, 1);
 
         // Revision level R99, A5/1 not available, RF class 3 / PS, SS 01, SM /
         // CM3, UCS2, A5/3.
@@ -2050,15 +1988,14 @@ mod tests {
         assert!(!NetworkName::new(vec![0x20]).is_well_formed());
 
         // 2026-09-26 13:45:07, UTC+2 (8 quarter hours).
-        let time = TimeZoneAndTime::new(vec![0; 7])
-            .with_year(26)
-            .with_month(9)
-            .with_day(26)
-            .with_hour(13)
-            .with_minute(45)
-            .with_second(7)
-            .with_timezone_quarter_hours(8)
-            .unwrap();
+        let mut time = TimeZoneAndTime::new(vec![0; 7]);
+        time.set_year(26);
+        time.set_month(9);
+        time.set_day(26);
+        time.set_hour(13);
+        time.set_minute(45);
+        time.set_second(7);
+        time.set_timezone_quarter_hours(8).unwrap();
         assert_eq!(time.value, [0x62, 0x90, 0x62, 0x31, 0x54, 0x70, 0x80]);
         let fgs = TimeZoneAndTime::new(time.value.clone());
         assert_eq!(

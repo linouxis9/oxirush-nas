@@ -109,8 +109,8 @@ fn a_field_of_a_few_bits_is_read_from_its_bits() {
         let drx = DrxParameters::new(vec![octet]);
         assert_eq!(drx.drx_value_raw(), Some(octet & 0x0f));
         assert_eq!(Rsn::new(vec![octet]).rsn_raw(), octet);
-        assert_eq!(GmmCause::new(octet).cause_raw(), octet);
-        assert_eq!(GsmCause::new(octet).cause_raw(), octet);
+        assert_eq!(GmmCause::new(octet).value, octet);
+        assert_eq!(GsmCause::new(octet).value, octet);
         // The request type, of three bits (Table 9.11.4.6.1)
         let request = RequestType::new(octet);
         let value = octet & 0x07;
@@ -333,22 +333,22 @@ fn a_registration_type_and_a_de_registration_type_write_their_bits() {
     // required in bit 3, the access type in bits 2 to 1
     for octet in 0..=u8::MAX {
         let registration = RegistrationType::new(octet);
-        let written =
-            registration.with_registration_type(RegistrationTypeValue::EmergencyRegistration);
+        let mut written = registration;
+        written.set_registration_type(RegistrationTypeValue::EmergencyRegistration);
         assert_eq!(written.value, octet & 0xf8 | 0x04, "{octet}");
-        assert_eq!(
-            registration.with_follow_on_request(true).value,
-            octet | 0x08
-        );
-        assert_eq!(
-            registration.with_follow_on_request(false).value,
-            octet & !0x08
-        );
+        let mut follow_on = registration;
+        follow_on.set_follow_on_request(true);
+        assert_eq!(follow_on.value, octet | 0x08);
+        let mut no_follow_on = registration;
+        no_follow_on.set_follow_on_request(false);
+        assert_eq!(no_follow_on.value, octet & !0x08);
         let deregistration = DeRegistrationType::new(octet);
         assert_eq!(deregistration.access_type_raw(), octet & 0x03, "{octet}");
-        let required = deregistration.with_re_registration_required(true);
+        let mut required = deregistration;
+        required.set_re_registration_required(true);
         assert_eq!(required.value, octet | 0x04, "{octet}");
-        let not_required = deregistration.with_re_registration_required(false);
+        let mut not_required = deregistration;
+        not_required.set_re_registration_required(false);
         assert_eq!(not_required.value, octet & !0x04, "{octet}");
     }
 }

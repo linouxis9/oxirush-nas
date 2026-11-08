@@ -236,7 +236,7 @@ fn nothing_keeps_the_low_bits_of_what_it_is_given() {
     assert_eq!(text(identifier.set_ksi(12).map(|_| ())), refused);
     assert_eq!(identifier.value, 0);
     assert_eq!(
-        text(nas_eps::KeySetIdentifier::new(0).with_ksi(12)),
+        text(nas_eps::KeySetIdentifier::new(0).set_ksi(12).map(|_| ())),
         refused
     );
 
@@ -277,7 +277,7 @@ fn nothing_keeps_the_low_bits_of_what_it_is_given() {
     );
     let refused = "`assignment-mode` is 16, and must be 0 to 15";
     assert_eq!(
-        text(Nid::new(vec![0; 6]).with_assignment_mode_raw(16)),
+        text(Nid::new(vec![0; 6]).set_assignment_mode_raw(16).map(|_| ())),
         refused
     );
     let deletion = UeRadioCapabilityIdDeletionIndication::from_deletion_request_raw;
@@ -409,12 +409,13 @@ fn nothing_keeps_the_low_bits_of_what_it_is_given() {
     );
     let name = NetworkName::from_name("net", false);
     assert_eq!(
-        text(name.clone().with_spare_bits(8)),
+        text(name.clone().set_spare_bits(8).map(|_| ())),
         "`spare-bits` is 8, and must be 0 to 7"
     );
-    let ucs2 = name.with_coding_scheme(NetworkNameCodingScheme::Ucs2);
+    let mut ucs2 = name;
+    ucs2.set_coding_scheme(NetworkNameCodingScheme::Ucs2);
     let refused = "`spare-bits` is 0 with the UCS2 coding scheme";
-    assert_eq!(text(ucs2.with_spare_bits(3)), refused);
+    assert_eq!(text(ucs2.set_spare_bits(3).map(|_| ())), refused);
 }
 
 /// A refusal is one error type for every constructor and setter: the member

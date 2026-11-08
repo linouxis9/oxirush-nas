@@ -1171,9 +1171,10 @@ built_ie!(
 built_ie!(
     TnanInformation,
     |tngf_id: Option<Vec<u8>>, ssid: Option<String>| {
-        Self::new(Vec::new())
-            .with_tngf_id(tngf_id.as_deref())?
-            .with_ssid(ssid.as_ref().map(String::as_bytes))
+        let mut ie = Self::new(Vec::new());
+        ie.set_tngf_id(tngf_id.as_deref())?
+            .set_ssid(ssid.as_ref().map(String::as_bytes))?;
+        Ok(ie)
     },
     {
         tngf_id: Option<Vec<u8>> = |ie| match ie.tngf_id_indicator() {

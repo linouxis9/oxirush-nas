@@ -167,12 +167,6 @@ impl MobileIdentity {
         Ok(self)
     }
 
-    /// Builder form of [`Self::set_mauri`].
-    pub fn with_mauri(mut self, mauri: bool) -> core::result::Result<Self, ValueError> {
-        self.set_mauri(mauri)?;
-        Ok(self)
-    }
-
     /// Construct a MAC address mobile identity (type=6). TS 24.501 §9.11.3.4.
     pub fn from_mac_address(mac: [u8; 6]) -> Self {
         Self::from_mac_address_with_mauri(mac, false)
@@ -442,12 +436,6 @@ impl N1ModeToS1ModeNasTransparentContainer {
         self.value
     }
 
-    /// Set the sequence number carried by this IE.
-    pub fn with_sequence_number(mut self, sequence_number: u8) -> Self {
-        self.set_sequence_number(sequence_number);
-        self
-    }
-
     /// Mutating setter for the sequence number carried by this IE.
     pub fn set_sequence_number(&mut self, sequence_number: u8) -> &mut Self {
         self.value = sequence_number;
@@ -506,12 +494,6 @@ impl RegistrationType {
         RegistrationTypeValue::received(self.value & 0x07)
     }
 
-    /// Set the registration type. Returns `self` for chaining.
-    pub fn with_registration_type(mut self, reg_type: RegistrationTypeValue) -> Self {
-        self.value = (self.value & 0xF8) | (reg_type as u8 & 0x07);
-        self
-    }
-
     /// Mutating setter for the registration type.
     pub fn set_registration_type(&mut self, reg_type: RegistrationTypeValue) {
         self.value = (self.value & 0xF8) | (reg_type as u8 & 0x07);
@@ -520,16 +502,6 @@ impl RegistrationType {
     /// Follow-on request indicator (lower nibble bit 4, mask 0x08).
     pub fn follow_on_request(&self) -> bool {
         (self.value >> 3) & 1 != 0
-    }
-
-    /// Set the follow-on request bit. Returns `self` for chaining.
-    pub fn with_follow_on_request(mut self, for_flag: bool) -> Self {
-        if for_flag {
-            self.value |= 0x08;
-        } else {
-            self.value &= !0x08;
-        }
-        self
     }
 
     /// Mutating setter for the follow-on request bit.
@@ -582,15 +554,6 @@ impl IdentityType {
             0x00 => None,
             value => MobileIdentityType5gs::try_from(value).ok(),
         }
-    }
-
-    /// Set the identity type while preserving spare bits.
-    pub fn with_identity_type(
-        mut self,
-        identity_type: MobileIdentityType5gs,
-    ) -> core::result::Result<Self, ValueError> {
-        self.set_identity_type(identity_type)?;
-        Ok(self)
     }
 
     /// Mutating setter for the identity type. An identity is asked for by
@@ -753,11 +716,6 @@ impl GmmCause {
         GmmCauseValue::try_from(self.value).ok()
     }
 
-    /// Raw cause value.
-    pub fn cause_raw(&self) -> u8 {
-        self.value
-    }
-
     /// Cause with the receiver rule of TS 24.501 Table 9.11.3.2.1 applied.
     pub fn cause_received(&self) -> GmmCauseValue {
         GmmCauseValue::received(self.value)
@@ -779,12 +737,6 @@ impl GmmCause {
     /// Set the cause value.
     pub fn set_cause(&mut self, cause: GmmCauseValue) -> &mut Self {
         self.value = u8::from(cause);
-        self
-    }
-
-    /// Builder form of [`Self::set_cause`].
-    pub fn with_cause(mut self, cause: GmmCauseValue) -> Self {
-        self.set_cause(cause);
         self
     }
 }
@@ -910,11 +862,6 @@ impl GsmCause {
         GsmCauseValue::try_from(self.value).ok()
     }
 
-    /// Raw cause value.
-    pub fn cause_raw(&self) -> u8 {
-        self.value
-    }
-
     /// Cause as received by the UE (TS 24.501 §9.11.4.2).
     pub fn cause_for_ue(&self) -> GsmCauseValue {
         GsmCauseValue::from_u8_for_ue(self.value)
@@ -941,12 +888,6 @@ impl GsmCause {
     /// Set the cause value.
     pub fn set_cause(&mut self, cause: GsmCauseValue) -> &mut Self {
         self.value = u8::from(cause);
-        self
-    }
-
-    /// Builder form of [`Self::set_cause`].
-    pub fn with_cause(mut self, cause: GsmCauseValue) -> Self {
-        self.set_cause(cause);
         self
     }
 }
@@ -1113,12 +1054,6 @@ impl PayloadContainerType {
         (self.value & 0x0F) == 0x01
     }
 
-    /// Set the payload container kind while preserving spare bits.
-    pub fn with_kind(mut self, kind: PayloadContainerKind) -> Self {
-        self.set_kind(kind);
-        self
-    }
-
     /// Mutating setter for the payload container kind.
     pub fn set_kind(&mut self, kind: PayloadContainerKind) -> &mut Self {
         self.value = (self.value & !0x0F) | (kind as u8 & 0x0F);
@@ -1188,12 +1123,6 @@ impl PduSessionType {
         self.value & 0x07
     }
 
-    /// Set the typed PDU session type and clear the spare TV-1 bit.
-    pub fn with_session_type(mut self, session_type: PduSessionTypeValue) -> Self {
-        self.set_session_type(session_type);
-        self
-    }
-
     /// Mutating setter for the typed PDU session type.
     pub fn set_session_type(&mut self, session_type: PduSessionTypeValue) -> &mut Self {
         self.value = session_type as u8 & 0x07;
@@ -1241,12 +1170,6 @@ impl AccessType {
     /// Raw access type value (lower 2 bits).
     pub fn access_type_raw(&self) -> u8 {
         self.value & 0x03
-    }
-
-    /// Set the typed access type and clear the spare TV-1 bits.
-    pub fn with_access_type(mut self, access_type: AccessTypeValue) -> Self {
-        self.set_access_type(access_type);
-        self
     }
 
     /// Mutating setter for the typed access type.
@@ -1696,36 +1619,14 @@ impl DeRegistrationType {
         self.value & 0x03
     }
 
-    /// Set the access type (bits 1-2). Returns `self` for chaining.
-    pub fn with_access_type(mut self, t: AccessTypeValue) -> Self {
-        self.value = (self.value & 0xFC) | (t as u8 & 0x03);
-        self
-    }
-
     /// Mutating setter for the access type.
     pub fn set_access_type(&mut self, t: AccessTypeValue) {
         self.value = (self.value & 0xFC) | (t as u8 & 0x03);
     }
 
-    /// Set the de-registration access type (bits 1-2), including the both-accesses value.
-    pub fn with_deregistration_access_type(mut self, t: DeregistrationAccessType) -> Self {
-        self.value = (self.value & 0xFC) | (t as u8 & 0x03);
-        self
-    }
-
     /// Mutating setter for the de-registration-specific access type.
     pub fn set_deregistration_access_type(&mut self, t: DeregistrationAccessType) {
         self.value = (self.value & 0xFC) | (t as u8 & 0x03);
-    }
-
-    /// Set the switch-off bit (UE-originated deregistration). Returns `self`.
-    pub fn with_switch_off(mut self, on: bool) -> Self {
-        if on {
-            self.value |= 0x08;
-        } else {
-            self.value &= !0x08;
-        }
-        self
     }
 
     /// Mutating setter for the switch-off bit.
@@ -1735,16 +1636,6 @@ impl DeRegistrationType {
         } else {
             self.value &= !0x08;
         }
-    }
-
-    /// Set the re-registration-required bit (network-originated deregistration).
-    pub fn with_re_registration_required(mut self, on: bool) -> Self {
-        if on {
-            self.value |= 0x04;
-        } else {
-            self.value &= !0x04;
-        }
-        self
     }
 
     /// Mutating setter for the re-registration-required bit.
@@ -1842,29 +1733,12 @@ impl RegistrationResult {
         }
     }
 
-    /// Set the registration result value (bits 1-3, mask 0x07). Returns `self`.
-    pub fn with_result_value(mut self, r: RegistrationResultValue) -> Self {
-        let b = (self.first_byte() & 0xF8) | (r as u8 & 0x07);
-        self.set_first_byte(b);
-        self
-    }
     /// Set what [`Self::result_value`] reads.
     pub fn set_result_value(&mut self, r: RegistrationResultValue) {
         let b = (self.first_byte() & 0xF8) | (r as u8 & 0x07);
         self.set_first_byte(b);
     }
 
-    /// Set SMS-allowed (bit 4, mask 0x08). Returns `self`.
-    pub fn with_sms_allowed(mut self, on: bool) -> Self {
-        let mut b = self.first_byte();
-        if on {
-            b |= 0x08;
-        } else {
-            b &= !0x08;
-        }
-        self.set_first_byte(b);
-        self
-    }
     /// Set what [`Self::sms_allowed`] reads.
     pub fn set_sms_allowed(&mut self, on: bool) {
         let mut b = self.first_byte();
@@ -1876,17 +1750,6 @@ impl RegistrationResult {
         self.set_first_byte(b);
     }
 
-    /// Set NSSAA-performed (bit 5, mask 0x10). Returns `self`.
-    pub fn with_nssaa_performed(mut self, on: bool) -> Self {
-        let mut b = self.first_byte();
-        if on {
-            b |= 0x10;
-        } else {
-            b &= !0x10;
-        }
-        self.set_first_byte(b);
-        self
-    }
     /// Set what [`Self::nssaa_performed`] reads.
     pub fn set_nssaa_performed(&mut self, on: bool) {
         let mut b = self.first_byte();
@@ -1898,17 +1761,6 @@ impl RegistrationResult {
         self.set_first_byte(b);
     }
 
-    /// Set emergency-registered (bit 6, mask 0x20). Returns `self`.
-    pub fn with_emergency_registered(mut self, on: bool) -> Self {
-        let mut b = self.first_byte();
-        if on {
-            b |= 0x20;
-        } else {
-            b &= !0x20;
-        }
-        self.set_first_byte(b);
-        self
-    }
     /// Set what [`Self::emergency_registered`] reads.
     pub fn set_emergency_registered(&mut self, on: bool) {
         let mut b = self.first_byte();
@@ -1920,17 +1772,6 @@ impl RegistrationResult {
         self.set_first_byte(b);
     }
 
-    /// Set disaster-roaming (bit 7, mask 0x40). Returns `self`.
-    pub fn with_disaster_roaming(mut self, on: bool) -> Self {
-        let mut b = self.first_byte();
-        if on {
-            b |= 0x40;
-        } else {
-            b &= !0x40;
-        }
-        self.set_first_byte(b);
-        self
-    }
     /// Set what [`Self::disaster_roaming`] reads.
     pub fn set_disaster_roaming(&mut self, on: bool) {
         let mut b = self.first_byte();
@@ -2012,12 +1853,6 @@ impl ServiceType {
     /// Set the service type.
     pub fn set_service_type(&mut self, value: ServiceTypeValue) -> &mut Self {
         self.value = value as u8;
-        self
-    }
-
-    /// Builder form of [`Self::set_service_type`].
-    pub fn with_service_type(mut self, value: ServiceTypeValue) -> Self {
-        self.set_service_type(value);
         self
     }
 }
@@ -2578,23 +2413,11 @@ impl SessionAmbr {
         self.value[1..3].copy_from_slice(&value.to_be_bytes());
     }
 
-    /// Builder-style downlink field setter.
-    pub fn with_downlink(mut self, unit: u8, value: u16) -> Self {
-        self.set_downlink(unit, value);
-        self
-    }
-
     /// Replace the uplink unit and value fields.
     pub fn set_uplink(&mut self, unit: u8, value: u16) {
         self.ensure_len();
         self.value[3] = unit;
         self.value[4..6].copy_from_slice(&value.to_be_bytes());
-    }
-
-    /// Builder-style uplink field setter.
-    pub fn with_uplink(mut self, unit: u8, value: u16) -> Self {
-        self.set_uplink(unit, value);
-        self
     }
 
     /// Build from raw DL and UL fields.
@@ -2774,21 +2597,9 @@ impl NetworkFeatureSupport {
         set_bit(&mut self.value, 0, 0, value);
     }
 
-    /// Set what [`Self::ims_vops_3gpp`] reads, and return the value.
-    pub fn with_ims_vops_3gpp(mut self, value: bool) -> Self {
-        self.set_ims_vops_3gpp(value);
-        self
-    }
-
     /// Set what [`Self::ims_vops_n3gpp`] reads.
     pub fn set_ims_vops_n3gpp(&mut self, value: bool) {
         set_bit(&mut self.value, 0, 1, value);
-    }
-
-    /// Set what [`Self::ims_vops_n3gpp`] reads, and return the value.
-    pub fn with_ims_vops_n3gpp(mut self, value: bool) -> Self {
-        self.set_ims_vops_n3gpp(value);
-        self
     }
 
     /// Emergency services support (bits 3-4 of octet 1).
@@ -2815,21 +2626,9 @@ impl NetworkFeatureSupport {
         Ok(self)
     }
 
-    /// Builder form of [`Self::set_emc`].
-    pub fn with_emc(mut self, value: u8) -> core::result::Result<Self, ValueError> {
-        self.set_emc(value)?;
-        Ok(self)
-    }
-
     /// Set what [`Self::emc_value`] reads.
     pub fn set_emc_value(&mut self, value: EmergencyServiceSupport) {
         self.write_two_bits(0, 2, value as u8);
-    }
-
-    /// Set what [`Self::emc_value`] reads, and return the value.
-    pub fn with_emc_value(mut self, value: EmergencyServiceSupport) -> Self {
-        self.set_emc_value(value);
-        self
     }
 
     /// Emergency services fallback (bits 5-6 of octet 1).
@@ -2848,21 +2647,9 @@ impl NetworkFeatureSupport {
         Ok(self)
     }
 
-    /// Builder form of [`Self::set_emf`].
-    pub fn with_emf(mut self, value: u8) -> core::result::Result<Self, ValueError> {
-        self.set_emf(value)?;
-        Ok(self)
-    }
-
     /// Set what [`Self::emf_value`] reads.
     pub fn set_emf_value(&mut self, value: EmergencyFallbackSupport) {
         self.write_two_bits(0, 4, value as u8);
-    }
-
-    /// Set what [`Self::emf_value`] reads, and return the value.
-    pub fn with_emf_value(mut self, value: EmergencyFallbackSupport) -> Self {
-        self.set_emf_value(value);
-        self
     }
 
     /// Interworking without N26 (bit 7 of octet 1).
@@ -2878,12 +2665,6 @@ impl NetworkFeatureSupport {
         set_bit(&mut self.value, 0, 6, value);
     }
 
-    /// Set what [`Self::iwk_n26`] reads, and return the value.
-    pub fn with_iwk_n26(mut self, value: bool) -> Self {
-        self.set_iwk_n26(value);
-        self
-    }
-
     /// Access identity 1 valid in the RPLMN or an equivalent PLMN (bit 8 of octet 1).
     pub fn mpsi(&self) -> bool {
         self.value
@@ -2895,12 +2676,6 @@ impl NetworkFeatureSupport {
     /// Set what [`Self::mpsi`] reads.
     pub fn set_mpsi(&mut self, value: bool) {
         set_bit(&mut self.value, 0, 7, value);
-    }
-
-    /// Set what [`Self::mpsi`] reads, and return the value.
-    pub fn with_mpsi(mut self, value: bool) -> Self {
-        self.set_mpsi(value);
-        self
     }
 
     /// MCS indicator (octet 4 bit 2 on wire; bit 2 of contents octet 2).
@@ -2931,21 +2706,9 @@ impl NetworkFeatureSupport {
         set_bit(&mut self.value, 1, 0, value);
     }
 
-    /// Set what [`Self::emcn3`] reads, and return the value.
-    pub fn with_emcn3(mut self, value: bool) -> Self {
-        self.set_emcn3(value);
-        self
-    }
-
     /// Set what [`Self::mcsi`] reads.
     pub fn set_mcsi(&mut self, value: bool) {
         set_bit(&mut self.value, 1, 1, value);
-    }
-
-    /// Set what [`Self::mcsi`] reads, and return the value.
-    pub fn with_mcsi(mut self, value: bool) -> Self {
-        self.set_mcsi(value);
-        self
     }
 
     /// Restriction on enhanced coverage support (bits 3-4 of octet 2).
@@ -2964,21 +2727,9 @@ impl NetworkFeatureSupport {
         Ok(self)
     }
 
-    /// Builder form of [`Self::set_restrict_ec`].
-    pub fn with_restrict_ec(mut self, value: u8) -> core::result::Result<Self, ValueError> {
-        self.set_restrict_ec(value)?;
-        Ok(self)
-    }
-
     /// Set what [`Self::restrict_ec_value`] reads.
     pub fn set_restrict_ec_value(&mut self, value: RestrictionOnEnhancedCoverage) {
         self.write_two_bits(1, 2, value as u8);
-    }
-
-    /// Set what [`Self::restrict_ec_value`] reads, and return the value.
-    pub fn with_restrict_ec_value(mut self, value: RestrictionOnEnhancedCoverage) -> Self {
-        self.set_restrict_ec_value(value);
-        self
     }
 
     /// 5G CP CIoT support (bit 5 of octet 2).
@@ -2989,12 +2740,6 @@ impl NetworkFeatureSupport {
     /// Set what [`Self::cp_ciot`] reads.
     pub fn set_cp_ciot(&mut self, value: bool) {
         set_bit(&mut self.value, 1, 4, value);
-    }
-
-    /// Set what [`Self::cp_ciot`] reads, and return the value.
-    pub fn with_cp_ciot(mut self, value: bool) -> Self {
-        self.set_cp_ciot(value);
-        self
     }
 
     /// N3 data transfer support (octet 4 bit 6 on wire).
@@ -3019,18 +2764,6 @@ impl NetworkFeatureSupport {
         set_bit(&mut self.value, 1, 5, value);
     }
 
-    /// Set what [`Self::n3_data`] reads, and return the value.
-    pub fn with_n3_data(mut self, supported: bool) -> Self {
-        self.set_n3_data(supported);
-        self
-    }
-
-    /// Set what [`Self::n3_data_not_supported`] reads, and return the value.
-    pub fn with_n3_data_not_supported(mut self, value: bool) -> Self {
-        self.set_n3_data_not_supported(value);
-        self
-    }
-
     /// 5G IPHC CP CIoT support (bit 7 of octet 2).
     pub fn iphc_cp_ciot(&self) -> bool {
         bit_at(&self.value, 1, 6)
@@ -3039,12 +2772,6 @@ impl NetworkFeatureSupport {
     /// Set what [`Self::iphc_cp_ciot`] reads.
     pub fn set_iphc_cp_ciot(&mut self, value: bool) {
         set_bit(&mut self.value, 1, 6, value);
-    }
-
-    /// Set what [`Self::iphc_cp_ciot`] reads, and return the value.
-    pub fn with_iphc_cp_ciot(mut self, value: bool) -> Self {
-        self.set_iphc_cp_ciot(value);
-        self
     }
 
     /// 5G UP CIoT support (bit 8 of octet 2).
@@ -3057,12 +2784,6 @@ impl NetworkFeatureSupport {
         set_bit(&mut self.value, 1, 7, value);
     }
 
-    /// Set what [`Self::up_ciot`] reads, and return the value.
-    pub fn with_up_ciot(mut self, value: bool) -> Self {
-        self.set_up_ciot(value);
-        self
-    }
-
     /// 5G LCS support (bit 1 of octet 3).
     pub fn lcs_5g(&self) -> bool {
         bit_at(&self.value, 2, 0)
@@ -3071,12 +2792,6 @@ impl NetworkFeatureSupport {
     /// Set what [`Self::lcs_5g`] reads.
     pub fn set_lcs_5g(&mut self, value: bool) {
         set_bit(&mut self.value, 2, 0, value);
-    }
-
-    /// Set what [`Self::lcs_5g`] reads, and return the value.
-    pub fn with_lcs_5g(mut self, value: bool) -> Self {
-        self.set_lcs_5g(value);
-        self
     }
 
     /// ATS indication (bit 2 of octet 3).
@@ -3089,12 +2804,6 @@ impl NetworkFeatureSupport {
         set_bit(&mut self.value, 2, 1, value);
     }
 
-    /// Set what [`Self::ats_ind`] reads, and return the value.
-    pub fn with_ats_ind(mut self, value: bool) -> Self {
-        self.set_ats_ind(value);
-        self
-    }
-
     /// 5G EHC CP CIoT support (bit 3 of octet 3).
     pub fn ehc_cp_ciot(&self) -> bool {
         bit_at(&self.value, 2, 2)
@@ -3103,12 +2812,6 @@ impl NetworkFeatureSupport {
     /// Set what [`Self::ehc_cp_ciot`] reads.
     pub fn set_ehc_cp_ciot(&mut self, value: bool) {
         set_bit(&mut self.value, 2, 2, value);
-    }
-
-    /// Set what [`Self::ehc_cp_ciot`] reads, and return the value.
-    pub fn with_ehc_cp_ciot(mut self, value: bool) -> Self {
-        self.set_ehc_cp_ciot(value);
-        self
     }
 
     /// NCR support (bit 4 of octet 3).
@@ -3121,12 +2824,6 @@ impl NetworkFeatureSupport {
         set_bit(&mut self.value, 2, 3, value);
     }
 
-    /// Set what [`Self::ncr`] reads, and return the value.
-    pub fn with_ncr(mut self, value: bool) -> Self {
-        self.set_ncr(value);
-        self
-    }
-
     /// PIV support (bit 5 of octet 3).
     pub fn piv(&self) -> bool {
         bit_at(&self.value, 2, 4)
@@ -3135,12 +2832,6 @@ impl NetworkFeatureSupport {
     /// Set what [`Self::piv`] reads.
     pub fn set_piv(&mut self, value: bool) {
         set_bit(&mut self.value, 2, 4, value);
-    }
-
-    /// Set what [`Self::piv`] reads, and return the value.
-    pub fn with_piv(mut self, value: bool) -> Self {
-        self.set_piv(value);
-        self
     }
 
     /// RPR support (bit 6 of octet 3).
@@ -3153,12 +2844,6 @@ impl NetworkFeatureSupport {
         set_bit(&mut self.value, 2, 5, value);
     }
 
-    /// Set what [`Self::rpr`] reads, and return the value.
-    pub fn with_rpr(mut self, value: bool) -> Self {
-        self.set_rpr(value);
-        self
-    }
-
     /// PR support (bit 7 of octet 3).
     pub fn pr(&self) -> bool {
         bit_at(&self.value, 2, 6)
@@ -3167,12 +2852,6 @@ impl NetworkFeatureSupport {
     /// Set what [`Self::pr`] reads.
     pub fn set_pr(&mut self, value: bool) {
         set_bit(&mut self.value, 2, 6, value);
-    }
-
-    /// Set what [`Self::pr`] reads, and return the value.
-    pub fn with_pr(mut self, value: bool) -> Self {
-        self.set_pr(value);
-        self
     }
 
     /// UN-PER support (bit 8 of octet 3).
@@ -3185,12 +2864,6 @@ impl NetworkFeatureSupport {
         set_bit(&mut self.value, 2, 7, value);
     }
 
-    /// Set what [`Self::un_per`] reads, and return the value.
-    pub fn with_un_per(mut self, value: bool) -> Self {
-        self.set_un_per(value);
-        self
-    }
-
     /// NAPS support (bit 1 of octet 4).
     pub fn naps(&self) -> bool {
         bit_at(&self.value, 3, 0)
@@ -3199,12 +2872,6 @@ impl NetworkFeatureSupport {
     /// Set what [`Self::naps`] reads.
     pub fn set_naps(&mut self, value: bool) {
         set_bit(&mut self.value, 3, 0, value);
-    }
-
-    /// Set what [`Self::naps`] reads, and return the value.
-    pub fn with_naps(mut self, value: bool) -> Self {
-        self.set_naps(value);
-        self
     }
 
     /// LCS UPP support (bit 2 of octet 4).
@@ -3217,12 +2884,6 @@ impl NetworkFeatureSupport {
         set_bit(&mut self.value, 3, 1, value);
     }
 
-    /// Set what [`Self::lcs_upp`] reads, and return the value.
-    pub fn with_lcs_upp(mut self, value: bool) -> Self {
-        self.set_lcs_upp(value);
-        self
-    }
-
     /// SUPL support (bit 3 of octet 4).
     pub fn supl(&self) -> bool {
         bit_at(&self.value, 3, 2)
@@ -3231,12 +2892,6 @@ impl NetworkFeatureSupport {
     /// Set what [`Self::supl`] reads.
     pub fn set_supl(&mut self, value: bool) {
         set_bit(&mut self.value, 3, 2, value);
-    }
-
-    /// Set what [`Self::supl`] reads, and return the value.
-    pub fn with_supl(mut self, value: bool) -> Self {
-        self.set_supl(value);
-        self
     }
 
     /// RSLP support (bit 4 of octet 4).
@@ -3249,12 +2904,6 @@ impl NetworkFeatureSupport {
         set_bit(&mut self.value, 3, 3, value);
     }
 
-    /// Set what [`Self::rslp`] reads, and return the value.
-    pub fn with_rslp(mut self, value: bool) -> Self {
-        self.set_rslp(value);
-        self
-    }
-
     /// MLCSUP support (bit 5 of octet 4).
     pub fn mlcsup(&self) -> bool {
         bit_at(&self.value, 3, 4)
@@ -3265,12 +2914,6 @@ impl NetworkFeatureSupport {
         set_bit(&mut self.value, 3, 4, value);
     }
 
-    /// Set what [`Self::mlcsup`] reads, and return the value.
-    pub fn with_mlcsup(mut self, value: bool) -> Self {
-        self.set_mlcsup(value);
-        self
-    }
-
     /// EF5L support (bit 6 of octet 4).
     pub fn ef5l(&self) -> bool {
         bit_at(&self.value, 3, 5)
@@ -3279,12 +2922,6 @@ impl NetworkFeatureSupport {
     /// Set what [`Self::ef5l`] reads.
     pub fn set_ef5l(&mut self, value: bool) {
         set_bit(&mut self.value, 3, 5, value);
-    }
-
-    /// Set what [`Self::ef5l`] reads, and return the value.
-    pub fn with_ef5l(mut self, value: bool) -> Self {
-        self.set_ef5l(value);
-        self
     }
 
     /// Raw octet at the given 1-based index (per spec numbering: `octet(1)` is octet 3 on wire).
@@ -3493,12 +3130,6 @@ impl ControlPlaneServiceType {
         self.value & 0x07
     }
 
-    /// Set the control plane service type. Returns `self` for chaining.
-    pub fn with_service_type(mut self, service_type: ControlPlaneServiceTypeValue) -> Self {
-        self.value = (self.value & 0xF8) | (service_type as u8 & 0x07);
-        self
-    }
-
     /// Mutating setter for the control plane service type.
     pub fn set_service_type(&mut self, service_type: ControlPlaneServiceTypeValue) -> &mut Self {
         self.value = (self.value & 0xF8) | (service_type as u8 & 0x07);
@@ -3543,12 +3174,6 @@ impl MaPduSessionInformation {
     /// Raw MA PDU session information value (bits 1-4).
     pub fn info_raw(&self) -> u8 {
         self.value & 0x0F
-    }
-
-    /// Set the typed MA PDU session information while preserving spare bits.
-    pub fn with_info(mut self, info: MaPduSessionInfoValue) -> Self {
-        self.set_info(info);
-        self
     }
 
     /// Mutating setter for the typed MA PDU session information.
@@ -3627,12 +3252,6 @@ impl NssaiInclusionMode {
         NssaiInclusionModeValue::received(self.value & 0x03)
     }
 
-    /// Set the typed NSSAI inclusion mode while preserving spare bits.
-    pub fn with_mode(mut self, mode: NssaiInclusionModeValue) -> Self {
-        self.set_mode(mode);
-        self
-    }
-
     /// Mutating setter for the typed NSSAI inclusion mode.
     pub fn set_mode(&mut self, mode: NssaiInclusionModeValue) -> &mut Self {
         self.value = (self.value & !0x03) | (mode as u8 & 0x03);
@@ -3704,12 +3323,6 @@ impl RequestType {
         )
     }
 
-    /// Set the typed request type and clear the spare TV-1 bit.
-    pub fn with_request_type(mut self, request_type: RequestTypeValue) -> Self {
-        self.set_request_type(request_type);
-        self
-    }
-
     /// Mutating setter for the typed request type.
     pub fn set_request_type(&mut self, request_type: RequestTypeValue) -> &mut Self {
         self.value = request_type as u8 & 0x07;
@@ -3750,12 +3363,6 @@ impl SscMode {
     /// Raw SSC mode value (bits 1-3).
     pub fn mode_raw(&self) -> u8 {
         self.value & 0x07
-    }
-
-    /// Set the typed SSC mode and clear the spare TV-1 bit.
-    pub fn with_mode(mut self, mode: SscModeValue) -> Self {
-        self.set_mode(mode);
-        self
     }
 
     /// Mutating setter for the typed SSC mode.
@@ -3960,33 +3567,15 @@ impl IntraN1ModeNasTransparentContainer {
         self.value.get(6).copied()
     }
 
-    /// Set the message authentication code.
-    pub fn with_message_authentication_code(mut self, mac: u32) -> Self {
-        self.set_message_authentication_code(mac);
-        self
-    }
-
     /// Mutating setter for the message authentication code.
     pub fn set_message_authentication_code(&mut self, mac: u32) -> &mut Self {
         self.ensure_value_len()[0..4].copy_from_slice(&mac.to_be_bytes());
         self
     }
 
-    /// Set the security algorithms octet.
-    pub fn with_security_algorithms(mut self, algorithms: SecurityAlgorithms) -> Self {
-        self.set_security_algorithms(algorithms);
-        self
-    }
-
     /// Mutating setter for the security algorithms octet.
     pub fn set_security_algorithms(&mut self, algorithms: SecurityAlgorithms) -> &mut Self {
         self.ensure_value_len()[4] = algorithms.value;
-        self
-    }
-
-    /// Set the K_AMF change flag while preserving the key set identifier bits.
-    pub fn with_k_amf_change_flag(mut self, k_amf_change_flag: bool) -> Self {
-        self.set_k_amf_change_flag(k_amf_change_flag);
         self
     }
 
@@ -3997,22 +3586,10 @@ impl IntraN1ModeNasTransparentContainer {
         self
     }
 
-    /// Set the key set identifier while preserving the K_AMF change flag.
-    pub fn with_key_set_identifier(mut self, key_set_identifier: KeySetIdentifier) -> Self {
-        self.set_key_set_identifier(key_set_identifier);
-        self
-    }
-
     /// Mutating setter for the key set identifier while preserving the K_AMF change flag.
     pub fn set_key_set_identifier(&mut self, key_set_identifier: KeySetIdentifier) -> &mut Self {
         let octet = &mut self.ensure_value_len()[5];
         *octet = (*octet & 0x10) | (key_set_identifier.value & 0x0F);
-        self
-    }
-
-    /// Set the sequence number.
-    pub fn with_sequence_number(mut self, sequence_number: u8) -> Self {
-        self.set_sequence_number(sequence_number);
         self
     }
 
@@ -4073,21 +3650,9 @@ impl S1ModeToN1ModeNasTransparentContainer {
         self.value.get(6).copied().unwrap_or(0) == 0 && self.value.get(7).copied().unwrap_or(0) == 0
     }
 
-    /// Set the message authentication code.
-    pub fn with_message_authentication_code(mut self, mac: u32) -> Self {
-        self.set_message_authentication_code(mac);
-        self
-    }
-
     /// Mutating setter for the message authentication code.
     pub fn set_message_authentication_code(&mut self, mac: u32) -> &mut Self {
         self.ensure_value_len()[0..4].copy_from_slice(&mac.to_be_bytes());
-        self
-    }
-
-    /// Set the security algorithms octet.
-    pub fn with_security_algorithms(mut self, algorithms: SecurityAlgorithms) -> Self {
-        self.set_security_algorithms(algorithms);
         self
     }
 
@@ -4095,13 +3660,6 @@ impl S1ModeToN1ModeNasTransparentContainer {
     pub fn set_security_algorithms(&mut self, algorithms: SecurityAlgorithms) -> &mut Self {
         self.ensure_value_len()[4] = algorithms.value;
         self
-    }
-
-    /// Set the NCC, a next-hop chaining counter of 7 at most, while
-    /// preserving the key set identifier bits.
-    pub fn with_ncc(mut self, ncc: u8) -> core::result::Result<Self, ValueError> {
-        self.set_ncc(ncc)?;
-        Ok(self)
     }
 
     /// Mutating setter for the NCC, a next-hop chaining counter of 7 at
@@ -4114,22 +3672,10 @@ impl S1ModeToN1ModeNasTransparentContainer {
         Ok(self)
     }
 
-    /// Set the key set identifier while preserving the NCC bits.
-    pub fn with_key_set_identifier(mut self, key_set_identifier: KeySetIdentifier) -> Self {
-        self.set_key_set_identifier(key_set_identifier);
-        self
-    }
-
     /// Mutating setter for the key set identifier while preserving the NCC bits.
     pub fn set_key_set_identifier(&mut self, key_set_identifier: KeySetIdentifier) -> &mut Self {
         let octet = &mut self.ensure_value_len()[5];
         *octet = (*octet & 0x70) | (key_set_identifier.value & 0x0F);
-        self
-    }
-
-    /// Force octets 9 and 10 to zero.
-    pub fn with_zeroed_spare_octets(mut self) -> Self {
-        self.set_zeroed_spare_octets();
         self
     }
 
@@ -4163,12 +3709,6 @@ impl TimeDuration {
     /// Time duration in seconds per TS 24.501 §9.11.2.19 / TS 24.301 §9.9.3.68.
     pub fn seconds(&self) -> Option<u32> {
         crate::common::ts24301::read_time_duration(&self.value)
-    }
-
-    /// Set the time duration in seconds.
-    pub fn with_seconds(mut self, seconds: u32) -> core::result::Result<Self, ValueError> {
-        self.set_seconds(seconds)?;
-        Ok(self)
     }
 
     /// Mutating setter for the time duration in seconds.
@@ -4501,12 +4041,6 @@ impl GmmCapability {
         self.set_n3_data_not_supported(!supported);
     }
 
-    /// Set what [`Self::n3_data`] reads, and return the value.
-    pub fn with_n3_data(mut self, supported: bool) -> Self {
-        self.set_n3_data(supported);
-        self
-    }
-
     /// Build from checked capability contents. Octet 1 (= wire octet 3) is the
     /// mandatory core capability; octets 2..13 (= wire octets 4..15) carry
     /// extensions per TS 24.501 §9.11.3.1. Bits 5..8 of wire octet 13 and
@@ -4626,12 +4160,6 @@ impl UpdateType {
     pub fn sms_requested(&self) -> bool {
         self.fb() & 0x01 != 0
     }
-    /// Set the SMS-requested bit. Returns `self`.
-    pub fn with_sms_requested(mut self, on: bool) -> Self {
-        let b = (self.fb() & !0x01) | if on { 0x01 } else { 0 };
-        self.write_first(b);
-        self
-    }
     /// Set what [`Self::sms_requested`] reads.
     pub fn set_sms_requested(&mut self, on: bool) {
         let b = (self.fb() & !0x01) | if on { 0x01 } else { 0 };
@@ -4641,12 +4169,6 @@ impl UpdateType {
     /// NG-RAN Radio Capability Update (bit 2, mask 0x02).
     pub fn ng_ran_rcu(&self) -> bool {
         (self.fb() >> 1) & 0x01 != 0
-    }
-    /// Set what [`Self::ng_ran_rcu`] reads, and return the value.
-    pub fn with_ng_ran_rcu(mut self, on: bool) -> Self {
-        let b = (self.fb() & !0x02) | if on { 0x02 } else { 0 };
-        self.write_first(b);
-        self
     }
     /// Set what [`Self::ng_ran_rcu`] reads.
     pub fn set_ng_ran_rcu(&mut self, on: bool) {
@@ -4672,12 +4194,6 @@ impl UpdateType {
         self
     }
 
-    /// Builder form of [`Self::set_pnb_ciot`].
-    pub fn with_pnb_ciot(mut self, value: PreferredCiotBehavior) -> Self {
-        self.set_pnb_ciot(value);
-        self
-    }
-
     /// EPS-PNB-CIoT, the preferred CIoT network behaviour for EPS (bits
     /// 6-5); reserved is `None`.
     pub fn eps_pnb_ciot(&self) -> Option<PreferredCiotBehavior> {
@@ -4693,12 +4209,6 @@ impl UpdateType {
     pub fn set_eps_pnb_ciot(&mut self, value: PreferredCiotBehavior) -> &mut Self {
         let b = (self.fb() & !0x30) | ((value as u8) << 4);
         self.write_first(b);
-        self
-    }
-
-    /// Builder form of [`Self::set_eps_pnb_ciot`].
-    pub fn with_eps_pnb_ciot(mut self, value: PreferredCiotBehavior) -> Self {
-        self.set_eps_pnb_ciot(value);
         self
     }
 }
@@ -4733,12 +4243,6 @@ impl GsmCapability {
         set_bit(&mut self.value, 0, 7, value);
     }
 
-    /// Set what [`Self::tpmic`] reads, and return the value.
-    pub fn with_tpmic(mut self, value: bool) -> Self {
-        self.set_tpmic(value);
-        self
-    }
-
     /// ATSSS-ST (octet 3 bits 4-7 = mask 0x78): selected steering functionality patterns.
     pub fn atsss_st(&self) -> u8 {
         self.value.first().map(|b| (b >> 3) & 0x0F).unwrap_or(0)
@@ -4757,12 +4261,6 @@ impl GsmCapability {
         self.value[0] = (self.value[0] & !0x78) | ((value as u8) << 3);
     }
 
-    /// Set what [`Self::atsss_st_value`] reads, and return the value.
-    pub fn with_atsss_st_value(mut self, value: AtsssSteeringFunctionality) -> Self {
-        self.set_atsss_st_value(value);
-        self
-    }
-
     /// EPT-S1 (octet 3 bit 3 = mask 0x04): Ethernet PDU type over S1 mode.
     pub fn ept_s1(&self) -> bool {
         self.value
@@ -4774,12 +4272,6 @@ impl GsmCapability {
     /// Set what [`Self::ept_s1`] reads.
     pub fn set_ept_s1(&mut self, value: bool) {
         set_bit(&mut self.value, 0, 2, value);
-    }
-
-    /// Set what [`Self::ept_s1`] reads, and return the value.
-    pub fn with_ept_s1(mut self, value: bool) -> Self {
-        self.set_ept_s1(value);
-        self
     }
 
     /// MH6-PDU (octet 3 bit 2 = mask 0x02): Multi-homed IPv6 PDU session.
@@ -4795,12 +4287,6 @@ impl GsmCapability {
         set_bit(&mut self.value, 0, 1, value);
     }
 
-    /// Set what [`Self::mh6_pdu`] reads, and return the value.
-    pub fn with_mh6_pdu(mut self, value: bool) -> Self {
-        self.set_mh6_pdu(value);
-        self
-    }
-
     /// RqoS (octet 3 bit 1 = mask 0x01): Reflective QoS.
     pub fn rqos(&self) -> bool {
         self.value.first().map(|b| b & 0x01 != 0).unwrap_or(false)
@@ -4809,12 +4295,6 @@ impl GsmCapability {
     /// Set what [`Self::rqos`] reads.
     pub fn set_rqos(&mut self, value: bool) {
         set_bit(&mut self.value, 0, 0, value);
-    }
-
-    /// Set what [`Self::rqos`] reads, and return the value.
-    pub fn with_rqos(mut self, value: bool) -> Self {
-        self.set_rqos(value);
-        self
     }
 
     // ── Octet 4 (Rust value[1]) — Rel-17 ────────────────────────────────
@@ -4827,12 +4307,6 @@ impl GsmCapability {
     pub fn set_mpquic_ip(&mut self, v: bool) {
         set_bit(&mut self.value, 1, 7, v);
     }
-    /// Set what [`Self::mpquic_ip`] reads, and return the value.
-    pub fn with_mpquic_ip(mut self, v: bool) -> Self {
-        self.set_mpquic_ip(v);
-        self
-    }
-
     /// MPQUIC-UDP — MPQUIC over UDP (octet 4 bit 7, mask 0x40).
     pub fn mpquic_udp(&self) -> bool {
         bit_at(&self.value, 1, 6)
@@ -4841,12 +4315,6 @@ impl GsmCapability {
     pub fn set_mpquic_udp(&mut self, v: bool) {
         set_bit(&mut self.value, 1, 6, v);
     }
-    /// Set what [`Self::mpquic_udp`] reads, and return the value.
-    pub fn with_mpquic_udp(mut self, v: bool) -> Self {
-        self.set_mpquic_udp(v);
-        self
-    }
-
     /// MPTCP — Multipath TCP support (octet 4 bit 6, mask 0x20).
     pub fn mptcp(&self) -> bool {
         bit_at(&self.value, 1, 5)
@@ -4855,12 +4323,6 @@ impl GsmCapability {
     pub fn set_mptcp(&mut self, v: bool) {
         set_bit(&mut self.value, 1, 5, v);
     }
-    /// Set what [`Self::mptcp`] reads, and return the value.
-    pub fn with_mptcp(mut self, v: bool) -> Self {
-        self.set_mptcp(v);
-        self
-    }
-
     /// ATSSS-LL — ATSSS Low-Layer (octet 4 bits 4-5, mask 0x18). 2-bit value.
     pub fn atsss_ll(&self) -> u8 {
         self.value.get(1).map(|b| (b >> 3) & 0x03).unwrap_or(0)
@@ -4876,12 +4338,6 @@ impl GsmCapability {
         }
         self.value[1] = (self.value[1] & !0x18) | ((v as u8) << 3);
     }
-    /// Set what [`Self::atsss_ll_value`] reads, and return the value.
-    pub fn with_atsss_ll_value(mut self, v: AtsssLowLayerFunctionality) -> Self {
-        self.set_atsss_ll_value(v);
-        self
-    }
-
     /// RTPMMII — Reflective QoS over multiple media identification information
     /// (octet 4 bit 3, mask 0x04).
     pub fn rtpmmii(&self) -> bool {
@@ -4891,12 +4347,6 @@ impl GsmCapability {
     pub fn set_rtpmmii(&mut self, v: bool) {
         set_bit(&mut self.value, 1, 2, v);
     }
-    /// Set what [`Self::rtpmmii`] reads, and return the value.
-    pub fn with_rtpmmii(mut self, v: bool) -> Self {
-        self.set_rtpmmii(v);
-        self
-    }
-
     /// SDNAEPC — Satellite NAS support over EPC (octet 4 bit 2, mask 0x02).
     pub fn sdnaepc(&self) -> bool {
         bit_at(&self.value, 1, 1)
@@ -4905,12 +4355,6 @@ impl GsmCapability {
     pub fn set_sdnaepc(&mut self, v: bool) {
         set_bit(&mut self.value, 1, 1, v);
     }
-    /// Set what [`Self::sdnaepc`] reads, and return the value.
-    pub fn with_sdnaepc(mut self, v: bool) -> Self {
-        self.set_sdnaepc(v);
-        self
-    }
-
     /// APMQF — Access Path Management QoS Flow (octet 4 bit 1, mask 0x01).
     pub fn apmqf(&self) -> bool {
         bit_at(&self.value, 1, 0)
@@ -4919,12 +4363,6 @@ impl GsmCapability {
     pub fn set_apmqf(&mut self, v: bool) {
         set_bit(&mut self.value, 1, 0, v);
     }
-    /// Set what [`Self::apmqf`] reads, and return the value.
-    pub fn with_apmqf(mut self, v: bool) -> Self {
-        self.set_apmqf(v);
-        self
-    }
-
     // ── Octet 5 (Rust value[2]) — Rel-18 ────────────────────────────────
 
     /// E8PCPDEI — Ethernet over 8PCPDE indication (octet 5 bit 2, mask 0x02).
@@ -4936,12 +4374,6 @@ impl GsmCapability {
         set_bit(&mut self.value, 2, 1, v);
         self.clear_spare_bits();
     }
-    /// Set what [`Self::e8pcpdei`] reads, and return the value.
-    pub fn with_e8pcpdei(mut self, v: bool) -> Self {
-        self.set_e8pcpdei(v);
-        self
-    }
-
     /// MPQUIC-E — MPQUIC enhanced (octet 5 bit 1, mask 0x01).
     pub fn mpquic_e(&self) -> bool {
         bit_at(&self.value, 2, 0)
@@ -4951,12 +4383,6 @@ impl GsmCapability {
         set_bit(&mut self.value, 2, 0, v);
         self.clear_spare_bits();
     }
-    /// Set what [`Self::mpquic_e`] reads, and return the value.
-    pub fn with_mpquic_e(mut self, v: bool) -> Self {
-        self.set_mpquic_e(v);
-        self
-    }
-
     /// Build a single-octet 5GSM capability with the most common Rel-15 flags.
     pub fn from_flags(
         tpmic: bool,
@@ -11756,12 +11182,6 @@ impl AdditionalInformationRequested {
         }
     }
 
-    /// Return `self` with the ciphering-key-data-requested flag updated.
-    pub fn with_cipher_key_data_requested(mut self, requested: bool) -> Self {
-        self.set_cipher_key_data_requested(requested);
-        self
-    }
-
     /// Build from the ciphering-key-data-requested flag.
     pub fn from_cipher_key_data_requested(requested: bool) -> Self {
         Self::new(vec![if requested { 0x01 } else { 0x00 }])
@@ -12277,15 +11697,6 @@ impl Nid {
         self.value[0] = (self.value[0] & 0xF0) | assignment_mode_raw;
         Ok(self)
     }
-
-    /// Builder form of [`Self::set_assignment_mode_raw`].
-    pub fn with_assignment_mode_raw(
-        mut self,
-        assignment_mode_raw: u8,
-    ) -> core::result::Result<Self, ValueError> {
-        self.set_assignment_mode_raw(assignment_mode_raw)?;
-        Ok(self)
-    }
 }
 
 impl Truncated5gSTmsiConfiguration {
@@ -12336,15 +11747,6 @@ impl Truncated5gSTmsiConfiguration {
         self.value.first().copied().unwrap_or(0)
     }
 
-    /// Set the AMF Set ID length; an error unless it is 1 to 10.
-    pub fn with_set_id_length(
-        mut self,
-        set_id_length: u8,
-    ) -> core::result::Result<Self, ValueError> {
-        self.set_set_id_length(set_id_length)?;
-        Ok(self)
-    }
-
     /// Set the AMF Set ID length; an error, and the IE as it was, unless it is
     /// 1 to 10.
     pub fn set_set_id_length(
@@ -12358,15 +11760,6 @@ impl Truncated5gSTmsiConfiguration {
         } else {
             self.value[0] = octet;
         }
-        Ok(self)
-    }
-
-    /// Set the AMF Pointer length; an error unless it is 1 to 6.
-    pub fn with_pointer_length(
-        mut self,
-        pointer_length: u8,
-    ) -> core::result::Result<Self, ValueError> {
-        self.set_pointer_length(pointer_length)?;
         Ok(self)
     }
 
@@ -15781,11 +15174,6 @@ crate::common::readable::readable!(
 crate::common::readable::serde_by_readable!(ProseRelayTransactionIdentityValue);
 
 impl ProseRelayTransactionIdentity {
-    /// Return identity raw.
-    pub fn identity_raw(&self) -> u8 {
-        self.value
-    }
-
     /// Return identity.
     pub fn identity(&self) -> Option<ProseRelayTransactionIdentityValue> {
         Some(match self.value {
@@ -16759,26 +16147,11 @@ impl TnanInformation {
         Ok(self)
     }
 
-    /// Builder-style TNGF identifier setter.
-    pub fn with_tngf_id(
-        mut self,
-        tngf_id: Option<&[u8]>,
-    ) -> core::result::Result<Self, ValueError> {
-        self.set_tngf_id(tngf_id)?;
-        Ok(self)
-    }
-
     /// Replace the optional SSID subfield; an error, and the IE as it was, for
     /// an SSID of more than 32 octets.
     pub fn set_ssid(&mut self, ssid: Option<&[u8]>) -> core::result::Result<&mut Self, ValueError> {
         let tngf_id = self.tngf_id().map(|value| value.to_vec());
         self.value = Self::encode_value(tngf_id.as_deref(), ssid)?.into();
-        Ok(self)
-    }
-
-    /// Builder-style SSID setter.
-    pub fn with_ssid(mut self, ssid: Option<&[u8]>) -> core::result::Result<Self, ValueError> {
-        self.set_ssid(ssid)?;
         Ok(self)
     }
 
@@ -17711,21 +17084,22 @@ mod tests {
         let mut truncated = Truncated5gSTmsiConfiguration::new(vec![]);
         truncated.set_pointer_length(2).unwrap();
         encodes(&truncated);
-        let truncated = Truncated5gSTmsiConfiguration::new(vec![]);
-        encodes(&truncated.clone().with_set_id_length(4).unwrap());
-        encodes(&truncated.clone().with_pointer_length(2).unwrap());
-        assert!(truncated.clone().with_set_id_length(11).is_err());
-        assert!(truncated.with_pointer_length(7).is_err());
+        let mut truncated = Truncated5gSTmsiConfiguration::new(vec![]);
+        truncated.set_set_id_length(4).unwrap();
+        encodes(&truncated);
+        assert!(truncated.set_set_id_length(11).is_err());
+        assert!(truncated.set_pointer_length(7).is_err());
         let mut tnan = TnanInformation::new(vec![]);
         tnan.set_tngf_id(Some(&[1, 2])).unwrap();
         encodes(&tnan);
         tnan.set_ssid(Some(b"ssid")).unwrap();
         encodes(&tnan);
-        encodes(
-            &RegistrationResult::new(vec![])
-                .with_result_value(RegistrationResultValue::ThreeGppAccess),
-        );
-        encodes(&UpdateType::new(vec![]).with_sms_requested(true));
+        let mut result = RegistrationResult::new(vec![]);
+        result.set_result_value(RegistrationResultValue::ThreeGppAccess);
+        encodes(&result);
+        let mut update = UpdateType::new(vec![]);
+        update.set_sms_requested(true);
+        encodes(&update);
     }
 
     use super::*;
@@ -17798,33 +17172,28 @@ mod tests {
         let reserved = SecurityAlgorithms::new(0x9a);
         assert_eq!(reserved.ciphering(), Err(9));
         assert_eq!(reserved.integrity(), Err(10));
-        assert_eq!(
-            SecurityAlgorithms::new(0x88)
-                .with_ciphering(Algorithm::Aes)
-                .value,
-            0x28
-        );
-        assert_eq!(
-            SecurityAlgorithms::new(0x88)
-                .with_integrity(Algorithm::Aes)
-                .value,
-            0x82
-        );
+        let mut algorithms = SecurityAlgorithms::new(0x88);
+        algorithms.set_ciphering(Algorithm::Aes);
+        assert_eq!(algorithms.value, 0x28);
+        let mut algorithms = SecurityAlgorithms::new(0x88);
+        algorithms.set_integrity(Algorithm::Aes);
+        assert_eq!(algorithms.value, 0x82);
     }
 
     #[test]
     fn test_security_algorithms_reserved_codes_roundtrip() {
         // A reserved code is read as its number, and written back as it came
-        let sa = SecurityAlgorithms::new(0x76);
+        let mut sa = SecurityAlgorithms::new(0x76);
         assert_eq!((sa.ciphering(), sa.integrity()), (Err(7), Err(6)));
-        assert_eq!(sa.with_integrity(Algorithm::Aes).value, 0x72);
+        sa.set_integrity(Algorithm::Aes);
+        assert_eq!(sa.value, 0x72);
     }
 
     #[test]
     fn test_registration_type() {
-        let rt = RegistrationType::default()
-            .with_registration_type(RegistrationTypeValue::InitialRegistration)
-            .with_follow_on_request(true);
+        let mut rt = RegistrationType::default();
+        rt.set_registration_type(RegistrationTypeValue::InitialRegistration);
+        rt.set_follow_on_request(true);
         assert_eq!(rt.value, 0x09);
         assert_eq!(
             rt.registration_type(),
@@ -17852,18 +17221,16 @@ mod tests {
 
     #[test]
     fn test_nas_ksi() {
-        let ksi = KeySetIdentifier::default()
-            .with_ksi(3)
-            .unwrap()
-            .with_tsc(false);
+        let mut ksi = KeySetIdentifier::default();
+        ksi.set_ksi(3).unwrap();
+        ksi.set_tsc(false);
         assert_eq!(ksi.value, 0x03);
         assert_eq!(ksi.ksi(), 3);
         assert!(!ksi.tsc());
         assert!(!ksi.no_key_available());
 
-        let no_key = KeySetIdentifier::default()
-            .with_ksi(NAS_KSI_NO_KEY_AVAILABLE)
-            .unwrap();
+        let mut no_key = KeySetIdentifier::default();
+        no_key.set_ksi(NAS_KSI_NO_KEY_AVAILABLE).unwrap();
         assert!(no_key.no_key_available());
     }
 
@@ -17945,7 +17312,7 @@ mod tests {
         // The receiver fallback is explicit, as in EPS.
         let gmm = GmmCause::new(0x01);
         assert_eq!(gmm.cause(), None);
-        assert_eq!(gmm.cause_raw(), 0x01);
+        assert_eq!(gmm.value, 0x01);
         assert_eq!(
             gmm.cause_received(),
             GmmCauseValue::ProtocolErrorUnspecified
@@ -18119,9 +17486,9 @@ mod tests {
         assert!(!dt2.re_registration_required());
         assert_eq!(dt2.access_type(), Some(AccessTypeValue::ThreeGppAccess));
 
-        let dt3 = DeRegistrationType::default()
-            .with_switch_off(true)
-            .with_access_type(AccessTypeValue::ThreeGppAccess);
+        let mut dt3 = DeRegistrationType::default();
+        dt3.set_switch_off(true);
+        dt3.set_access_type(AccessTypeValue::ThreeGppAccess);
         assert!(dt3.switch_off());
         assert_eq!(dt3.access_type(), Some(AccessTypeValue::ThreeGppAccess));
         assert_eq!(dt3.value, 0x09);
@@ -18131,7 +17498,8 @@ mod tests {
         assert!(dt4.re_registration_required());
         assert_eq!(dt4.value, 0x05);
 
-        let dt5 = DeRegistrationType::default().with_deregistration_access_type(
+        let mut dt5 = DeRegistrationType::default();
+        dt5.set_deregistration_access_type(
             DeregistrationAccessType::ThreeGppAccessAndNon3GppAccess,
         );
         assert_eq!(
@@ -18329,12 +17697,9 @@ mod tests {
         assert_eq!(spare.ciphering(), Ok(Algorithm::Aes));
         assert_eq!(spare.integrity(), Ok(Algorithm::Aes));
         assert!(!spare.is_well_formed());
-        assert_eq!(
-            SecurityAlgorithms::new(0x11)
-                .with_ciphering(Algorithm::Aes)
-                .value,
-            0x21
-        );
+        let mut algorithms = SecurityAlgorithms::new(0x11);
+        algorithms.set_ciphering(Algorithm::Aes);
+        assert_eq!(algorithms.value, 0x21);
     }
 
     #[test]
@@ -18474,7 +17839,8 @@ mod tests {
         let mut retry = ReAttemptIndicator::new(vec![]);
         retry.set_ratc_not_allowed(true);
         assert!(retry.ratc_not_allowed());
-        assert!(retry.with_eplmnc_not_allowed(true).eplmnc_not_allowed());
+        retry.set_eplmnc_not_allowed(true);
+        assert!(retry.eplmnc_not_allowed());
 
         assert!(ControlPlaneOnlyIndication::control_plane_only().is_well_formed());
         assert!(ControlPlaneOnlyIndication::from_cpoi(false).is_err());
@@ -18619,7 +17985,8 @@ mod tests {
         assert_eq!(nid.assignment_mode_raw(), 0x01);
         assert_eq!(nid.nid_value(), "1a32547698ba");
 
-        let nid = nid.with_assignment_mode_raw(0x02).unwrap();
+        let mut nid = nid;
+        nid.set_assignment_mode_raw(0x02).unwrap();
         assert_eq!(nid.assignment_mode_raw(), 0x02);
         assert_eq!(nid.value.as_slice()[0], 0xA2);
     }
@@ -18640,13 +18007,16 @@ mod tests {
 
     #[test]
     fn test_tv1_setters_clear_spare_bits() {
-        let access = AccessType::new(0x0F).with_access_type(AccessTypeValue::Non3GppAccess);
+        let mut access = AccessType::new(0x0F);
+        access.set_access_type(AccessTypeValue::Non3GppAccess);
         assert_eq!(access.value, 0x02);
 
-        let pdu = PduSessionType::new(0x0F).with_session_type(PduSessionTypeValue::Ethernet);
+        let mut pdu = PduSessionType::new(0x0F);
+        pdu.set_session_type(PduSessionTypeValue::Ethernet);
         assert_eq!(pdu.value, 0x05);
 
-        let ssc = SscMode::new(0x0F).with_mode(SscModeValue::Ssc3);
+        let mut ssc = SscMode::new(0x0F);
+        ssc.set_mode(SscModeValue::Ssc3);
         assert_eq!(ssc.value, 0x03);
 
         let mut request = RequestType::new(0x0F);
@@ -18742,15 +18112,14 @@ mod tests {
 
     #[test]
     fn test_timezone_and_time_roundtrip() {
-        let tzt = TimeZoneAndTime::default()
-            .with_year(26)
-            .with_month(4)
-            .with_day(6)
-            .with_hour(14)
-            .with_minute(30)
-            .with_second(0)
-            .with_timezone_quarter_hours(32)
-            .unwrap();
+        let mut tzt = TimeZoneAndTime::default();
+        tzt.set_year(26);
+        tzt.set_month(4);
+        tzt.set_day(6);
+        tzt.set_hour(14);
+        tzt.set_minute(30);
+        tzt.set_second(0);
+        tzt.set_timezone_quarter_hours(32).unwrap();
         assert_eq!(tzt.year(), 26);
         assert_eq!(tzt.month(), 4);
         assert_eq!(tzt.day(), 6);
@@ -18760,18 +18129,13 @@ mod tests {
         assert_eq!(tzt.timezone_quarter_hours(), 32);
 
         // Negative timezone
-        let tzt = TimeZoneAndTime::default()
-            .with_year(26)
-            .with_month(1)
-            .with_day(1)
-            .with_timezone_quarter_hours(-20)
-            .unwrap();
+        let mut tzt = TimeZoneAndTime::default();
+        tzt.set_year(26);
+        tzt.set_month(1);
+        tzt.set_day(1);
+        tzt.set_timezone_quarter_hours(-20).unwrap();
         assert_eq!(tzt.timezone_quarter_hours(), -20);
-        assert!(
-            TimeZoneAndTime::default()
-                .with_timezone_quarter_hours(80)
-                .is_err()
-        );
+        assert!(tzt.set_timezone_quarter_hours(80).is_err());
     }
 
     #[test]
@@ -19952,12 +19316,13 @@ mod tests {
         let tngf = b"tngf-id-bytes";
         let ssid = b"SSID";
         let ie = TnanInformation::from_tngf_id(tngf).unwrap();
-        let ie = ie.with_ssid(Some(ssid)).unwrap();
+        let mut ie = ie;
+        ie.set_ssid(Some(ssid)).unwrap();
         assert!(ie.tngf_id_indicator());
         assert!(ie.ssid_indicator());
         assert_eq!(ie.tngf_id().unwrap(), tngf);
         assert_eq!(ie.ssid().unwrap(), ssid);
-        assert!(ie.clone().with_ssid(Some(&[0; 33])).is_err());
+        assert!(ie.set_ssid(Some(&[0; 33])).is_err());
         assert!(TnanInformation::from_tngf_id(&[0; 256]).is_err());
     }
 
@@ -21267,10 +20632,10 @@ mod tests {
 
     #[test]
     fn test_fgsm_capability_typed_atsss_values() {
-        let cap = GsmCapability::default()
-            .with_tpmic(true)
-            .with_atsss_st_value(AtsssSteeringFunctionality::MptcpAnyAndLowLayerAny)
-            .with_atsss_ll_value(AtsssLowLayerFunctionality::AnySteering);
+        let mut cap = GsmCapability::default();
+        cap.set_tpmic(true);
+        cap.set_atsss_st_value(AtsssSteeringFunctionality::MptcpAnyAndLowLayerAny);
+        cap.set_atsss_ll_value(AtsssLowLayerFunctionality::AnySteering);
         assert!(cap.tpmic());
         assert_eq!(
             cap.atsss_st_value(),
@@ -21308,10 +20673,9 @@ mod tests {
                 "{octet:#04x}"
             );
             if let Some(value) = value {
-                assert_eq!(
-                    GsmCapability::new(vec![0]).with_atsss_st_value(value).value,
-                    [octet]
-                );
+                let mut capability = GsmCapability::new(vec![0]);
+                capability.set_atsss_st_value(value);
+                assert_eq!(capability.value, [octet]);
                 assert_eq!(
                     GsmCapability::from_flags(false, value, false, false, false).value,
                     [octet]
@@ -21344,9 +20708,10 @@ mod tests {
         );
         assert_eq!(standalone.value, 0x02);
 
+        let mut service = ControlPlaneServiceType::default();
+        service.set_service_type(ControlPlaneServiceTypeValue::MobileTerminatingRequest);
         let msg = ControlPlaneServiceRequest::new(
-            ControlPlaneServiceType::default()
-                .with_service_type(ControlPlaneServiceTypeValue::MobileTerminatingRequest),
+            service,
             KeySetIdentifier::from_key_set_identifier(KeySetIdentifierValue::Mapped(3)).unwrap(),
         );
         let mut buf = Vec::new();

@@ -48,7 +48,7 @@ fn a_5g_guti_has_its_plmn_and_its_5g_tmsi() {
     // Of another type than a MAC address, it has no MAC address nor MAURI bit
     assert_eq!(guti.as_mac_address(), None);
     assert_eq!(guti.mauri(), None);
-    assert!(guti.clone().with_mauri(true).is_err());
+    assert!(guti.clone().set_mauri(true).is_err());
 }
 
 #[test]

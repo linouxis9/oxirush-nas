@@ -139,10 +139,6 @@ impl EmmCause {
     pub fn cause(&self) -> Option<EmmCauseValue> {
         EmmCauseValue::try_from(self.value).ok()
     }
-    /// Raw cause value.
-    pub fn cause_raw(&self) -> u8 {
-        self.value
-    }
     /// Decode the cause received by the UE or the network (see [`EmmCauseValue::received`]).
     pub fn cause_received(&self) -> EmmCauseValue {
         EmmCauseValue::received(self.value)
@@ -150,11 +146,6 @@ impl EmmCause {
     /// Set the cause value.
     pub fn set_cause(&mut self, cause: EmmCauseValue) -> &mut Self {
         self.value = u8::from(cause);
-        self
-    }
-    /// Builder form of [`Self::set_cause`].
-    pub fn with_cause(mut self, cause: EmmCauseValue) -> Self {
-        self.set_cause(cause);
         self
     }
     /// Cause text, with the hexadecimal value for unknown codes.
@@ -289,10 +280,6 @@ impl EsmCause {
     pub fn cause(&self) -> Option<EsmCauseValue> {
         EsmCauseValue::try_from(self.value).ok()
     }
-    /// Raw cause value.
-    pub fn cause_raw(&self) -> u8 {
-        self.value
-    }
     /// Decode the cause received by the UE (see [`EsmCauseValue::from_u8_for_ue`]).
     pub fn cause_for_ue(&self) -> EsmCauseValue {
         EsmCauseValue::from_u8_for_ue(self.value)
@@ -304,11 +291,6 @@ impl EsmCause {
     /// Set the cause value.
     pub fn set_cause(&mut self, cause: EsmCauseValue) -> &mut Self {
         self.value = u8::from(cause);
-        self
-    }
-    /// Builder form of [`Self::set_cause`].
-    pub fn with_cause(mut self, cause: EsmCauseValue) -> Self {
-        self.set_cause(cause);
         self
     }
     /// Cause text, with the hexadecimal value for unknown codes.
@@ -558,12 +540,6 @@ impl N1UeNetworkCapability {
             self.value.push(0);
         }
         self.value[0] = (self.value[0] & !0x30) | ((value as u8) << 4);
-        self
-    }
-
-    /// Builder form of [`Self::set_pnb_ciot`].
-    pub fn with_pnb_ciot(mut self, value: PreferredCiotBehavior) -> Self {
-        self.set_pnb_ciot(value);
         self
     }
 
@@ -1651,12 +1627,6 @@ impl EpsAttachType {
         self.value = value as u8;
         self
     }
-
-    /// Builder form of [`Self::set_attach_type`].
-    pub fn with_attach_type(mut self, value: AttachType) -> Self {
-        self.set_attach_type(value);
-        self
-    }
 }
 
 crate::common::enums::nas_enum! {
@@ -1703,12 +1673,6 @@ impl ServiceType {
     /// Set the service type.
     pub fn set_service_type(&mut self, value: ServiceTypeValue) -> &mut Self {
         self.value = value as u8;
-        self
-    }
-
-    /// Builder form of [`Self::set_service_type`].
-    pub fn with_service_type(mut self, value: ServiceTypeValue) -> Self {
-        self.set_service_type(value);
         self
     }
 }
@@ -1759,21 +1723,9 @@ impl ControlPlaneServiceType {
         self
     }
 
-    /// Builder form of [`Self::set_service_type`].
-    pub fn with_service_type(mut self, value: ControlPlaneServiceTypeValue) -> Self {
-        self.set_service_type(value);
-        self
-    }
-
     /// Set the "active" flag.
     pub fn set_active(&mut self, active: bool) -> &mut Self {
         self.value = (self.value & 0x07) | ((active as u8) << 3);
-        self
-    }
-
-    /// Builder form of [`Self::set_active`].
-    pub fn with_active(mut self, active: bool) -> Self {
-        self.set_active(active);
         self
     }
 }
@@ -1824,12 +1776,6 @@ impl PdnType {
         self.value = value as u8;
         self
     }
-
-    /// Builder form of [`Self::set_pdn_type`].
-    pub fn with_pdn_type(mut self, value: PdnTypeValue) -> Self {
-        self.set_pdn_type(value);
-        self
-    }
 }
 
 // ── Attach and tracking area update values ─────────────────────────────────
@@ -1864,12 +1810,6 @@ impl EpsAttachResult {
     /// Set the attach result and clear the spare bit.
     pub fn set_attach_result(&mut self, value: AttachResult) -> &mut Self {
         self.value = value as u8;
-        self
-    }
-
-    /// Builder form of [`Self::set_attach_result`].
-    pub fn with_attach_result(mut self, value: AttachResult) -> Self {
-        self.set_attach_result(value);
         self
     }
 }
@@ -1921,12 +1861,6 @@ impl EpsUpdateType {
         self
     }
 
-    /// Builder form of [`Self::set_update_type`].
-    pub fn with_update_type(mut self, value: UpdateType) -> Self {
-        self.set_update_type(value);
-        self
-    }
-
     /// "Active" flag (bit 4): bearer establishment requested.
     pub fn is_active(&self) -> bool {
         self.value & 0x08 != 0
@@ -1935,12 +1869,6 @@ impl EpsUpdateType {
     /// Set the "active" flag.
     pub fn set_active(&mut self, active: bool) -> &mut Self {
         self.value = (self.value & 0x07) | ((active as u8) << 3);
-        self
-    }
-
-    /// Builder form of [`Self::set_active`].
-    pub fn with_active(mut self, active: bool) -> Self {
-        self.set_active(active);
         self
     }
 }
@@ -1979,12 +1907,6 @@ impl EpsUpdateResult {
     /// Set the update result and clear the spare bit.
     pub fn set_update_result(&mut self, value: UpdateResult) -> &mut Self {
         self.value = value as u8;
-        self
-    }
-
-    /// Builder form of [`Self::set_update_result`].
-    pub fn with_update_result(mut self, value: UpdateResult) -> Self {
-        self.set_update_result(value);
         self
     }
 }
@@ -3386,11 +3308,11 @@ crate::common::ts24301::ue_network_capability_ie!(UeNetworkCapability);
 crate::common::ts24301::ue_security_capability_ie!(UeSecurityCapability, UeNetworkCapability);
 
 impl UeSecurityCapability {
-    /// These replayed capabilities with the GPRS algorithms of the MS
+    /// Add to these replayed capabilities the GPRS algorithms of the MS
     /// network capability that the UE sent, which a SECURITY MODE COMMAND
     /// repeats too (TS 24.301 §5.4.3.2): the octet of GEA1 to GEA7, after
     /// the UMTS octets, zero where the UE sent none.
-    pub fn with_gea_of(mut self, capability: &MsNetworkCapability) -> Self {
+    pub fn set_gea_of(&mut self, capability: &MsNetworkCapability) {
         let first = if capability.gea1() { 0x40 } else { 0 };
         let gea = (2..=7)
             .filter(|&algo| capability.supports_gea(algo))
@@ -3401,7 +3323,6 @@ impl UeSecurityCapability {
             value.push(gea);
             self.value = value.into();
         }
-        self
     }
 }
 
@@ -4555,12 +4476,6 @@ impl RequestType {
         self.value = request_type as u8;
         self
     }
-
-    /// Builder form of [`Self::set_request_type`].
-    pub fn with_request_type(mut self, request_type: RequestTypeValue) -> Self {
-        self.set_request_type(request_type);
-        self
-    }
 }
 
 impl EsmInformationTransferFlag {
@@ -4659,12 +4574,6 @@ impl EpsNetworkFeatureSupport {
             self.value.push(0);
         }
         self.value[0] = (self.value[0] & !0x18) | ((value as u8) << 3);
-    }
-
-    /// Builder form of [`Self::set_cs_lcs`].
-    pub fn with_cs_lcs(mut self, value: CsLcsSupport) -> Self {
-        self.set_cs_lcs(value);
-        self
     }
 
     /// S1-U data transfer as interpreted by the UE: supported when control
@@ -4838,12 +4747,6 @@ impl RadioPriority {
     /// Set the priority level and clear the spare bit.
     pub fn set_priority_level(&mut self, level: RadioPriorityLevel) -> &mut Self {
         self.value = level as u8;
-        self
-    }
-
-    /// Builder form of [`Self::set_priority_level`].
-    pub fn with_priority_level(mut self, level: RadioPriorityLevel) -> Self {
-        self.set_priority_level(level);
         self
     }
 }
@@ -5421,12 +5324,6 @@ impl Nonce {
     pub fn set_nonce(&mut self, nonce: u32) {
         self.value = nonce.to_be_bytes().to_vec().into();
     }
-
-    /// Builder form of [`Self::set_nonce`].
-    pub fn with_nonce(mut self, nonce: u32) -> Self {
-        self.set_nonce(nonce);
-        self
-    }
 }
 
 impl PTmsiSignature {
@@ -5864,11 +5761,6 @@ impl GenericMessageContainerType {
         GenericMessageContainerTypeValue::try_from(self.value).ok()
     }
 
-    /// Raw container type.
-    pub fn container_type_raw(&self) -> u8 {
-        self.value
-    }
-
     /// Whether the value is reserved (0 or 128 to 255) rather than unused.
     pub fn is_reserved(&self) -> bool {
         self.value == 0 || self.value >= 128
@@ -5882,12 +5774,6 @@ impl GenericMessageContainerType {
     /// Replace the container type.
     pub fn set_container_type(&mut self, kind: GenericMessageContainerTypeValue) {
         self.value = kind as u8;
-    }
-
-    /// Builder form of [`Self::set_container_type`].
-    pub fn with_container_type(mut self, kind: GenericMessageContainerTypeValue) -> Self {
-        self.set_container_type(kind);
-        self
     }
 }
 
@@ -6055,15 +5941,6 @@ impl CipheringKeySequenceNumber {
         within("key-sequence", sequence, 0, 7)?;
         self.value = sequence;
         Ok(())
-    }
-
-    /// Builder form of [`Self::set_key_sequence_number`].
-    pub fn with_key_sequence_number(
-        mut self,
-        sequence: u8,
-    ) -> core::result::Result<Self, ValueError> {
-        self.set_key_sequence_number(sequence)?;
-        Ok(self)
     }
 }
 
@@ -6488,7 +6365,8 @@ mod tests {
         pdn_type.set_pdn_type(PdnTypeValue::Ipv4v6);
         assert_eq!(pdn_type.value, 3);
 
-        let request = RequestType::new(0x0e).with_request_type(RequestTypeValue::Emergency);
+        let mut request = RequestType::new(0x0e);
+        request.set_request_type(RequestTypeValue::Emergency);
         assert!(request.is_emergency() && request.value == 4);
         assert_eq!(RequestType::new(0x0d).request_type_raw(), 5);
         assert_eq!(RequestType::new(5).request_type(), None);
@@ -6508,12 +6386,15 @@ mod tests {
         let radio = RadioPriority::new(0x0f);
         assert_eq!(radio.priority_level(), RadioPriorityLevel::Four);
         assert_eq!(RadioPriorityLevel::try_from(radio.value & 0x07).ok(), None);
-        assert_eq!(radio.with_priority_level(RadioPriorityLevel::One).value, 1);
+        let mut radio = radio;
+        radio.set_priority_level(RadioPriorityLevel::One);
+        assert_eq!(radio.value, 1);
 
         assert!(ConnectivityType::new(0x01).is_lipa());
         assert!(!ConnectivityType::new(0x02).is_lipa());
 
-        let wlan = WlanOffloadAcceptability::new(0x0c).with_iu_offload_acceptable(true);
+        let mut wlan = WlanOffloadAcceptability::new(0x0c);
+        wlan.set_iu_offload_acceptable(true);
         assert!(wlan.iu_offload_acceptable() && !wlan.s1_offload_acceptable());
 
         let mut reattempt = ReAttemptIndicator::new(vec![]);
@@ -6585,12 +6466,9 @@ mod tests {
             (attach.attach_type_strict(), attach.attach_type_raw()),
             (None, 0)
         );
-        assert_eq!(
-            attach
-                .with_attach_type(AttachType::EpsEmergencyAttach)
-                .value,
-            6
-        );
+        let mut attach = attach;
+        attach.set_attach_type(AttachType::EpsEmergencyAttach);
+        assert_eq!(attach.value, 6);
 
         let mut update = EpsUpdateType::new(0x0c);
         assert_eq!(update.update_type(), Some(UpdateType::TaUpdating));
@@ -6815,11 +6693,9 @@ mod tests {
         );
         assert_eq!(emm.description(), "Unknown EMM cause 0x04");
         assert_eq!(EmmCauseValue::try_from(0x04).ok(), None);
-        let emm = EmmCause::new(0).with_cause(EmmCauseValue::IllegalUe);
-        assert_eq!(
-            (emm.cause_raw(), emm.description()),
-            (3, "Illegal UE".into())
-        );
+        let mut emm = EmmCause::new(0);
+        emm.set_cause(EmmCauseValue::IllegalUe);
+        assert_eq!((emm.value, emm.description()), (3, "Illegal UE".into()));
 
         // Table 9.9.4.4.1: the UE uses #34 and the network #111, including
         // for the unused value 0x2E (NOTE 2).
@@ -6907,7 +6783,9 @@ mod tests {
     fn key_set_identifiers_expose_ksi_tsc_and_no_key() {
         let ksi = KeySetIdentifier::default();
         assert!(ksi.no_key_available());
-        let mapped = ksi.with_ksi(3).unwrap().with_tsc(true);
+        let mut mapped = ksi;
+        mapped.set_ksi(3).unwrap();
+        mapped.set_tsc(true);
         assert_eq!((mapped.ksi(), mapped.tsc(), mapped.value), (3, true, 0x0b));
         assert_eq!(
             mapped.key_set_identifier(),
@@ -6919,7 +6797,8 @@ mod tests {
         let cksn = CipheringKeySequenceNumber::default();
         assert!(cksn.no_key_available());
         assert_eq!(cksn.key_sequence_number_strict(), None);
-        let cksn = cksn.with_key_sequence_number(4).unwrap();
+        let mut cksn = cksn;
+        cksn.set_key_sequence_number(4).unwrap();
         assert_eq!(cksn.key_sequence_number_strict(), Some(4));
         assert!(CipheringKeySequenceNumber::from_key_sequence_number(8).is_err());
     }
@@ -6931,17 +6810,17 @@ mod tests {
         assert_eq!(received.ciphering(), Ok(Algorithm::Aes));
         assert_eq!(received.integrity(), Ok(Algorithm::Aes));
         assert!(!received.is_well_formed());
-        let built = SecurityAlgorithms::from_algorithms(Algorithm::Null, Algorithm::Aes)
-            .with_ciphering(Algorithm::Zuc);
+        let mut built = SecurityAlgorithms::from_algorithms(Algorithm::Null, Algorithm::Aes);
+        built.set_ciphering(Algorithm::Zuc);
         assert_eq!(built.value, 0x32);
         assert!(built.is_well_formed());
     }
 
     #[test]
     fn n1_and_ms_network_capabilities_decode_their_bits() {
-        let n1 = N1UeNetworkCapability::default()
-            .with_cp_ciot(true)
-            .with_pnb_ciot(PreferredCiotBehavior::UserPlane);
+        let mut n1 = N1UeNetworkCapability::default();
+        n1.set_cp_ciot(true);
+        n1.set_pnb_ciot(PreferredCiotBehavior::UserPlane);
         assert_eq!(n1.value, [0x21]);
         assert!(n1.n3_data_transfer_supported());
         assert_eq!(n1.pnb_ciot(), Some(PreferredCiotBehavior::UserPlane));
@@ -6958,7 +6837,8 @@ mod tests {
         assert!(ms.emm_combined() && ms.isr() && ms.epc() && !ms.srvcc());
         assert!(ms.is_well_formed());
         assert!(!MsNetworkCapability::new(vec![0x80, 0x00]).is_well_formed());
-        let dcnr = MsNetworkCapability::new(vec![0x10, 0x00]).with_dcnr(true);
+        let mut dcnr = MsNetworkCapability::new(vec![0x10, 0x00]);
+        dcnr.set_dcnr(true);
         assert_eq!(
             (dcnr.value.as_slice(), dcnr.value.len()),
             (&[0x10, 0, 0, 0x01][..], 4)
@@ -7003,19 +6883,20 @@ mod tests {
 
     #[test]
     fn small_flag_ies_have_setters_and_generic_container_type_ranges() {
-        assert_eq!(DeviceProperties::new(0).with_low_priority(true).value, 1);
+        let mut properties = DeviceProperties::new(0);
+        properties.set_low_priority(true);
+        assert_eq!(properties.value, 1);
         assert!(NetworkPolicy::new(0x0f).unsecured_redirection_forbidden());
-        assert!(
-            MsNetworkFeatureSupport::new(0)
-                .with_extended_periodic_timers_supported(true)
-                .extended_periodic_timers_supported()
-        );
+        let mut features = MsNetworkFeatureSupport::new(0);
+        features.set_extended_periodic_timers_supported(true);
+        assert!(features.extended_periodic_timers_supported());
         let requested = AdditionalInformationRequested::from_cipher_key_data_requested(true);
         assert!(requested.cipher_key_data_requested() && requested.is_well_formed());
         let container = GenericMessageContainerType::new(0x80);
         assert!(container.is_reserved() && container.container_type().is_none());
-        let lcs = container.with_container_type(GenericMessageContainerTypeValue::Lcs);
-        assert_eq!((lcs.container_type_raw(), lcs.is_reserved()), (2, false));
+        let mut lcs = container;
+        lcs.set_container_type(GenericMessageContainerTypeValue::Lcs);
+        assert_eq!((lcs.value, lcs.is_reserved()), (2, false));
     }
 
     #[test]
@@ -7188,10 +7069,10 @@ mod tests {
         let reserved = EpsNetworkFeatureSupport::new(vec![0x18, 0x00, 0x80]);
         assert_eq!((reserved.cs_lcs(), reserved.cs_lcs_raw()), (None, 3));
         assert!(!reserved.is_well_formed());
-        let built = EpsNetworkFeatureSupport::default()
-            .with_cs_lcs(CsLcsSupport::Supported)
-            .with_iwk_n26(true)
-            .with_ptcc(true);
+        let mut built = EpsNetworkFeatureSupport::default();
+        built.set_cs_lcs(CsLcsSupport::Supported);
+        built.set_iwk_n26(true);
+        built.set_ptcc(true);
         assert_eq!(built.value, [0x08, 0x40, 0x10]);
         assert_eq!(built.value.len(), 3);
 
@@ -7204,11 +7085,9 @@ mod tests {
 
     #[test]
     fn extended_drx_retry_and_eps_rate_helpers() {
-        let drx = ExtendedDrxParameters::new(vec![])
-            .with_paging_time_window(0xa)
-            .unwrap()
-            .with_edrx_value(3)
-            .unwrap();
+        let mut drx = ExtendedDrxParameters::new(vec![]);
+        drx.set_paging_time_window(0xa).unwrap();
+        drx.set_edrx_value(3).unwrap();
         assert_eq!(drx.value, [0xa3]);
         assert_eq!(drx.value.len(), 1);
         assert_eq!((drx.paging_time_window(), drx.edrx_value()), (10, 3));
@@ -7657,7 +7536,8 @@ mod tests {
         );
         // GEA2 and GEA3 of an MS network capability.
         let ms = MsNetworkCapability::new(vec![0x00, 0x60]);
-        let gprs = UeSecurityCapability::from_ue_network_capability(&eps).with_gea_of(&ms);
+        let mut gprs = UeSecurityCapability::from_ue_network_capability(&eps);
+        gprs.set_gea_of(&ms);
         assert_eq!(gprs.value, [0xf0, 0x70, 0x00, 0x00, 0x30]);
         assert!(gprs.supports_gea(2) && gprs.supports_gea(3) && gprs.is_well_formed());
     }
@@ -7671,7 +7551,7 @@ mod tests {
         );
         // A value that the table does not list is kept by the IE.
         let unknown = EmmCause::new(0xFE);
-        assert_eq!((unknown.cause(), unknown.cause_raw()), (None, 0xFE));
+        assert_eq!((unknown.cause(), unknown.value), (None, 0xFE));
         assert_eq!(unknown.encode().unwrap(), [0xFE]);
     }
 
@@ -7681,7 +7561,9 @@ mod tests {
             EpsUpdateType::new(4).update_type(),
             Some(UpdateType::TaUpdating)
         );
-        assert!(EpsUpdateType::new(0).with_active(true).is_active());
+        let mut update = EpsUpdateType::new(0);
+        update.set_active(true);
+        assert!(update.is_active());
         assert_eq!(
             EpsUpdateResult::new(5).update_result(),
             Some(UpdateResult::CombinedTaLaUpdatedAndIsrActivated)

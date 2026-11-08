@@ -290,12 +290,6 @@ macro_rules! nas_ie_flags {
                         self.value[$octet] &= !(1 << ($bit - 1));
                     }
                 }
-
-                #[doc = concat!("Builder form of [`Self::set_", stringify!($flag), "`].")]
-                pub fn [<with_ $flag>](mut self, value: bool) -> Self {
-                    self.[<set_ $flag>](value);
-                    self
-                }
             )* }
         }
     };
@@ -338,12 +332,6 @@ macro_rules! nas_ie_flags {
                     } else {
                         self.value &= !(1 << ($bit - 1));
                     }
-                }
-
-                #[doc = concat!("Builder form of [`Self::set_", stringify!($flag), "`].")]
-                pub fn [<with_ $flag>](mut self, value: bool) -> Self {
-                    self.[<set_ $flag>](value);
-                    self
                 }
             )* }
         }

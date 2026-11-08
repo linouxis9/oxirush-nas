@@ -39,10 +39,12 @@ fn n3_data_of_a_5gmm_capability_is_supported_when_its_bit_is_0() {
     let capability = request.fgmm_capability.unwrap();
     assert!(capability.n3_data());
     assert!(!capability.n3_data_not_supported());
-    let not_supported = capability.clone().with_n3_data(false);
+    let mut not_supported = capability.clone();
+    not_supported.set_n3_data(false);
     assert_eq!(not_supported.value, [0x27]);
     assert!(not_supported.n3_data_not_supported());
-    assert_eq!(not_supported.with_n3_data(true).value, [0x07]);
+    not_supported.set_n3_data(true);
+    assert_eq!(not_supported.value, [0x07]);
 }
 
 #[cfg(feature = "tree")]

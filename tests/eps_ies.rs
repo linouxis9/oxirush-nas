@@ -112,10 +112,10 @@ fn an_esm_cause_is_one_of_table_9_9_4_4_1() {
 #[test]
 fn an_esm_cause_ie_has_its_raw_value_and_the_text_of_its_cause() {
     let cause = EsmCause::new(0x1A);
-    assert_eq!(cause.cause_raw(), 0x1A);
+    assert_eq!(cause.value, 0x1A);
     assert_eq!(cause.description(), "Insufficient resources");
     let unknown = EsmCause::new(0x2E);
-    assert_eq!(unknown.cause_raw(), 0x2E);
+    assert_eq!(unknown.value, 0x2E);
     assert_eq!(unknown.description(), "Unknown ESM cause 0x2e");
     // Any other value is read as #34 by the UE and as #111 by the network
     assert_eq!(
@@ -1285,11 +1285,12 @@ fn s1_u_data_and_overhead_reduction_depend_on_cp_ciot() {
     assert!(!cp_ciot.s1u_data_supported());
     let cp_ciot_and_s1u = EpsNetworkFeatureSupport::new(vec![0x80, 0x02]);
     assert!(cp_ciot_and_s1u.s1u_data_supported());
-    let with_ohr = EpsNetworkFeatureSupport::new(vec![0x80, 0x00])
-        .with_cp_ciot(true)
-        .with_ohr_cp_ciot(true);
+    let mut with_ohr = EpsNetworkFeatureSupport::new(vec![0x80, 0x00]);
+    with_ohr.set_cp_ciot(true);
+    with_ohr.set_ohr_cp_ciot(true);
     assert!(with_ohr.ohr_cp_ciot_supported());
-    let ohr_alone = EpsNetworkFeatureSupport::new(vec![0x00, 0x00]).with_ohr_cp_ciot(true);
+    let mut ohr_alone = EpsNetworkFeatureSupport::new(vec![0x00, 0x00]);
+    ohr_alone.set_ohr_cp_ciot(true);
     assert!(!ohr_alone.ohr_cp_ciot_supported());
 }
 

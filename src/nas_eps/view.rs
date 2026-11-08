@@ -938,13 +938,13 @@ container_ie!(
 code_ie!(
     EmmCause,
     EmmCauseValue,
-    |ie| EmmCauseValue::try_from(ie.cause_raw()).ok(),
+    |ie| EmmCauseValue::try_from(ie.value).ok(),
     EmmCause::from_cause
 );
 code_ie!(
     EsmCause,
     EsmCauseValue,
-    |ie| EsmCauseValue::try_from(ie.cause_raw()).ok(),
+    |ie| EsmCauseValue::try_from(ie.value).ok(),
     EsmCause::from_cause
 );
 code_ie!(

@@ -782,10 +782,7 @@ impl fmt::Display for DownlinkGenericNasTransport {
         f.write_str("DownlinkGenericNasTransport")?;
         let mut items = Items::new(f);
         let kind = &self.generic_message_container_type;
-        items.item(
-            "type",
-            Coded(kind.container_type(), kind.container_type_raw()),
-        )?;
+        items.item("type", Coded(kind.container_type(), kind.value))?;
         let container = &self.generic_message_container.value;
         items.item("container", display::Octets(container))?;
         items.end()
@@ -797,10 +794,7 @@ impl fmt::Display for UplinkGenericNasTransport {
         f.write_str("UplinkGenericNasTransport")?;
         let mut items = Items::new(f);
         let kind = &self.generic_message_container_type;
-        items.item(
-            "type",
-            Coded(kind.container_type(), kind.container_type_raw()),
-        )?;
+        items.item("type", Coded(kind.container_type(), kind.value))?;
         let container = &self.generic_message_container.value;
         items.item("container", display::Octets(container))?;
         items.end()

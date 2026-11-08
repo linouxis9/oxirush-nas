@@ -2615,7 +2615,10 @@ macro_rules! shared_ies {
         decoded_ie!(
             KeySetIdentifier: KeySetIdentifierValue,
             |ie| Some(ie.key_set_identifier()),
-            |ie, identifier| ie.clone().with_key_set_identifier(identifier)
+            |ie, identifier| {
+                let mut ie = ie.clone();
+                ie.set_key_set_identifier(identifier).map(|()| ie)
+            }
         );
         fields_ie!(ReAttemptIndicator {} flags);
     };
