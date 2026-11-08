@@ -144,6 +144,7 @@ jobs:
           - { target: security_eps, max_len: 1024, flags: -len_control=0 }
           - { target: paths_5gs, max_len: 512, flags: -len_control=0 }
           - { target: paths_eps, max_len: 512, flags: -len_control=0 }
+          - { target: upds, max_len: 1024 }
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
@@ -171,8 +172,9 @@ jobs:
           FLAGS: ${{ matrix.flags }}
         run: |
           mkdir -p "fuzz/corpus/$TARGET"
+          # FLAGS is one option, or none
           cargo fuzz run "$TARGET" "fuzz/corpus/$TARGET" -- \
-            -max_total_time="$FUZZ_SECONDS" -timeout=30 -max_len="$MAX_LEN" "$FLAGS" 2>&1 |
+            -max_total_time="$FUZZ_SECONDS" -timeout=30 -max_len="$MAX_LEN" ${FLAGS:+"$FLAGS"} 2>&1 |
             tee "$RUNNER_TEMP/fuzz.log"
       # On Sunday: the inputs that reach nothing that the others do not are
       # dropped.

@@ -110,3 +110,10 @@ test = false
 doc = false
 bench = false
 
+
+[[bin]]
+name = "upds"
+path = "fuzz_targets/upds.rs"
+test = false
+doc = false
+bench = false
