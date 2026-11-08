@@ -31,7 +31,7 @@ use crate::prelude::*;
 use alloc::collections::BTreeMap;
 use alloc::collections::btree_map::Entry;
 use core::net::{Ipv4Addr, Ipv6Addr};
-use oxirush_utils::tree::{Map, Value};
+use oxirush_utils::tree::{self, ErrorKind, Map, Value};
 use readable::Readable;
 
 /// An IE type whose octets have a value: what its typed accessors return,
@@ -1424,6 +1424,50 @@ pub(crate) fn edited_view(
         entries.insert(name, entry);
     }
     Ok(entries.into())
+}
+
+/// The octets of the IE that `path` names in the message whose view is `view`, as
+/// the message has them: `/nas`, then an IE, then for a container an IE of its
+/// message. `None` for an optional IE that the message does not have.
+pub(crate) fn ie_octets(view: &Value, path: &str) -> Result<Option<Vec<u8>>, tree::Error> {
+    let error = |kind, reason: String| tree::Error::new(kind, path, reason);
+    let segments = tree::segments(path)?;
+    let names = match segments.split_first() {
+        Some((root, names)) if same_name(root, "nas") && !names.is_empty() => names,
+        _ => {
+            return Err(error(
+                ErrorKind::Path,
+                "the path of an IE is `/nas/<ie>`".into(),
+            ));
+        }
+    };
+    let mut message = view;
+    for (at, name) in names.iter().enumerate() {
+        let entry = message
+            .as_object()
+            .and_then(|entries| tree::member(entries, name));
+        let Some((name, entry)) = entry else {
+            let reason = format!("`{name}` is no IE of the message");
+            return Err(error(ErrorKind::NoSuchMember, reason));
+        };
+        if entry.is_null() {
+            return Ok(None);
+        }
+        if at + 1 == names.len() {
+            let octets = entry
+                .get("octets")
+                .and_then(Value::as_str)
+                .and_then(tree::unhex);
+            let reason = format!("`{name}` is a field of a header, with no octets of its own");
+            return octets
+                .map(Some)
+                .ok_or_else(|| error(ErrorKind::Refused, reason));
+        }
+        let inside = entry.get("value").filter(|value| is_message(value));
+        let reason = format!("`{name}` has no message in it");
+        message = inside.ok_or_else(|| error(ErrorKind::Refused, reason))?;
+    }
+    Ok(None)
 }
 
 /// The message that `view` describes: `original` as the view edits it, or

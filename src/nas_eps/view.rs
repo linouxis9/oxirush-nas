@@ -754,6 +754,29 @@ impl Message {
         sendable(Self::SecurityProtected(header, Box::new(message)))
     }
 
+    /// The octets of the IE at `path` in the [tree](Self::to_tree), as the
+    /// message has them: the value part of the IE, without its IEI and its
+    /// length. `path` is `/nas` and the name of an IE, then for a container the
+    /// name of an IE of its message: `/nas/nas-message-container/5gmm-capability`.
+    /// `None` for an optional IE that the message does not have.
+    ///
+    /// A tree has the value of an IE, and its octets where the value does not
+    /// write them back: these are the octets that the message came with.
+    ///
+    /// ```
+    /// use oxirush_nas::nas_eps::Message;
+    ///
+    /// // ATTACH REJECT with EMM cause #3
+    /// let reject = Message::decode(&[0x07, 0x44, 0x03]).unwrap();
+    /// assert_eq!(reject.ie_octets("/nas/emm-cause").unwrap(), Some(vec![0x03]));
+    /// ```
+    pub fn ie_octets(
+        &self,
+        path: &str,
+    ) -> core::result::Result<Option<Vec<u8>>, oxirush_utils::tree::Error> {
+        view::ie_octets(&self.to_view(), path)
+    }
+
     /// The message that an edited tree of this one writes: this message, with
     /// what the tree changes.
     ///

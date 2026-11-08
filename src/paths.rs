@@ -369,6 +369,7 @@
 //! | Order | The order of the message: the header first, then the IEs in the order of the message table, and in a value its members in the order of the clause. A tree that is written may have them in any order. |
 //! | Errors | Nothing that is written is ignored. These are errors: a name that the message or a value does not have; a value that its IE cannot carry, with the member and the limit that it breaks as the constructor of the IE says them (``pdu-session-status: entry 1: `pdu-session-identity` is 16, and must be 1 to 15``); a mandatory IE that is taken out or not written; octets of a length that the message does not give the IE; a `message-type` that the IEs are not those of; an edit under a `security-header` that keeps its code. |
 //! | Not checked | The rules of a sender: `validate()` has them. |
+//! | Octets that a message came with | A tree has the value of an IE, and its octets where the value does not write them back. [`ie_octets()`] gives the octets of an IE as the message has them, by the path of the IE: `/nas/nas-message-container/5gmm-capability`. |
 //! | Octets after `with_tree()` | Only what was edited changes: an IE that the tree leaves as it was keeps its octets, and a tree that changes nothing gives the message back. |
 //! | Octets after `from_tree()` | The message means the same ([`means_the_same()`]) and may have other octets, in three cases: its optional IEs are in the order of the message table, with the unknown IEs after them; and a value that says all that its octets mean without deciding them is written in one form (the unit of a timer of one octet and of the rates of a session AMBR, octets of zeros at the end of the flags of a capability, the partial lists of an EPS tracking area identity list). Octets are the way to choose them. |
 //! | EPS SERVICE REQUEST | A short header, no IEs and no `message-type` (TS 24.301 §8.2.25). Its tree has `ksi-and-sequence-number`, whose value is a `ksi` and a `sequence-number`, and the two octets of `message-authentication-code`; the protocol discriminator, and a security header type of 12, are left out as the other headers leave out what their type decides. |
@@ -493,6 +494,7 @@
 //! [`means_the_same()`]: crate::nas_5gs::Message::means_the_same
 //! [`from_tree()`]: crate::nas_5gs::Message::from_tree
 //! [`with_tree()`]: crate::nas_5gs::Message::with_tree
+//! [`ie_octets()`]: crate::nas_5gs::Message::ie_octets
 
 use crate::prelude::*;
 use oxirush_utils::tree::Value;

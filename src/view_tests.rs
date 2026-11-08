@@ -4126,3 +4126,43 @@ fn an_ie_of_octets_alone_is_written_and_shown_by_its_octets() {
     assert_eq!(os_id.value, [1, 2]);
     assert_eq!(os_id.to_tree(), tree!({"octets": "0102"}));
 }
+
+#[test]
+fn the_octets_of_an_ie_are_those_that_the_message_came_with() {
+    use crate::tree::ErrorKind;
+    // SECURITY MODE COMPLETE with the REGISTRATION REQUEST it replays
+    let complete = fgs("7e005e7100137e004101000d0102f8390000000021436587f9");
+    let octets = |path| complete.ie_octets(path);
+    let replayed = hex::decode("7e004101000d0102f8390000000021436587f9").unwrap();
+    assert_eq!(octets("/nas/nas-message-container"), Ok(Some(replayed)));
+    // An IE of the message in a container, by a name written in any case
+    let identity = hex::decode("0102f8390000000021436587f9").unwrap();
+    let path = "/nas/NAS message container/5GS mobile identity";
+    assert_eq!(octets(path), Ok(Some(identity)));
+    // An optional IE that the message does not have
+    assert_eq!(octets("/nas/imeisv"), Ok(None));
+    // What is no IE
+    for (path, kind) in [
+        ("/nas/message-type", ErrorKind::Refused),
+        (
+            "/nas/nas-message-container/5gs-mobile-identity/suci",
+            ErrorKind::Refused,
+        ),
+        (
+            "/nas/nas-message-container/5gmm-cause",
+            ErrorKind::NoSuchMember,
+        ),
+        ("/nas/5gs-mobile-identity", ErrorKind::NoSuchMember),
+        ("/nas", ErrorKind::Path),
+        ("/ngap/Cause", ErrorKind::Path),
+    ] {
+        assert_eq!(
+            octets(path).map_err(|error| error.kind()),
+            Err(kind),
+            "{path}"
+        );
+    }
+    // ATTACH REJECT with EMM cause #3
+    let reject = eps("074403");
+    assert_eq!(reject.ie_octets("/nas/emm-cause"), Ok(Some(vec![3])));
+}
