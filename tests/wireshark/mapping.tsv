@@ -132,6 +132,7 @@ ie	5gs	UE security capability - Replayed S1 UE security capabilities	replayed-s1
 ie	5gs	UE security capability - Replayed UE security capabilities	replayed-ue-security-capabilities
 ie	5gs	UE status	ue-status
 ie	5gs	UE's usage setting	ue-usage-setting
+ie	5gs	Unavailability information	unavailability-information
 ie	5gs	Uplink data status	uplink-data-status
 ie	eps	Additional information	additional-information
 ie	eps	Additional update type	additional-update-type
@@ -697,6 +698,9 @@ field	5gs	UE security capability	eia	bit:nas-eps.emm.eia7,7
 field	5gs	UE status	n1-mode-reg	bool:nas-5gs.mm.n1_mode_reg_b1	
 field	5gs	UE status	s1-mode-reg	bool:nas-5gs.mm.s1_mode_reg_b0	
 field	5gs	UE's usage setting	data-centric	bool:nas-5gs.mm.ue_usage_setting	
+field	5gs	Unavailability information	due-to-discontinuous-coverage	bool:nas-eps.emm.unavailability_info.type	
+field	5gs	Unavailability information	period-duration	int:nas-eps.emm.unavailability_info.unavailability_period_duration	
+field	5gs	Unavailability information	start-of-period	int:nas-eps.emm.unavailability_info.start_unavailability_period	
 field	5gs	Uplink data status		bit:nas-5gs.ul_data_sts_psi_0_b0,0	
 field	5gs	Uplink data status		bit:nas-5gs.ul_data_sts_psi_1_b1,1	
 field	5gs	Uplink data status		bit:nas-5gs.ul_data_sts_psi_2_b2,2	
@@ -1098,6 +1102,8 @@ none	5gs	nas-5gs.mm.tnan_info.ssid_ind	TNAN information	an indication or a lengt
 none	5gs	nas-5gs.mm.tnan_info.ssid_len	TNAN information	an indication or a length: compared through the SSID and the TNGF ID
 none	5gs	nas-5gs.mm.tnan_info.tngf_id_ind	TNAN information	an indication or a length: compared through the SSID and the TNGF ID
 none	5gs	nas-5gs.mm.tnan_info.tngf_id_len	TNAN information	an indication or a length: compared through the SSID and the TNGF ID
+none	5gs	nas-eps.emm.unavailability_info.suppi	Unavailability information	an indication: compared through the start of the period
+none	5gs	nas-eps.emm.unavailability_info.updpi	Unavailability information	an indication: compared through the duration of the period
 none	eps	nas-eps.emm.detach_req_dl	(message)	a marker of the direction that Wireshark takes a DETACH REQUEST in, not a field of the message
 none	eps	nas-eps.emm.detach_req_ul	(message)	a marker of the direction that Wireshark takes a DETACH REQUEST in, not a field of the message
 none	eps	nas-eps.emm.spare_half_octet	(message)	a spare half octet beside a half-octet IE: the crate has it in the octets of that IE

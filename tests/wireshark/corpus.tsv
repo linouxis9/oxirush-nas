@@ -4,7 +4,7 @@
 # RAN simulator, a fixture of the crate or a test of the crate; there is one of each shape of message that
 # both read alike, some of each difference that known.tsv explains, and messages written from the clauses for
 # the components that no capture has (packet filters, QoS flow parameters, EPS QoS bit rates, containers of
-# protocol configuration options). None holds a key.
+# protocol configuration options, the periods of an unavailability). None holds a key.
 5gs	capture, both-ignore	7e004179000d0102f8390000000000000000702e022020700004deadbeef
 5gs	capture, wireshark W2	7e01b2fbc3f3087e004c810007f40041d4413590
 5gs	capture, crate-by-clause	7e00572d0100
@@ -415,6 +415,8 @@ eps	written from the clause, EPS QoS bit rate fe	6200c5050501fefefefe06213111023
 eps	written from the clause, EPS QoS bit rate ff	6200c5050501ffffffff06213111023006
 eps	written from the clause, PCO with network containers	0201c101090908696e7465726e657405010a00000127418000011020010db800000000000000000000005300031020010db800000000000000000000003500050102000c040a0000fe000d040808080800100205dc001100
 5gs	written from the clause, ePCO with network containers	2e0501c211000901000631310101ff01060600010600017b00418000011020010db800000000000000000000005300031020010db800000000000000000000003500050102000c040a0000fe000d040808080800100205dc001100
+5gs	written from the clause, unavailability information with its period and its start	7e004501000bf202f839010040c00000013c07180000100000a0
+5gs	written from the clause, unavailability information of discontinuous coverage with its period	7e004501000bf202f839010040c00000013c0409000010
 eps	written from the clause, PCO with the requests of a UE	0201d011271980000a00000d00000300000c00000100001000000500001100
 eps	written from the clause, TFT of no operation with an authorization token and a flow identifier	6200c50501090bd001020102020400010002
 eps	written from the clause, TFT of no operation with packet filter identifiers	6200c505010905d003020102
