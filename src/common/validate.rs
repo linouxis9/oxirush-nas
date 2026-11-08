@@ -158,13 +158,13 @@ pub(crate) fn with_optional_ie_checks(
 /// The rules of an IE type that `validate()` and a receiver check: the
 /// lengths of its value that its clause gives, the values that a sender sets,
 /// and the grammar that a receiver takes. Each IE type of a message has it,
-/// from the table of its module ([`ie_rules!`]); a rule that a type has not
-/// says nothing (`None`).
+/// from the table of its module ([`ie_rules!`]); a type without a rule takes
+/// what it would check, and has no fault to say.
 pub(crate) trait IeRules {
     /// Whether a receiver takes the length of the value: at least the least
     /// of the clause, and longer (TS 24.007 §11.4.2).
-    fn receiver_length_ok(&self) -> Option<bool> {
-        None
+    fn receiver_length_ok(&self) -> bool {
+        true
     }
 
     /// The rule of the clause on the length of the value that a sender
@@ -175,8 +175,8 @@ pub(crate) trait IeRules {
 
     /// Whether the IE is one that a sender writes.
     #[cfg(feature = "tree")]
-    fn sender_ok(&self) -> Option<bool> {
-        None
+    fn sender_ok(&self) -> bool {
+        true
     }
 
     /// The rule of a sender that the IE breaks, if it breaks one.
@@ -184,14 +184,10 @@ pub(crate) trait IeRules {
         None
     }
 
-    /// Whether a receiver takes the value in the message field `field`.
-    fn receiver_ok(&self, _field: &str) -> Option<bool> {
-        None
-    }
-
-    /// Why a receiver does not take the value, when it says it.
-    fn receiver_fault(&self) -> Option<String> {
-        None
+    /// Whether a receiver takes the value in the message field `field`, or
+    /// why not when it says it.
+    fn receiver_check(&self, _field: &str) -> core::result::Result<(), Option<String>> {
+        Ok(())
     }
 
     /// The IE as the `Display` of its message shows it: by its own `Display`,
@@ -240,8 +236,8 @@ macro_rules! ie_rules {
     };
     (@display) => {};
     (@lengths ($least:expr, $most:expr)) => {
-        fn receiver_length_ok(&self) -> Option<bool> {
-            Some(self.value.len().checked_sub($least).is_some())
+        fn receiver_length_ok(&self) -> bool {
+            self.value.len().checked_sub($least).is_some()
         }
 
         fn sender_length_fault(&self) -> Option<String> {
@@ -251,8 +247,8 @@ macro_rules! ie_rules {
     };
     (@sender) => {
         #[cfg(feature = "tree")]
-        fn sender_ok(&self) -> Option<bool> {
-            Some(self.is_well_formed())
+        fn sender_ok(&self) -> bool {
+            self.is_well_formed()
         }
 
         fn sender_fault(&self) -> Option<&'static str> {
@@ -261,8 +257,8 @@ macro_rules! ie_rules {
     };
     (@sender ($values:pat)) => {
         #[cfg(feature = "tree")]
-        fn sender_ok(&self) -> Option<bool> {
-            Some(matches!(self.value, $values))
+        fn sender_ok(&self) -> bool {
+            matches!(self.value, $values)
         }
 
         fn sender_fault(&self) -> Option<&'static str> {
@@ -272,8 +268,8 @@ macro_rules! ie_rules {
     };
     (@sender_own) => {
         #[cfg(feature = "tree")]
-        fn sender_ok(&self) -> Option<bool> {
-            Some(self.sender_check())
+        fn sender_ok(&self) -> bool {
+            self.sender_check()
         }
 
         fn sender_fault(&self) -> Option<&'static str> {
@@ -281,12 +277,12 @@ macro_rules! ie_rules {
         }
     };
     (@receiver) => {
-        fn receiver_ok(&self, field: &str) -> Option<bool> {
-            Some($crate::common::ReceiverSyntaxCheck::receiver_syntax_ok_for_field(self, field))
-        }
-
-        fn receiver_fault(&self) -> Option<String> {
-            $crate::common::ReceiverSyntaxCheck::receiver_syntax_fault(self)
+        fn receiver_check(&self, field: &str) -> core::result::Result<(), Option<String>> {
+            use $crate::common::ReceiverSyntaxCheck;
+            match self.receiver_syntax_ok_for_field(field) {
+                true => Ok(()),
+                false => Err(self.receiver_syntax_fault()),
+            }
         }
     };
 }

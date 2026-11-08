@@ -4172,3 +4172,22 @@ fn the_octets_of_an_ie_are_those_that_the_message_came_with() {
     let reject = eps("074403");
     assert_eq!(reject.ie_octets("/nas/emm-cause"), Ok(Some(vec![3])));
 }
+
+/// A tree leaves out the fields of a security header that the system decides,
+/// and an edit of the header by its tree writes them all the same.
+#[test]
+fn an_edit_of_a_security_header_by_its_tree_keeps_what_the_system_decides() {
+    let protected = fgs("7e01aabbccdd057e006416");
+    let mut tree = protected.to_tree();
+    let header = &tree["security-header"];
+    assert!(
+        header.get("extended-protocol-discriminator").is_none(),
+        "{header}"
+    );
+    crate::paths::set(&mut tree, "/nas/security-header/sequence-number", tree!(6)).unwrap();
+    let edited = protected.with_tree(tree).unwrap();
+    assert_eq!(
+        hex::encode(edited.encode().unwrap()),
+        "7e01aabbccdd067e006416"
+    );
+}

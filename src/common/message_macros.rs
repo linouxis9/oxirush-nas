@@ -807,7 +807,7 @@ macro_rules! nas_message {
                         nas_message!(@min $($mmin)?),
                         |buffer| Ok(nas_message!(@decode_mand buffer, $mtype $(, $mattr)?)),
                         |value: &$mtype| nas_message!(@receivable value, $mfield),
-                        |value: &$mtype| nas_message!(@reason value),
+                        |value: &$mtype| nas_message!(@reason value, $mfield),
                         faults,
                     )?;
                 )*
@@ -892,12 +892,12 @@ macro_rules! nas_message {
 
     // Whether a receiver accepts the decoded value of `$field`: its type's
     // syntax and minimum-length checks, for the types that have them.
-    (@reason $value:expr) => {
-        crate::common::IeRules::receiver_fault($value)
+    (@reason $value:expr, $field:ident) => {
+        crate::common::IeRules::receiver_check($value, stringify!($field)).err().flatten()
     };
     (@receivable $value:expr, $field:ident) => {
-        crate::common::IeRules::receiver_ok($value, stringify!($field)) != Some(false)
-            && crate::common::IeRules::receiver_length_ok($value) != Some(false)
+        crate::common::IeRules::receiver_check($value, stringify!($field)).is_ok()
+            && crate::common::IeRules::receiver_length_ok($value)
     };
 
     // ── Internal encode rules ──────────────────────────────────────────────

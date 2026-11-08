@@ -557,6 +557,24 @@ mod shown_tests {
         }
     }
 
+    /// A tree on one line: the members of an object and the items of a list
+    /// with a comma between two of them, a text without its quotes.
+    #[cfg(feature = "tree")]
+    #[test]
+    fn a_tree_is_shown_on_one_line() {
+        struct Compact(oxirush_utils::tree::Value);
+        impl fmt::Display for Compact {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                super::compact(f, &self.0)
+            }
+        }
+        let tree = oxirush_utils::tree!({"list": [1, 2], "on": true, "none": null, "text": "a b"});
+        assert_eq!(
+            Compact(tree).to_string(),
+            "{list: [1, 2], on: true, none: null, text: a b}"
+        );
+    }
+
     /// An IE without a `Display` of its own is shown by its tree on one line.
     #[cfg(feature = "tree")]
     #[test]

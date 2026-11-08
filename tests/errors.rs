@@ -785,3 +785,18 @@ fn a_security_context_refuses_what_it_does_not_do() {
         "EPS EIA0, which does not protect, takes EEA0 alone"
     );
 }
+
+/// A mandatory IE that is shorter than its table has it is refused for its
+/// length alone, with no other reason: its type has no grammar to say one.
+#[test]
+fn a_mandatory_ie_too_short_for_its_table_has_no_other_reason() {
+    // EPS AUTHENTICATION RESPONSE whose RES has three octets, where Table
+    // 8.2.8.1 of TS 24.301 has four at least
+    let refusal = Error::InvalidMandatoryIe {
+        ie: IeName::of("authentication_response_parameter"),
+        fault: IeFault::TooShort,
+        reason: None,
+    };
+    let octets = [0x07, 0x53, 0x03, 0xa1, 0xa2, 0xa3];
+    assert_eq!(e::Message::decode(&octets), Err(refusal));
+}

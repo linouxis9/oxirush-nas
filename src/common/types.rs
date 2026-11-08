@@ -325,7 +325,7 @@ mod tests {
     /// that have a value.
     #[test]
     fn a_receiver_takes_parameters_of_their_length() {
-        let ok = |check: &dyn IeRules| check.receiver_length_ok() == Some(true);
+        let ok = |check: &dyn IeRules| check.receiver_length_ok();
         for (length, taken) in [(14, true), (13, false)] {
             assert_eq!(
                 ok(&AuthenticationFailureParameter::new(vec![0; length])),

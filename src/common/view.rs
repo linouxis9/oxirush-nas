@@ -2314,7 +2314,7 @@ macro_rules! fields_ie {
                 }
                 if built
                     && ($crate::common::view::members(value)?.is_empty()
-                        || ie.receiver_length_ok() == Some(false))
+                        || !ie.receiver_length_ok())
                 {
                     let bits = $crate::common::view::Fields::octets(&mut ie).bits();
                     return Err($crate::common::view::too_short(value, bits / 8));
@@ -2362,15 +2362,11 @@ macro_rules! fields_ie {
     // An IE of flags that a value builds is the shortest that carries the
     // flags that are set and that is still an IE of its type: one that the
     // checks of the type take, for its length and as a sender writes it,
-    // and that has an octet. A type that has no such check keeps the octet
-    // of every flag.
+    // and that has an octet. Every type of flags has such a check.
     (@shortest $ie:ident, flags) => {
         let mut shorter = $ie.clone();
         while $crate::common::view::Fields::octets(&mut shorter).shorter(1) {
-            let received = shorter.receiver_length_ok();
-            let sent = shorter.sender_ok();
-            let known = received.is_some() || sent.is_some();
-            if known && received != Some(false) && sent != Some(false) {
+            if shorter.receiver_length_ok() && shorter.sender_ok() {
                 $ie = shorter.clone();
             }
         }
