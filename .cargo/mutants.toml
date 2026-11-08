@@ -36,7 +36,7 @@ exclude_re = [
     # in the four low ones; the second octet of a SERVICE REQUEST is the KSI in the
     # three high bits and the five low bits of the sequence number: `|` and `^` of
     # the two parts give the same octet.
-    'src/nas_eps/security\.rs:.*: replace \| with \^ in NasSecurityContext::(protect_service_request|unprotect_service_request|protect_envelope)$',
+    'src/nas_eps/security\.rs:.*: replace \| with \^ in SecurityContext::(protect_service_request|unprotect_service_request|protect_envelope)$',
     # Fields of distinct bits of one octet, each kept to its own: `^` joins them as
     # `|` does. The MAURI bit (bit 4) and the type of identity 110 (TS 24.501
     # §9.11.3.4); the data type (bits 8 to 6), the DDX (bits 5 to 4) and the PDU
@@ -45,9 +45,9 @@ exclude_re = [
     # (§9.11.3.38); the TFT operation (bits 8 to 6), the E bit and the number of
     # filters of 4 bits, and the direction (bits 6 to 5) and the identifier of 4
     # bits of a filter (TS 24.008 §10.5.6.12).
-    'src/nas_5gs/ie\.rs:.*: replace \| with \^ in NasFGsMobileIdentity::(set_mauri|from_mac_address_with_mauri)$',
-    'src/nas_5gs/ie\.rs:.*: replace \| with \^ in NasCiotSmallDataContainer::from_parsed$',
-    'src/nas_5gs/ie\.rs:.*: replace \| with \^ in NasOperatorDefinedAccessCategoryDefinitions::from_definitions$',
+    'src/nas_5gs/ie\.rs:.*: replace \| with \^ in MobileIdentity::(set_mauri|from_mac_address_with_mauri)$',
+    'src/nas_5gs/ie\.rs:.*: replace \| with \^ in CiotSmallDataContainer::from_parsed$',
+    'src/nas_5gs/ie\.rs:.*: replace \| with \^ in OperatorDefinedAccessCategoryDefinitions::from_definitions$',
     'src/nas_eps/ie\.rs:.*: replace \| with \^ in Tft::to_bytes_mode$',
     # An operator-defined access category definition of fewer than 4 octets, with
     # `entry_length < 3` as with `<= 3` or `== 3`, has no room for a criterion: the
@@ -56,15 +56,15 @@ exclude_re = [
     # or octets after them, the end of the entry that is read is not the end that
     # it says, and `pos != entry_end` refuses it, whether `entry_end != criteria_end
     # + psac` is joined by `||` or by `&&`.
-    'src/nas_5gs/ie\.rs:12159:29: replace < with (<=|==) in NasOperatorDefinedAccessCategoryDefinitions::try_definitions$',
-    'src/nas_5gs/ie\.rs:12177:41: replace \|\| with && in NasOperatorDefinedAccessCategoryDefinitions::try_definitions$',
+    'src/nas_5gs/ie\.rs:\d+:29: replace < with (<=|==) in OperatorDefinedAccessCategoryDefinitions::try_definitions$',
+    'src/nas_5gs/ie\.rs:\d+:41: replace \|\| with && in OperatorDefinedAccessCategoryDefinitions::try_definitions$',
     # Receive rules of a value length that the table of each message where the IE is
     # sets already: a T3512 value, a 5GS network feature support and QoS flow
     # descriptions are not empty, a PDU session reactivation result error cause and
     # an uplink data status have 2 octets at least, and a UE-DS-TT residence time 8,
     # in every message that has them. The decoder checks that length, and with it
     # the same values are refused when the rule says true.
-    'src/nas_5gs/validate\.rs:.*: replace <impl ReceiverSyntaxCheck for (NasT3512Value|NasFGsRegistrationResult|NasFGsNetworkFeatureSupport|NasPduSessionReactivationResultErrorCause|NasQosFlowDescriptions|NasUplinkDataStatus|NasUeDsTtResidenceTime)>::receiver_syntax_ok -> bool with true$',
+    'src/nas_5gs/validate\.rs:.*: replace <impl ReceiverSyntaxCheck for (T3512Value|RegistrationResult|NetworkFeatureSupport|PduSessionReactivationResultErrorCause|QosFlowDescriptions|UplinkDataStatus|UeDsTtResidenceTime)>::receiver_syntax_ok -> bool with true$',
     # Fields of distinct bits of one value of the 5GS IEs, each kept to its own: `^`
     # joins them as `|` does. The registration type, the result, the access type, the
     # service type, the type of identity, the payload container type, the MA PDU
@@ -80,34 +80,31 @@ exclude_re = [
     # the segregation bit, and the indicators and the fields of a PCP/DEI component
     # (§9.11.4.13); the C2AR and the SLAR of a service-level-AA response, and the IEI
     # and the SLAPI of the pending indication, which is written set (§9.11.2.10).
-    'src/nas_5gs/ie\.rs:.*: replace \| with \^ in (NasFGsRegistrationType::(with|set)_registration_type|NasFGsRegistrationResult::(with|set)_result_value|NasDeRegistrationType::(with|set)_(deregistration_)?access_type|NasControlPlaneServiceType::(with|set)_service_type|NasFGsIdentityType::set_identity_type|NasPayloadContainerType::set_kind|NasMaPduSessionInformation::set_info|NasNssaiInclusionMode::set_mode|NasFGsUpdateType::(with|set)_(sms_requested|ng_ran_rcu)|NasFGsUpdateType::set_(eps_)?pnb_ciot|NasFGsmCapability::set_atsss_(st|ll)_value|NasFGsNetworkFeatureSupport::write_two_bits|NasIntraN1ModeNasTransparentContainer::set_(k_amf_change_flag|key_set_identifier)|NasS1ModeToN1ModeNasTransparentContainer::set_(ncc|key_set_identifier)|NasPriorityIndicator::from_flags|NasIntegrityProtectionMaximumDataRate::from_rates|NasMaximumNumberOfSupportedPacketFilters::max_filters|NasRejectedNssai::from_entries_raw|NasQosRules::from_rules|encode_qos_packet_filter_component|NasServiceLevelAaContainer::from_parameters)$',
+    'src/nas_5gs/ie\.rs:.*: replace \| with \^ in (RegistrationType::(with|set)_registration_type|RegistrationResult::(with|set)_result_value|DeRegistrationType::(with|set)_(deregistration_)?access_type|ControlPlaneServiceType::(with|set)_service_type|IdentityType::set_identity_type|PayloadContainerType::set_kind|MaPduSessionInformation::set_info|NssaiInclusionMode::set_mode|UpdateType::(with|set)_(sms_requested|ng_ran_rcu)|UpdateType::set_(eps_)?pnb_ciot|GsmCapability::set_atsss_(st|ll)_value|NetworkFeatureSupport::write_two_bits|IntraN1ModeNasTransparentContainer::set_(k_amf_change_flag|key_set_identifier)|S1ModeToN1ModeNasTransparentContainer::set_(ncc|key_set_identifier)|PriorityIndicator::from_flags|IntegrityProtectionMaximumDataRate::from_rates|MaximumNumberOfSupportedPacketFilters::max_filters|RejectedNssai::from_entries_raw|QosRules::from_rules|encode_qos_packet_filter_component|ServiceLevelAaContainer::from_parameters)$',
     # Growing a value to the length that it has already changes nothing: the session
     # AMBR of six octets, and the 5GSM capability of two.
-    'src/nas_5gs/ie\.rs:(3483:29: replace < with <= in NasSessionAmbr::ensure_len|5983:29: replace < with <= in NasFGsmCapability::set_atsss_ll_value)$',
+    'src/nas_5gs/ie\.rs:(\d+:29: replace < with <= in SessionAmbr::ensure_len|\d+:29: replace < with <= in GsmCapability::set_atsss_ll_value)$',
     # The SMF's IPv6 link local address of a PDU address is taken with `get`, which
     # has none in a value too short for it: the length that the offset of the address
     # checks for each PDU session type says the same.
-    'src/nas_5gs/ie\.rs:(6403:48|6404:48|6405:50): replace match guard self\.value\.len\(\) >= (21|25|29) with true in NasPduAddress::smf_ipv6_link_local_address_offset$',
+    'src/nas_5gs/ie\.rs:(\d+:48|\d+:48|\d+:50): replace match guard self\.value\.len\(\) >= (21|25|29) with true in PduAddress::smf_ipv6_link_local_address_offset$',
     # A mapped NSSAI that is read and written back is the same with eight S-NSSAIs at
     # most; `from_snssais` refuses more than eight on its own, so the count of eight
     # may be joined to it by `||` as by `&&`.
-    'src/nas_5gs/ie\.rs:6336:17: replace && with \|\| in NasMappedNssai::is_well_formed$',
+    'src/nas_5gs/ie\.rs:\d+:17: replace && with \|\| in MappedNssai::is_well_formed$',
     # A rule that deletes may have no precedence, QFI or segregation. The checks before
     # refuse a segregation without a QFI and a QFI without a precedence: a rule with
     # any of the three has a precedence, whether the last two are joined by `||` or by
     # `&&`.
-    'src/nas_5gs/ie\.rs:8588:33: replace \|\| with && in NasQosRules::from_rules$',
+    'src/nas_5gs/ie\.rs:\d+:33: replace \|\| with && in QosRules::from_rules$',
     # The length of a packet filter component of a type that Table 9.11.4.13.1 does
     # not name is only a bound before the octets are written: a rule refuses such a
     # component, and a delay budget writes the length of the octets that it wrote,
     # which refuses a list of 256 octets that a count of one octet fewer lets pass.
-    'src/nas_5gs/ie\.rs:8143:65: replace \+ with \* in qos_packet_filter_component_len$',
+    'src/nas_5gs/ie\.rs:\d+:65: replace \+ with \* in qos_packet_filter_component_len$',
     # The strict check of a service-level-AA container takes a payload as it takes a
     # parameter of a type that it does not know.
-    'src/nas_5gs/ie\.rs:9730:17: delete match arm 0x70 in NasServiceLevelAaContainer::validate_strict$',
-    # A DRX value that is not specified is the one that a receiver reads for every
-    # code that no arm names (TS 24.501 §9.11.3.2A): the arm of 0000 gives it too.
-    'src/nas_5gs/ie\.rs:5683:13: delete match arm 0x00 in DrxValue::from_u8$',
+    'src/nas_5gs/ie\.rs:\d+:17: delete match arm 0x70 in ServiceLevelAaContainer::validate_strict$',
     # Fields of distinct bits of the lists and containers of the 5GS IEs, each kept
     # to its own: `^` joins them as `|` does. The decision, the kind of area and the
     # cause of a received MBS session, and its flags; the type of ID and the operation
@@ -119,13 +116,12 @@ exclude_re = [
     # parameter; the type and the format of a remote UE ID, the protocol and its flags;
     # the direction and the identifier of a packet filter of a delay budget; and the
     # three octets of a relay service code.
-    'src/nas_5gs/ie\.rs:.*: replace \| with \^ in (NasReceivedMbsContainer::try_from_sessions|NasRequestedMbsContainer::try_from_sessions|NasMappedEpsBearerContexts::from_contexts|NasExtendedRejectedNssai::from_partial_lists|NasServiceAreaList::from_entries|NasNid::(from_nid_value|set_assignment_mode_raw)|NasTruncatedFGSTmsiConfiguration::set_(set_id|pointer)_length|PeipsAssistanceInformationEntry::to_validated_byte|NasRemoteUeContextList::from_contexts|encode_qos_match_packet_filters|NasRelayKeyRequestParameters::parse)$',
+    'src/nas_5gs/ie\.rs:.*: replace \| with \^ in (ReceivedMbsContainer::try_from_sessions|RequestedMbsContainer::try_from_sessions|MappedEpsBearerContexts::from_contexts|ExtendedRejectedNssai::from_partial_lists|ServiceAreaList::from_entries|Nid::(from_nid_value|set_assignment_mode_raw)|Truncated5gSTmsiConfiguration::set_(set_id|pointer)_length|PeipsAssistanceInformationEntry::to_validated_byte|RemoteUeContextList::from_contexts|encode_qos_match_packet_filters|RelayKeyRequestParameters::parse)$',
     # A code that the default arm reads the same: the CID length 01 of Ethernet header
     # compression, the DRX value 0000 of NB-N1 mode, and the AUN3 device security key
     # type 00. The data type of control plane user data is 0, which shifts to 0 either
     # way.
-    'src/nas_5gs/ie\.rs:(13317:13: delete match arm 0x01 in EthHdrCompCidLen|13868:13: delete match arm 0x00 in NbN1DrxValue|18846:13: delete match arm 0 in Aun3DeviceSecurityKeyType)::from_u8$',
-    'src/nas_5gs/ie\.rs:17467:79: replace << with >> in NasCiotSmallDataContainer::from_parsed$',
+    'src/nas_5gs/ie\.rs:\d+:79: replace << with >> in CiotSmallDataContainer::from_parsed$',
     # A reader that stops at the end of its value, or where a field ends it, reads no
     # more with `<=` or `>=` there: the next length, which is missing, stops it the same
     # way. A set of ciphering key data starts with 29 octets; c0 and the E-UTRA posSIB
@@ -134,27 +130,27 @@ exclude_re = [
     # NSSAI likewise; a remote UE context of one octet, or one whose ID ends it, has no
     # protocol octet in it; the time windows and the payload information list of a
     # protocol description end at their own end; a CAG information list at its end.
-    'src/nas_5gs/ie\.rs:(13010:19: replace < with <=|13022:44: replace > with >=|13033:35: replace > with >=) in NasCipheringKeyData::data_sets$',
-    'src/nas_5gs/ie\.rs:12465:24: replace > with >= in NasLadnInformation::entries$',
-    'src/nas_5gs/ie\.rs:(17687:19: replace < with <=|17693:30: replace > with >=|17704:34: replace > with >=) in NasExtendedLadnInformation::entries$',
-    'src/nas_5gs/ie\.rs:(18032:34|18040:24): replace > with >= in NasSNssaiLocationValidityInformation::entries$',
-    'src/nas_5gs/ie\.rs:(18270:34: replace > with >=|18285:23: replace < with <=) in NasSNssaiTimeValidityInformation::entries$',
-    'src/nas_5gs/ie\.rs:19215:28: replace > with >= in NasPartialNssai::entries$',
-    'src/nas_5gs/ie\.rs:(19311:19: replace < with <=|19317:28: replace > with >=) in NasAlternativeNssai::entries$',
-    'src/nas_5gs/ie\.rs:(16348:24|16364:29): replace > with >= in NasRemoteUeContextList::contexts$',
-    'src/nas_5gs/ie\.rs:17140:27: replace < with <= in NasProtocolDescription::entries$',
-    'src/nas_5gs/ie\.rs:12619:15: replace < with <= in parse_cag_information_list$',
+    'src/nas_5gs/ie\.rs:(\d+:19: replace < with <=|\d+:44: replace > with >=|\d+:35: replace > with >=) in CipheringKeyData::data_sets$',
+    'src/nas_5gs/ie\.rs:\d+:24: replace > with >= in LadnInformation::entries$',
+    'src/nas_5gs/ie\.rs:(\d+:19: replace < with <=|\d+:30: replace > with >=|\d+:34: replace > with >=) in ExtendedLadnInformation::entries$',
+    'src/nas_5gs/ie\.rs:(\d+:34|\d+:24): replace > with >= in SNssaiLocationValidityInformation::entries$',
+    'src/nas_5gs/ie\.rs:(\d+:34: replace > with >=|\d+:23: replace < with <=) in SNssaiTimeValidityInformation::entries$',
+    'src/nas_5gs/ie\.rs:\d+:28: replace > with >= in PartialNssai::entries$',
+    'src/nas_5gs/ie\.rs:(\d+:19: replace < with <=|\d+:28: replace > with >=) in AlternativeNssai::entries$',
+    'src/nas_5gs/ie\.rs:(\d+:24|\d+:29): replace > with >= in RemoteUeContextList::contexts$',
+    'src/nas_5gs/ie\.rs:\d+:27: replace < with <= in ProtocolDescription::entries$',
+    'src/nas_5gs/ie\.rs:\d+:15: replace < with <= in parse_cag_information_list$',
     # The SOR information: a list of PLMNs that ends at or past the end of the IE
     # leaves no octet of additional parameters, which `data.get` refuses the same
     # way; an acknowledgement of 17 octets is taken by `== 17` already.
-    'src/nas_5gs/ie\.rs:10129:55: replace > with (==|>=) in sor_information_body_is_valid$',
-    'src/nas_5gs/ie\.rs:10309:75: replace > with >= in NasSorTransparentContainer::syntax_is_valid$',
+    'src/nas_5gs/ie\.rs:\d+:55: replace > with (==|>=) in sor_information_body_is_valid$',
+    'src/nas_5gs/ie\.rs:\d+:75: replace > with >= in SorTransparentContainer::syntax_is_valid$',
     # A CAG-ID with additional information that is refused leaves the list with
     # `pos = list_end + 1`; `- 1` is no more the end of the list, which is all that
     # the check after it asks; the number of time periods is one octet, times 16 added
     # to a position: that checked_add has no overflow to answer.
-    'src/nas_5gs/ie\.rs:(12713:36|12730:40|12739:40): replace \+ with - in parse_cag_information_list$',
-    'src/nas_5gs/ie\.rs:12735:40: replace \+ with (\*|-) in parse_cag_information_list$',
+    'src/nas_5gs/ie\.rs:(\d+:36|\d+:40|\d+:40): replace \+ with - in parse_cag_information_list$',
+    'src/nas_5gs/ie\.rs:\d+:40: replace \+ with (\*|-) in parse_cag_information_list$',
     # Checks that another check settles: more than 15, or 15, parameters of five defined
     # identifiers repeat one or have an undefined one; a GPRS timer 3 is well formed
     # with one octet, and only then; a list of rejected S-NSSAIs cut short has reached
@@ -162,21 +158,21 @@ exclude_re = [
     # the length of a packet filter of a delay budget refuses 256 octets again; the
     # count of NR CGIs of an S-NSSAI location is read in two octets of an entry that
     # has, with a valid S-NSSAI, ten more octets than the place of that count.
-    'src/nas_5gs/ie\.rs:10654:34: replace > with (==|>=) in MappedEpsBearerContext::is_well_formed$',
-    'src/nas_5gs/ie\.rs:11763:61: replace && with \|\| in NasExtendedRejectedNssai::from_partial_lists$',
-    'src/nas_5gs/ie\.rs:11736:25: replace < with > in NasExtendedRejectedNssai::try_partial_lists$',
-    'src/nas_5gs/ie\.rs:15681:31: replace \|\| with && in NasNon3GppDeviceInformation::entries$',
-    'src/nas_5gs/ie\.rs:(16786:24: replace \+ with \*|16788:25: replace > with ==) in encode_qos_match_packet_filters$',
-    'src/nas_5gs/ie\.rs:17992:60: replace \+ with \* in NasSNssaiLocationValidityInformation::receiver_syntax_is_valid$',
+    'src/nas_5gs/ie\.rs:\d+:34: replace > with (==|>=) in MappedEpsBearerContext::is_well_formed$',
+    'src/nas_5gs/ie\.rs:\d+:61: replace && with \|\| in ExtendedRejectedNssai::from_partial_lists$',
+    'src/nas_5gs/ie\.rs:\d+:25: replace < with > in ExtendedRejectedNssai::try_partial_lists$',
+    'src/nas_5gs/ie\.rs:\d+:31: replace \|\| with && in Non3GppDeviceInformation::entries$',
+    'src/nas_5gs/ie\.rs:(\d+:24: replace \+ with \*|\d+:25: replace > with ==) in encode_qos_match_packet_filters$',
+    'src/nas_5gs/ie\.rs:\d+:60: replace \+ with \* in SNssaiLocationValidityInformation::receiver_syntax_is_valid$',
     # The replay window, a bit for each COUNT below the highest that it accepted.
     # Without the arm for a direction where nothing was accepted, the first COUNT
     # accepted marks the one before COUNT 0, which no message has: the window takes
     # no COUNT below 0. The bits that a window keeps are moved past the one of the
     # highest COUNT before, and those that it had are kept apart from those that it
     # takes as accepted: `^` joins them as `|` does.
-    'src/common/security\.rs:417:17: delete match arm 0 in Core<S>::advance$',
-    'src/common/security\.rs:423:27: replace \| with \^ in Core<S>::advance$',
-    'src/common/security\.rs:452:44: replace \| with \^ in Core<S>::set_window$',
+    'src/common/security\.rs:\d+:17: delete match arm 0 in Core<S>::advance$',
+    'src/common/security\.rs:\d+:27: replace \| with \^ in Core<S>::advance$',
+    'src/common/security\.rs:\d+:44: replace \| with \^ in Core<S>::set_window$',
     # Fields of distinct bits of one value, each kept to its own: `^` joins them as `|`
     # does. A KSI and the bit of a mapped one (TS 24.301 §9.9.3.21); a bit for each
     # profile of header compression; the security header type in the four high bits and
@@ -186,15 +182,15 @@ exclude_re = [
     # bits; the digits, the sign and the tens of a time zone, two swapped BCD digits, two
     # number digits and two hexadecimal digits, each of four bits; the octets of a septet
     # and of a TAC; the octets of a number that a view writes.
-    'src/common/ts24301\.rs:114:38: replace \| with \^ in KeySetIdentifier::as_u8$',
-    'src/common/ts24301\.rs:1216:45: replace \| with \^ in IpHdrCompProfiles::as_u8$',
-    'src/nas_5gs/messages\.rs:98:32: replace \| with \^ in security_header_type_octet$',
-    'src/nas_eps/messages\.rs:(72:64|3010:55|3066:56): replace \| with \^ in <impl Encode for (NasEpsSecurityHeader|NasEsmHeader|NasServiceRequest)>::encode_into$',
-    'src/nas_eps/view\.rs:661:48: replace \| with \^ in NasServiceRequest::written$',
-    'src/common/ts24008\.rs:(269:40|296:40|1434:32|1434:51|1525:25|1643:29): replace \| with \^ in (gprs_timer_octet_from_seconds|gprs_timer3_octet_from_seconds|time_zone_octet|to_swapped_bcd_value|encode_number_digits)$',
-    'src/common/gsm7\.rs:121:30: replace \| with \^ in unpack_septets$',
-    'src/common/readable\.rs:364:54: replace \| with \^ in octets_of$',
-    'src/common/view\.rs:(809:54|868:67): replace \| with \^ in (set_octets|unknown_ies)$',
+    'src/common/ts24301\.rs:\d+:38: replace \| with \^ in KeySetIdentifierValue::as_u8$',
+    'src/common/ts24301\.rs:\d+:45: replace \| with \^ in IpHdrCompProfiles::as_u8$',
+    'src/nas_5gs/messages\.rs:\d+:32: replace \| with \^ in security_header_type_octet$',
+    'src/nas_eps/messages\.rs:(\d+:64|\d+:55|\d+:56): replace \| with \^ in <impl Encode for (SecurityHeader|EsmHeader|ServiceRequest)>::encode_into$',
+    'src/nas_eps/view\.rs:\d+:48: replace \| with \^ in ServiceRequest::written$',
+    'src/common/ts24008\.rs:(\d+:40|\d+:40|\d+:32|\d+:51|\d+:25|\d+:29): replace \| with \^ in (gprs_timer_octet_from_seconds|gprs_timer3_octet_from_seconds|time_zone_octet|to_swapped_bcd_value|encode_number_digits)$',
+    'src/common/gsm7\.rs:\d+:30: replace \| with \^ in unpack_septets$',
+    'src/common/readable\.rs:\d+:54: replace \| with \^ in octets_of$',
+    'src/common/view\.rs:(\d+:54|\d+:67): replace \| with \^ in (set_octets|unknown_ies)$',
     # Fields of distinct bits of one value of the EPS IEs, each kept to its own: `^`
     # joins them as `|` does. The preferred CIoT behaviour of the N1 UE network
     # capability and the two parts of an NRI of 10 bits (TS 24.008 §10.5.5.31); the
@@ -206,34 +202,34 @@ exclude_re = [
     # octet 3a of a CLI (TS 24.008 §10.5.4.9); the flags of the additional update type
     # (§9.9.3.0B), of the WLAN offload acceptability (TS 24.008 §10.5.6.20) and of the
     # extended EMM cause (§9.9.3.26A).
-    'src/nas_eps/ie\.rs:.*: replace \| with \^ in (NasN1UeNetworkCapability::set_pnb_ciot|NasNetworkResourceIdentifierContainer::nri|RemoteUeContext::to_bytes|NasControlPlaneServiceType::(from_service_type|set_service_type|set_active)|NasEpsUpdateType::(set_update_type|set_active)|NasDetachType::from_ue_detach_kind|NasUeSecurityCapability::with_gea_of|TftPacketFilterComponent::to_bytes|NasEpsNetworkFeatureSupport::set_cs_lcs|NasCli::from_number|NasAdditionalUpdateType::from_fields|NasWlanOffloadAcceptability::from_acceptability|NasExtendedEmmCause::from_flags)$',
+    'src/nas_eps/ie\.rs:.*: replace \| with \^ in (N1UeNetworkCapability::set_pnb_ciot|NetworkResourceIdentifierContainer::nri|RemoteUeContext::to_bytes|ControlPlaneServiceType::(from_service_type|set_service_type|set_active)|EpsUpdateType::(set_update_type|set_active)|DetachType::from_ue_detach_kind|UeSecurityCapability::with_gea_of|TftPacketFilterComponent::to_bytes|EpsNetworkFeatureSupport::set_cs_lcs|Cli::from_number|AdditionalUpdateType::from_fields|WlanOffloadAcceptability::from_acceptability|ExtendedEmmCause::from_flags)$',
     # A user identity of a remote UE is well formed when it is the identity that
     # `from_digits` writes of its digits. That builder refuses an IMEI or an IMEISV of
     # another number of digits, or of the last digits that the type check refuses, and
     # the digits are read from canonical octets alone: where the type check says false,
     # the identity is not the one that the builder writes, and where it says true, it is.
-    'src/nas_eps/ie\.rs:(1697:70|1698:72|1702:31): replace && with \|\| in RemoteUeUserIdentity::is_well_formed$',
+    'src/nas_eps/ie\.rs:(\d+:70|\d+:72|\d+:31): replace && with \|\| in RemoteUeUserIdentity::is_well_formed$',
     # A packet filter is held only in the list of a TFT, whose blank is empty: nothing
     # asks a filter for a blank of its own.
     'src/nas_eps/ie\.rs:.*: replace <impl crate::common::readable::Readable for TftPacketFilter>::blank -> Option<Self> with None$',
     # Resizing four octets to four changes nothing.
-    'src/nas_eps/ie\.rs:6557:29: replace < with <= in NasUeAdditionalSecurityCapability::set_bit$',
+    'src/nas_eps/ie\.rs:\d+:29: replace < with <= in UeAdditionalSecurityCapability::set_bit$',
     # Receive rules of a value length that the table of each message where the IE is
     # sets already: an EPS QoS, a traffic flow aggregate and a NAS message container are
     # not empty, and a UE network capability has two octets, in every message that has
     # them (TS 24.301 chapter 8), and an EPS QoS of one octet or more is read. The decoder
     # checks that length, and with it the same values are refused when the rule says true.
-    'src/nas_eps/validate\.rs:.*: replace <impl ReceiverSyntaxCheck for (NasEpsQualityOfService|NasTrafficFlowAggregateDescription|NasMessageContainer|NasUeNetworkCapability)>::receiver_syntax_ok -> bool with true$',
+    'src/nas_eps/validate\.rs:.*: replace <impl ReceiverSyntaxCheck for (EpsQualityOfService|TrafficFlowAggregateDescription|MessageContainer|UeNetworkCapability)>::receiver_syntax_ok -> bool with true$',
     # An NSSAI is checked by the rule of the field that holds it, which takes the place of
     # the rule of its type: nothing asks for the latter, and the trait is the crate's own.
-    'src/nas_5gs/validate\.rs:259:9: replace <impl ReceiverSyntaxCheck for NasNssai>::receiver_syntax_ok -> bool with (true|false)$',
+    'src/nas_5gs/validate\.rs:\d+:9: replace <impl ReceiverSyntaxCheck for Nssai>::receiver_syntax_ok -> bool with (true|false)$',
     # Every value of the three bits of a registration type and of the type of an identity
     # request has a name (TS 24.501 §9.11.3.7 reads the unused 000 as initial
     # registration, §9.11.3.3 as SUCI), so the code of a value of no name is never shown;
     # and the name of "no identity" is never asked for, a mobile identity of that type
     # being shown as such before.
-    'src/nas_5gs/display\.rs:(581:71|821:83): replace & with (\^|\|) in <impl fmt::Display for (NasRegistrationRequest|NasIdentityRequest)>::fmt$',
-    'src/nas_5gs/display\.rs:495:9: delete match arm MobileIdentityType::NoIdentity in identity_type_name$',
+    'src/nas_5gs/display\.rs:(\d+:71|\d+:83): replace & with (\^|\|) in <impl fmt::Display for (RegistrationRequest|IdentityRequest)>::fmt$',
+    'src/nas_5gs/display\.rs:\d+:9: delete match arm MobileIdentityType5gs::NoIdentity in identity_type_name$',
     # The IEs of the UE policy delivery service (TS 24.501 Annex D.6). Five octets left at
     # the start of a sublist of instructions, four at the start of a subresult, five at
     # the start of a UPSI sublist and four at the start of a tuple are too few for one,
@@ -243,48 +239,41 @@ exclude_re = [
     # UPSI sublist, are even when their sum with what was read is, as their difference is.
     # Every cause of a result is read as #111 (Table D.6.3.1), whichever octet it is read
     # from. And fields of distinct bits of one octet: `^` joins them as `|` does.
-    'src/nas_5gs/upds\.rs:(765:24|902:24|996:24|1069:24): replace > with >= in (UePolicySectionManagementList::try_sublists|UePolicySectionManagementResult::try_subresults|UpsiList::try_sublists|VpsUrspConfiguration::parse)$',
-    'src/nas_5gs/upds\.rs:(1091:72|1106:71): replace < with <= in VpsUrspConfiguration::parse$',
-    'src/nas_5gs/upds\.rs:(1002:34|1145:28): replace - with \+ in (UpsiList::try_sublists|VpsUrspConfiguration::parse)$',
-    'src/nas_5gs/upds\.rs:920:76: replace \+ with - in UePolicySectionManagementResult::try_subresults$',
+    'src/nas_5gs/upds\.rs:(\d+:24|\d+:24|\d+:24|\d+:24): replace > with >= in (UePolicySectionManagementList::try_sublists|UePolicySectionManagementResult::try_subresults|UpsiList::try_sublists|VpsUrspConfiguration::parse)$',
+    'src/nas_5gs/upds\.rs:(\d+:72|\d+:71): replace < with <= in VpsUrspConfiguration::parse$',
+    'src/nas_5gs/upds\.rs:(\d+:34|\d+:28): replace - with \+ in (UpsiList::try_sublists|VpsUrspConfiguration::parse)$',
+    'src/nas_5gs/upds\.rs:\d+:76: replace \+ with - in UePolicySectionManagementResult::try_subresults$',
     'src/nas_5gs/upds\.rs:.*: replace \| with \^ in (UpdsMultiplePayloadContainer::encode|encode_mcc_pair|encode_odd_mcc)$',
     # The messages of the service: a network classmark is out of sequence after a VPS URSP
     # configuration alone, the rank 1 being reached by a classmark, which makes the next
     # one repeated before its rank is asked. An optional TLV or TLV-E IE of no octet at the
     # end of a message is malformed, and is kept with its header whether it is read as its
     # IE or as an unknown one.
-    'src/nas_5gs/upds\.rs:2264:53: replace > with >= in <impl Decode for NasUpdsEnvelope>::decode_from$',
-    'src/nas_5gs/upds\.rs:(2527|2544):27: replace < with (<=|==) in (decode_tlv|decode_tlve)$',
+    'src/nas_5gs/upds\.rs:\d+:53: replace > with >= in <impl Decode for UpdsEnvelope>::decode_from$',
+    'src/nas_5gs/upds\.rs:\d+:27: replace < with (<=|==) in (decode_tlv|decode_tlve)$',
     # A rate is on a step of 8, 64 or 100 kbps from the start of its range as from 0:
     # the starts 64, 576 and 8,600 are steps of their own, added or taken away.
-    'src/common/ts24301\.rs:(843:27|844:30|852:33): replace - with \+ in (eps_bit_rate_octet|eps_extended_bit_rate_octet)$',
+    'src/common/ts24301\.rs:(\d+:27|\d+:30|\d+:33): replace - with \+ in (eps_bit_rate_octet|eps_extended_bit_rate_octet)$',
     # The value of a member that is not written, or the blank one, is the default of its
     # type: zero, false, empty or absent.
-    'src/common/readable\.rs:(694|713|729|743|810|814|860|916):9: replace <impl Readable for (u8|usize|bool|String|Option<T>|Vec<T>|crate::common::Octets)>::(missing|blank) -> Option<Self> with Some\(Default::default\(\)\)$',
-    'src/common/forms\.rs:(101|163|187):9: replace (plmn_list|tai_list|hexadecimal)::blank -> Option<Vec<.*>> with Some\(vec!\[\]\)$',
-    'src/common/unknown_ie\.rs:(230|234):9: replace <impl crate::common::readable::Readable for UnknownIes>::(missing|blank) -> Option<Self> with Some\(Default::default\(\)\)$',
+    'src/common/readable\.rs:\d+:9: replace <impl Readable for (u8|usize|bool|String|Option<T>|Vec<T>|crate::common::Octets)>::(missing|blank) -> Option<Self> with Some\(Default::default\(\)\)$',
+    'src/common/forms\.rs:\d+:9: replace (plmn_list|tai_list|hexadecimal)::blank -> Option<Vec<.*>> with Some\(vec!\[\]\)$',
+    'src/common/unknown_ie\.rs:\d+:9: replace <impl crate::common::readable::Readable for UnknownIes>::(missing|blank) -> Option<Self> with Some\(Default::default\(\)\)$',
     # The place of the second of a pair of values is any but 0, counted down as up.
-    'src/common/readable\.rs:437:12: replace \+= with -= in pair_items$',
+    'src/common/readable\.rs:\d+:12: replace \+= with -= in pair_items$',
     # A label of no octet or of more than 63 is refused by valid_label all the same.
-    'src/common/labels\.rs:47:27: replace \|\| with && in decode_labels_with_maximum$',
+    'src/common/labels\.rs:\d+:27: replace \|\| with && in decode_labels_with_maximum$',
     # A repeated IE is not kept, and the branch of an IE that is not kept writes the order
     # of those kept so far just as this one does; an IE at the place of the furthest one
     # is a repeated one, which is no IE out of sequence that could be kept.
-    'src/common/message_macros\.rs:(147:51|181:66): replace (>> with <<|< with <=) in decode_optional_ies$',
+    'src/common/message_macros\.rs:(\d+:51|\d+:66): replace (>> with <<|< with <=) in decode_optional_ies$',
     # An order without an entry has nothing to find in it, early return or not.
-    'src/common/unknown_ie\.rs:286:9: replace IeOrder::is_empty -> bool with false$',
+    'src/common/unknown_ie\.rs:\d+:9: replace IeOrder::is_empty -> bool with false$',
     # Keeping as many octets as there are changes nothing, as resizing to the same length.
-    'src/common/octets\.rs:141:19: replace < with <= in Octets::truncate$',
+    'src/common/octets\.rs:\d+:19: replace < with <= in Octets::truncate$',
     # Each reader of a packet of the protocol configuration options reads only what its
     # writer gives back, so the octets of what it read are always those it was given.
-    'src/common/ppp\.rs:54:29: replace match guard packet\.octets\(\)\.as_deref\(\) == Ok\(octets\) with true in Packet<T>::of$',
-    # The checks that a type does not have answer None, which their callers take as the
-    # check that passes, and an IE of flags of octets has a length or a sender check
-    # while one of one octet does not grow shorter. No table of a message gives an IE
-    # fewer octets than its type takes, so the decoder refuses a shorter one by the table
-    # before the type's check, which says nothing more there, nor its reason.
-    'src/common/validate\.rs:(220|236|293|334):9: replace <impl (ViaIeLengthCheck for IeLengthCheckProbe|ViaNoIeLengthCheck for &IeLengthCheckProbe|ViaNoReceiverSyntaxCheck for &ReceiverSyntaxCheckProbe|ViaNoSenderCheck for &SenderCheckProbe)<._, T>>::(receiver_length_result|receiver_syntax_result|sender_check_result) -> Option<bool> with Some\(true\)$',
-    'src/common/validate\.rs:297:9: replace <impl ViaNoReceiverSyntaxCheck for &ReceiverSyntaxCheckProbe<._, T>>::receiver_syntax_reason -> Option<String> with Some\(.*\)$',
+    'src/common/ppp\.rs:\d+:29: replace match guard packet\.octets\(\)\.as_deref\(\) == Ok\(octets\) with true in Packet<T>::of$',
     # The views: a number in a view is that of an IE of one or two octets, the size that
     # a value of octets has, of 0 as of none, never reaches either; the defaults of
     # header_name and refused_header are those of no message, both systems having their
@@ -293,21 +282,19 @@ exclude_re = [
     # flag writes its own bit, which reads back; and a code is written by trying every
     # combination of the bits of its field, of 4 at most, in any order, in an IE of one
     # octet that holds them already.
-    'src/common/view\.rs:(286|296):9: replace <impl Shown for (Vec<u8>|crate::common::Octets)>::size -> usize with 0$',
-    'src/common/view\.rs:794:34: replace match guard size <= 2 with true in octets_of$',
-    'src/common/view\.rs:(355|366):9: replace Viewed::(header_name|refused_header) -> ',
-    'src/common/view\.rs:(1069:5: replace is_message -> bool|1091:33: replace match guard is_message\(value\)|1166:21: replace match guard is_message\(value\)) with false( in to_tree| in tree_in)?$',
-    'src/common/view\.rs:1922:39: replace && with \|\| in set_flag$',
-    'src/common/view\.rs:(1768:40|1794:26): replace == with != in <impl FlagOctets for (crate::common::Octets|u8)>::bit$',
-    'src/common/view\.rs:1782:9: replace <impl FlagOctets for u8>::longer -> bool with true$',
-    'src/common/view\.rs:(1884:24: replace \|\| with &&|1884:38: replace > with (==|>=)|1889:43: replace != with ==|1889:69: replace == with !=) in set_number$',
-    'src/view\.rs:629:32: replace match guard place\.value\(\)\.is_none_or\(Value::is_null\) with true in <impl Family for Views>::step$',
-    'src/view\.rs:641:29: replace match guard tree::same_name\(name, "value"\) with true in <impl Family for Views>::member$',
+    'src/common/view\.rs:\d+:9: replace <impl Shown for (Vec<u8>|crate::common::Octets)>::size -> usize with 0$',
+    'src/common/view\.rs:\d+:34: replace match guard size <= 2 with true in octets_of$',
+    'src/common/view\.rs:\d+:9: replace Viewed::(header_name|refused_header) -> ',
+    'src/common/view\.rs:(\d+:5: replace is_message -> bool|\d+:33: replace match guard is_message\(value\)|\d+:21: replace match guard is_message\(value\)) with false( in to_tree| in tree_in)?$',
+    'src/common/view\.rs:\d+:39: replace && with \|\| in set_flag$',
+    'src/common/view\.rs:(\d+:40|\d+:26): replace == with != in <impl FlagOctets for (crate::common::Octets|u8)>::bit$',
+    'src/common/view\.rs:\d+:9: replace <impl FlagOctets for u8>::longer -> bool with true$',
+    'src/common/view\.rs:(\d+:24: replace \|\| with &&|\d+:38: replace > with (==|>=)|\d+:43: replace != with ==|\d+:69: replace == with !=) in set_number$',
     # The readable form of every message reads back, so `meant` never fails and the
     # comparison of the messages themselves is not reached; and a container whose octets
     # are a 5GSM message is written back by the tree of that message, its unknown IEs
     # with it.
-    'src/nas_(5gs|eps)/view\.rs:(538|775):23: replace == with != in Nas(5gs|Eps)Message::means_the_same$',
-    'src/nas_5gs/view\.rs:811:9: replace <impl Ie for N1SmContainer<._>>::written_back -> bool with true$',
-    'src/nas_5gs/view\.rs:816:25: replace && with \|\| in <impl Ie for N1SmContainer<._>>::written_back$',
+    'src/nas_(5gs|eps)/view\.rs:\d+:23: replace == with != in Message::means_the_same$',
+    'src/nas_5gs/view\.rs:\d+:9: replace <impl Ie for N1SmContainer<._>>::written_back -> bool with true$',
+    'src/nas_5gs/view\.rs:\d+:25: replace && with \|\| in <impl Ie for N1SmContainer<._>>::written_back$',
 ]
