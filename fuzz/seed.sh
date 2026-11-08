@@ -12,7 +12,7 @@ tab="$(printf '\t')"
 # The message of the octets $3, under the name $2, for the targets of the
 # system $1.
 seed() {
-    for target in decode view; do
+    for target in decode tree; do
         mkdir -p "fuzz/corpus/${target}_$1"
         printf '%s' "$3" | xxd -r -p > "fuzz/corpus/${target}_$1/$2"
     done

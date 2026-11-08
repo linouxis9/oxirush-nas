@@ -60,10 +60,9 @@ enum Choice {
 pub fn build<M: Message>(input: Build) {
     let pool = M::pool();
     let message = pool.message(input.base);
-    // What the message type can have: the names of its view, but for the
-    // type itself, which decides them
-    let names: Vec<String> = (message.to_view().as_object().into_iter())
-        .flat_map(|view| view.keys().cloned())
+    // What the message type can have, but for the type itself, which
+    // decides them
+    let names: Vec<String> = (message.names().into_iter())
         .filter(|name| name != "message-type")
         .collect();
     let mut tree = message.to_tree();

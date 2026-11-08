@@ -26,8 +26,8 @@
 //!
 //! A benchmark is `operation/input`, and its time is that of one pass over
 //! the messages of the input: criterion also gives it per message, as
-//! elements per second. What an operation is given, such as the view that
-//! `with-view` reads, is made before the pass and is no part of its time. With `--profile-time`, criterion runs the benchmark
+//! elements per second. What an operation is given, such as the tree that
+//! `with-tree` reads, is made before the pass and is no part of its time. With `--profile-time`, criterion runs the benchmark
 //! for that many seconds under pprof, which samples the program a thousand
 //! times a second and writes `profile.pb`, a profile that `go tool pprof`
 //! reads (`-top`, `-list REGEX`, `-peek REGEX`, `-traces`). With

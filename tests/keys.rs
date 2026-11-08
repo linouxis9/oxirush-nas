@@ -2,7 +2,7 @@
 //! ciphering keys of the positioning SIBs, the MSK of an MBS session and K_NR_ProSe it
 //! shows the length, and so does it of the octets of an IE that holds one. Of an EAP
 //! message it shows the header, without the attributes, where an EAP-AKA' response
-//! has RES. A tree and a view are the data of a message, and have the keys.
+//! has RES. A tree is the data of a message, and has the keys.
 
 use oxirush_nas::nas_5gs::*;
 use oxirush_nas::nas_eps;

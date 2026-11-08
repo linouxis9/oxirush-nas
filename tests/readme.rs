@@ -45,7 +45,7 @@ const PAGES: &[(&str, &str)] = &[
         "src/nas_eps/security.rs",
         include_str!("../src/nas_eps/security.rs"),
     ),
-    ("src/view.rs", include_str!("../src/view.rs")),
+    ("src/paths.rs", include_str!("../src/paths.rs")),
 ];
 const BLOCKS: &str = include_str!("readme/blocks.rs");
 const BLOCKS_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/readme/blocks.rs");

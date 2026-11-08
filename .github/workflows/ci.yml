@@ -161,8 +161,8 @@ jobs:
       - run: ./fuzz/seed.sh
       - run: cargo fuzz run decode_5gs -- -max_total_time=60 -max_len=512 -dict=fuzz/nas-5gs.dict
       - run: cargo fuzz run decode_eps -- -max_total_time=60 -max_len=512 -dict=fuzz/nas-eps.dict
-      - run: cargo fuzz run view_5gs -- -max_total_time=60 -max_len=512 -dict=fuzz/nas-5gs.dict
-      - run: cargo fuzz run view_eps -- -max_total_time=60 -max_len=512 -dict=fuzz/nas-eps.dict
+      - run: cargo fuzz run tree_5gs -- -max_total_time=60 -max_len=512 -dict=fuzz/nas-5gs.dict
+      - run: cargo fuzz run tree_eps -- -max_total_time=60 -max_len=512 -dict=fuzz/nas-eps.dict
       - run: cargo fuzz run edit_5gs -- -max_total_time=60 -max_len=512 -len_control=0
       - run: cargo fuzz run edit_eps -- -max_total_time=60 -max_len=512 -len_control=0
       - run: cargo fuzz run build_5gs -- -max_total_time=60 -max_len=512 -len_control=0

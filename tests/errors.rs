@@ -730,10 +730,10 @@ fn a_tree_out_of_range_is_refused_in_the_words_of_the_crate() {
         "{refused}"
     );
     let reject = f::Message::decode(&hex::decode("7e0044165f012a").unwrap()).unwrap();
-    let mut view = reject.to_view();
-    view["5gmm-cause"]["octets"] = tree!("ffff");
+    let mut edit = reject.to_tree();
+    edit["5gmm-cause"] = tree!({"octets": "ffff"});
     assert_eq!(
-        reject.with_view(view).unwrap_err().to_string(),
+        reject.with_tree(edit).unwrap_err().to_string(),
         "cannot encode: 5gmm-cause: \"ffff\" is not one octet"
     );
 }

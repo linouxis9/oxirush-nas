@@ -19,7 +19,7 @@
 //!
 //! ```sh
 //! cargo bench --bench heap -- decode/5gs-fixtures
-//! cargo bench --bench heap -- with-view/unknown-ies-1000 12   # the 12 first sites
+//! cargo bench --bench heap -- with-tree/unknown-ies-1000 12   # the 12 first sites
 //! ```
 //!
 //! The program runs the benchmarks that its arguments select, each for a

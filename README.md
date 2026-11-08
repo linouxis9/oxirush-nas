@@ -482,14 +482,13 @@ mandatory IE `5gs-mobile-identity` has a value that is syntactically incorrect: 
 
 ## A message as JSON
 
-With the `tree` feature, a message has two JSON forms. The tree has the
-message type and the value of each IE: you print a message with it, and
-write one. The view has every IE that the message can have, with its
-`value` and its `octets`: you edit a message with it, and `with_view()`
-encodes the IEs you changed and keeps the octets of the others. Both carry
-the keys of a message, RES and RES\* among them, which `Display` and `Debug`
-hide: do not log them. `Serialize` and `Deserialize` go through the tree, in
-any format of serde.
+With the `tree` feature, a message is a tree: its message type and the value
+of each IE by its name. You print a message with it, write one from it, and
+edit one: `with_tree()` encodes the IEs you changed and keeps the octets of
+the others. An IE is written `{"octets": "…"}` to send its octets as they are.
+A tree carries the keys of a message, RES and RES\* among them, which
+`Display` and `Debug` hide: do not log it. `Serialize` and `Deserialize` go
+through the tree, in any format of serde.
 
 ```rust
 use oxirush_nas::nas_5gs::Message;
@@ -500,14 +499,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let reject = Message::decode(&hex::decode("7e0044165f012a")?)?;
     println!("{}", reject.to_tree());
 
-    // In its view, an IE is changed by its value, one comes in by its octets,
-    // and one goes out
-    let mut view = reject.to_view();
-    println!("{}", view["t3346-value"]);
-    view["5gmm-cause"]["value"] = tree!("illegal-ue");
-    view["t3502-value"] = tree!({"octets": "2c"});
-    view["t3346-value"] = tree!(null);
-    let edited = reject.with_view(view)?;
+    // An IE is changed by its value, one comes in by its octets, and one goes out
+    let mut tree = reject.to_tree();
+    tree["5gmm-cause"] = tree!("illegal-ue");
+    tree["t3502-value"] = tree!({"octets": "2c"});
+    tree.as_object_mut().unwrap().shift_remove("t3346-value");
+    let edited = reject.with_tree(tree)?;
     println!("{}", edited.to_tree());
 
     // A message written from its tree
@@ -520,46 +517,44 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ```text
 {"message-type":"registration-reject","5gmm-cause":"congestion","t3346-value":600}
-{"value":600,"octets":"2a"}
 {"message-type":"registration-reject","5gmm-cause":"illegal-ue","t3502-value":720}
 ```
 
-The [`view`](https://docs.rs/oxirush-nas/latest/oxirush_nas/view/index.html)
-module has the rules of the two forms and the notation of each kind of
-value, with examples: a message in a container, the protocol configuration
-options, a list, a protected message, and octets sent as they are.
+The [`paths`](https://docs.rs/oxirush-nas/latest/oxirush_nas/paths/index.html)
+module has the rules of the tree and the notation of each kind of value, with
+examples: a message in a container, the protocol configuration options, a
+list, a protected message, and octets sent as they are.
 
 ## Read and edit by path
 
 A path starts at `/nas`, then names an IE, in any case.
 
 ```rust
-use oxirush_nas::{nas_5gs::Message, view};
-use oxirush_nas::tree;
+use oxirush_nas::{nas_5gs::Message, paths, tree};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // REGISTRATION ACCEPT with a 5G-GUTI and an allowed NSSAI
     let bytes = hex::decode("7e0042010177000bf202f8390100421122334415020101")?;
     let accept = Message::decode(&bytes)?;
-    let mut tree = accept.to_view();
+    let mut tree = accept.to_tree();
 
     // A value by its path, and each entry of a list with `*`
-    for path in ["/nas/5g-guti/value/guti/plmn", "/NAS/Allowed NSSAI/value/*/SST"] {
-        for value in view::select(&tree, path)? {
+    for path in ["/nas/5g-guti/guti/plmn", "/NAS/Allowed NSSAI/*/SST"] {
+        for value in paths::select(&tree, path)? {
             println!("{value}");
         }
     }
 
     // A value is set at its path, an optional IE added by its value, and an
     // entry put at the end of a list (`-`)
-    view::set(&mut tree, "/nas/5g-guti/value/guti/tmsi", tree!("0xdeadbeef"))?;
-    view::set(&mut tree, "/nas/t3512-value/value", tree!(3600))?;
-    view::insert(&mut tree, "/nas/allowed-nssai/value/-", tree!({"sst": 2}))?;
-    let edited = accept.with_view(tree)?;
+    paths::set(&mut tree, "/nas/5g-guti/guti/tmsi", tree!("0xdeadbeef"))?;
+    paths::set(&mut tree, "/nas/t3512-value", tree!(3600))?;
+    paths::insert(&mut tree, "/nas/allowed-nssai/-", tree!({"sst": 2}))?;
+    let edited = accept.with_tree(tree)?;
     println!("{}", hex::encode(edited.encode()?));
 
     // A name that the message does not have is an error
-    if let Err(wrong) = view::select(&accept.to_view(), "/nas/t3512/value") {
+    if let Err(wrong) = paths::select(&accept.to_tree(), "/nas/t3512") {
         println!("{wrong}");
     }
     Ok(())
@@ -570,10 +565,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 "208-93"
 1
 7e0042010177000bf202f839010042deadbeef1504010101025e0106
-`t3512` is no IE of a message `registration-accept`, at /nas/t3512/value
+`t3512` is no IE of a message `registration-accept`, at /nas/t3512
 ```
 
-`view::paths` gives each value of a view with the path that selects it.
+`paths::paths` gives each value of a tree with the path that selects it.
 
 ## Limits
 
@@ -584,7 +579,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 - `encode()` writes any value that a type can hold, so a test tool can send
   an invalid message.
 - 13 5GS and 19 EPS IE types have octets and no value in JSON
-  ([which](https://docs.rs/oxirush-nas/latest/oxirush_nas/view/index.html#ie-types-that-have-a-value)).
+  ([which](https://docs.rs/oxirush-nas/latest/oxirush_nas/paths/index.html#ie-types-that-have-a-value)).
 - Two items follow Release 20 and differ from V19.8.0 on the wire
   ([which](https://docs.rs/oxirush-nas#specification-versions)).
 
@@ -592,17 +587,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 On one core of an AMD Ryzen 7 5700G (Linux 7.0, Rust 1.98.1), at c4fdffc on
 2026-10-18, and the JSON forms at 3a0d08d, for a message of the 5GS
-fixtures (17 octets on average):
+fixtures (17 octets on average). `with_tree` was timed for 0.6.0 beside
+`from_tree`, on a busy machine: it takes 1.14 times as long.
 
 | Operation | Time | Allocations |
 |-----------|------|-------------|
 | `decode` | 109 ns | 1.2 |
 | `encode` | 46 ns | 1.0 |
 | `validate` | 210 ns | 3.2 |
-| `to_view` | 3.2 µs | 65 |
-| `with_view` | 13.2 µs | 137 |
 | `to_tree` | 15.2 µs | 210 |
 | `from_tree` | 29.9 µs | 339 |
+| `with_tree` | 34 µs | 478 |
 | `protect`, `unprotect` (128-NIA2, 128-NEA2) | 230 ns, 323 ns | 2.0, 2.3 |
 
 [`benches/`](benches/README.md) has how to run them and the profilers.
@@ -640,7 +635,7 @@ cargo test --release --features security --test key_wiping
 `tests/fixtures` has at least one message of each 5GMM, 5GSM, EMM and ESM
 type, and 170 messages that Open5GS, free5GC and PacketRusher sent in a
 lab. Each one decodes, validates and encodes back to its octets, also
-through its view and its serde form. `key_wiping` searches the memory of its
+through its tree, which is its serde form. `key_wiping` searches the memory of its
 own process for the keys of a dropped security context, in an optimized
 build. Ten fuzz targets decode, edit and build messages and protect them,
 for a minute each at each commit, an hour each night and four hours on

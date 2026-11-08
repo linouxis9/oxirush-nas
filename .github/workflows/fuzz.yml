@@ -134,8 +134,8 @@ jobs:
         include:
           - { target: decode_5gs, max_len: 512, flags: -dict=fuzz/nas-5gs.dict }
           - { target: decode_eps, max_len: 512, flags: -dict=fuzz/nas-eps.dict }
-          - { target: view_5gs, max_len: 512, flags: -dict=fuzz/nas-5gs.dict }
-          - { target: view_eps, max_len: 512, flags: -dict=fuzz/nas-eps.dict }
+          - { target: tree_5gs, max_len: 512, flags: -dict=fuzz/nas-5gs.dict }
+          - { target: tree_eps, max_len: 512, flags: -dict=fuzz/nas-eps.dict }
           - { target: edit_5gs, max_len: 512, flags: -len_control=0 }
           - { target: edit_eps, max_len: 512, flags: -len_control=0 }
           - { target: build_5gs, max_len: 512, flags: -len_control=0 }

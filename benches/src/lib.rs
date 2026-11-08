@@ -117,7 +117,7 @@ pub enum Run<'a> {
     /// The operation needs the message alone.
     Direct(Box<dyn Fn(usize) + 'a>),
     /// The operation is given something that is made first and is no part
-    /// of it, such as the view that `with-view` reads: this makes it, and
+    /// of it, such as the tree that `with-tree` reads: this makes it, and
     /// returns the call.
     Prepared(Box<dyn Fn(usize) -> Call<'a> + 'a>),
 }
@@ -438,10 +438,9 @@ impl Input {
                         let tree = message(at).to_tree();
                         move || done(nas_5gs::Message::from_tree(tree))
                     }),
-                    operation("view", count, move |at| done(message(at).to_view())),
-                    prepared("with-view", count, move |at| {
-                        let view = message(at).to_view();
-                        move || done(message(at).with_view(view))
+                    prepared("with-tree", count, move |at| {
+                        let tree = message(at).to_tree();
+                        move || done(message(at).with_tree(tree))
                     }),
                     operation("to-json", count, move |at| {
                         done(serde_json::to_string(message(at)))
@@ -469,10 +468,9 @@ impl Input {
                         let tree = message(at).to_tree();
                         move || done(nas_eps::Message::from_tree(tree))
                     }),
-                    operation("view", count, move |at| done(message(at).to_view())),
-                    prepared("with-view", count, move |at| {
-                        let view = message(at).to_view();
-                        move || done(message(at).with_view(view))
+                    prepared("with-tree", count, move |at| {
+                        let tree = message(at).to_tree();
+                        move || done(message(at).with_tree(tree))
                     }),
                     operation("to-json", count, move |at| {
                         done(serde_json::to_string(message(at)))

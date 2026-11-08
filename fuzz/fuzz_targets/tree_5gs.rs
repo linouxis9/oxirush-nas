@@ -18,7 +18,7 @@
 #![no_main]
 //! The JSON forms of a decoded message, whatever octets it was decoded from.
 //!
-//! A view that changes nothing gives the message back. A tree is one that a
+//! A tree that changes nothing gives the message back. A tree is one that a
 //! message is written from, the message that is written from it has the
 //! same tree, and it means what the message means: two messages may have
 //! one tree and not mean the same, where a tree does not show all that the
@@ -27,16 +27,15 @@
 //! same.
 
 use libfuzzer_sys::fuzz_target;
-use oxirush_nas::nas_eps::Message;
+use oxirush_nas::nas_5gs::Message;
 
 fuzz_target!(|octets: &[u8]| {
     let Ok(message) = Message::decode(octets) else {
         return;
     };
-    let view = message.to_view();
-    match message.with_view(view) {
+    match message.with_tree(message.to_tree()) {
         Ok(same) => assert_eq!(same, message),
-        Err(error) => panic!("the view of a message is refused: {error}: {message:?}"),
+        Err(error) => panic!("the tree of a message does not edit it: {error}: {message:?}"),
     }
 
     let tree = message.to_tree();

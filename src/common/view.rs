@@ -1080,21 +1080,6 @@ pub(crate) fn from_view<M: Viewed>(
     Err(format!("no message `{kind}`"))
 }
 
-/// The view of the message of the kind `kind` that has nothing written yet,
-/// as [`from_view`] starts from it: `None` when no variant of `families`
-/// has such a message.
-pub(crate) fn blank_view<M: Viewed>(families: &[&str], kind: &str) -> Option<Value> {
-    families.iter().find_map(|family| {
-        let blank = readable::blank::<M>(&[family, kind])?;
-        // The message struct that `kind` names, and not the first of the enum.
-        let tree = readable::to_value(&blank).ok()?;
-        let body = tree.as_object().and_then(|tree| tree.values().next());
-        (body.and_then(|parts| parts.as_array()?.get(1)?.as_object()?.keys().next()))
-            .is_some_and(|name| same_name(name, kind))
-            .then(|| to_view(&blank, Scope::NONE))
-    })
-}
-
 /// The name of the `message-type` that the view `view` writes: a name as it
 /// is written, or the name that a message of `M` has for a number.
 pub(crate) fn message_type<M: Viewed>(view: &Value) -> Option<String> {
@@ -1381,6 +1366,64 @@ pub(crate) fn from_tree(
         view.insert(name.clone(), entry);
     }
     Ok(view.into())
+}
+
+/// The view that the tree `tree` writes as an edit of a message whose view is
+/// `view` and whose tree is `before`: `view`, in which each member that the tree
+/// changes is written by the tree, each member that the tree leaves out is taken
+/// out, and every other entry, the fields of the header that the tree leaves to
+/// its type among them, keeps its octets.
+pub(crate) fn edited_view(
+    view: Value,
+    before: Value,
+    tree: Value,
+    decided: Decided<'_>,
+    scope: Scope,
+) -> Result<Value, String> {
+    let (Value::Object(mut entries), Value::Object(before)) = (view, before) else {
+        return Err("a message is written as its IEs by name".into());
+    };
+    let Value::Object(members) = tree else {
+        return Err("a message is written as its IEs by name".into());
+    };
+    let named = |map: &Map, name: &str| (map.keys().find(|key| same_name(key, name))).cloned();
+    // What the tree leaves out is taken out.
+    for name in before.keys() {
+        if named(&members, name).is_none()
+            && let Some(entry) = entries.get_mut(name)
+        {
+            *entry = Value::Null;
+        }
+    }
+    // What the tree changes is written by it.
+    for (name, mut written) in members {
+        let unchanged =
+            named(&before, &name).is_some_and(|known| before[known.as_str()] == written);
+        if unchanged {
+            continue;
+        }
+        // A security header has the fields that the system decides, which a
+        // tree leaves out.
+        if let (true, Value::Object(fields)) = (same_name(&name, SECURITY_HEADER), &mut written) {
+            for (field, value) in decided(Some(SECURITY_HEADER), None)? {
+                if !fields.keys().any(|name| same_name(name, field)) {
+                    fields.insert(field.into(), value);
+                }
+            }
+        }
+        let octets = written.as_object().filter(|written| written.len() == 1);
+        let entry = match octets.and_then(|written| written.get("octets")) {
+            Some(octets) => oxirush_utils::tree!({ "octets": octets }),
+            None if written.get("message-type").is_some_and(is_type_written) => {
+                let inside = scope.inside().ok_or(Scope::REFUSED)?;
+                oxirush_utils::tree!({ "value": from_tree(&written, Some(&name), decided, inside)? })
+            }
+            None => oxirush_utils::tree!({ "value": written }),
+        };
+        let name = named(&entries, &name).unwrap_or(name);
+        entries.insert(name, entry);
+    }
+    Ok(entries.into())
 }
 
 /// The message that `view` describes: `original` as the view edits it, or
@@ -3070,7 +3113,7 @@ pub(crate) mod tests {
             "security-header-type": {"value": "plain-5gs-nas-message-not-security-protected"},
             "message-type": {"value": "5gmm-status"},
         });
-        let from = |view: Value| GmmMessageType::FiveGmmStatus.from_view(view);
+        let from = |view: Value| GmmMessageType::FiveGmmStatus.message_from_view(view);
         let error = from(header.clone()).unwrap_err().to_string();
         assert!(error.contains("`5gmm-cause` is not written"), "{error}");
         let mut view = header.clone();
@@ -3096,7 +3139,7 @@ pub(crate) mod tests {
         use crate::nas_5gs::GmmMessageType;
         use oxirush_utils::tree;
         let request = GmmMessageType::RegistrationRequest
-            .from_view(tree!({
+            .message_from_view(tree!({
                 "extended-protocol-discriminator": {"value": 126},
                 "security-header-type": {"value": "plain-5gs-nas-message-not-security-protected"},
                 "message-type": {"value": "registration-request"},
@@ -3118,7 +3161,7 @@ pub(crate) mod tests {
         use crate::nas_5gs::{GmmMessage, GmmMessageType};
         use oxirush_utils::tree;
         let transport = GmmMessageType::UlNasTransport
-            .from_view(tree!({
+            .message_from_view(tree!({
                 "extended-protocol-discriminator": {"value": 126},
                 "security-header-type": {"value": "plain-5gs-nas-message-not-security-protected"},
                 "message-type": {"value": "ul-nas-transport"},

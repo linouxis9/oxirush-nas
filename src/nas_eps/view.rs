@@ -20,8 +20,8 @@
 use crate::common::readable::{from_value, same_name};
 use crate::common::view::{self, Viewed, Visit};
 use crate::common::{Error, Result};
-use crate::nas_eps::{EmmHeader, EmmTransport, EsmHeader, ServiceRequest};
-use crate::nas_eps::{EmmMessage, EmmMessageType, EsmMessage, EsmMessageType, Message};
+use crate::nas_eps::{EmmMessageType, EsmMessage, EsmMessageType, Message};
+use crate::nas_eps::{EmmTransport, ServiceRequest};
 use crate::prelude::*;
 
 /// Who sends an ESM message, where its type says so (TS 24.301 §8.3): the
@@ -215,55 +215,10 @@ impl Viewed for Message {
 }
 
 impl Message {
-    /// The view of the message: each of its IEs by the name TS 24.301 gives
-    /// it, with its `value` and its `octets`.
-    ///
-    /// `octets` is the value part of the IE in hexadecimal. `value` is what
-    /// the typed accessors of the IE decode from it, in the notation a
-    /// reader expects: a coded value is its name (`"eps-attach"`) or, where
-    /// the specification names none, its number; a PLMN identity is
-    /// `"208-93"`; an IMSI or an IMEI is its digits; a TMSI or a TAC is a
-    /// number and an APN is text; an IP address is its text; a container of
-    /// a NAS message is the view of that message. What has no other
-    /// notation stays hexadecimal. An IE that the crate does not decode,
-    /// and octets that do not decode, have `octets` alone. So do octets
-    /// whose value the crate could not take back, such as the reserved
-    /// identity of a linked bearer or a time whose digits are no decimal
-    /// digits: a value that a view shows is one that it takes.
-    ///
-    /// Names are in lower case with hyphens. A field of the header has a
-    /// `value` alone, and an optional IE that the message does not have is
-    /// `null`. The unknown IEs of a message are not in it. The entries are
-    /// in the order of the message: the fields of the header first, then the
-    /// IEs in the order of the message table.
-    ///
-    /// A view is read through a security header: its entries are those of
-    /// the plain message, and `security-header` beside them has the value
-    /// of the header that protects it, with its `security-header-type`, its
-    /// `message-authentication-code` and its `sequence-number`. A message
-    /// that is ciphered has that header and its octets as
-    /// `ciphered-message`. A SERVICE
-    /// REQUEST has the fields of its short header (§8.2.25): its
-    /// `security-header-type`, its `ksi-and-sequence-number`, whose value
-    /// is a `ksi` and a `sequence-number`, and the octets of its
-    /// `message-authentication-code`. EMM TRANSPORT, which has no IEs, has
-    /// an empty view.
-    ///
-    /// ```
-    /// use oxirush_nas::nas_eps::Message;
-    /// use oxirush_nas::tree;
-    ///
-    /// // ATTACH REJECT with EMM cause #3.
-    /// let reject = Message::decode(&[0x07, 0x44, 0x03]).unwrap();
-    /// let mut view = reject.to_view();
-    /// assert_eq!(view["message-type"]["value"], tree!("attach-reject"));
-    /// assert_eq!(view["emm-cause"], tree!({"value": "illegal-ue", "octets": "03"}));
-    ///
-    /// view["emm-cause"]["value"] = tree!("congestion");
-    /// let edited = reject.with_view(view).unwrap();
-    /// assert_eq!(edited.encode().unwrap(), [0x07, 0x44, 0x16]);
-    /// ```
-    pub fn to_view(&self) -> oxirush_utils::tree::Value {
+    /// The view of the message: each field of the header and each IE that the message
+    /// can have, with its `value` and its `octets`, `null` for one that the message has
+    /// not. A tree is made of it.
+    pub(crate) fn to_view(&self) -> oxirush_utils::tree::Value {
         match self {
             Self::ServiceRequest(request) => request.view(),
             Self::EmmTransport(transport) => transport.view(),
@@ -271,44 +226,10 @@ impl Message {
         }
     }
 
-    /// The message that an edited view of this one describes.
-    ///
-    /// An IE whose `value` was changed is encoded from it, and an IE whose
-    /// `octets` were changed has those octets, whatever they are: its
-    /// length follows. An IE that the view leaves out or has as `null` is
-    /// taken out of the message, and an optional IE that the message does
-    /// not have is added with the `value` or the `octets` that the view
-    /// gives it. An IE that is built from a value has the octets of every
-    /// member that is written, a zero or a `false` as any other. The
-    /// message is otherwise this one, with its unknown IEs.
-    ///
-    /// A name is its letters and its digits, whatever their case and
-    /// whatever is between them, and a number is also read as a `"0x…"`
-    /// string, except in the `message-type` and the `security-header-type`
-    /// of a header, where a string is a name. Nothing that the view says is
-    /// ignored: a name that does not exist, a member that an IE or a value
-    /// does not have, a value that its IE cannot carry, and `octets` and a
-    /// `value` that were both changed and disagree are errors.
-    ///
-    /// A value says what an IE means, not how it is coded. The encoder
-    /// chooses what the value does not show, such as the unit of a timer
-    /// or the type of a partial tracking area identity list; the octets
-    /// are the way to choose it. A coded value is written by its name or
-    /// by its number, which are two ways to write one code, in an IE and
-    /// in the header: `"congestion"` and `22` are one cause, and a
-    /// `message-type` of `0x44` is `"attach-reject"`.
-    ///
-    /// The message authentication code of a security header is that of the
-    /// octets it was computed over: an edit of the message under the header
-    /// that keeps the code is an error, and the code that the view writes
-    /// in `security-header` is taken as it is.
-    ///
-    /// The message that comes back is one that [`Self::encode`] encodes,
-    /// as this one is: an edit that makes a message that has no octets, such
-    /// as octets of a length that the message does not give the IE, is an
-    /// error here. What the message says is not checked against the rules of
-    /// a sender, which `validate()` has.
-    pub fn with_view(&self, view: oxirush_utils::tree::Value) -> Result<Self> {
+    /// The message that an edited view of this one describes: an IE whose `value`
+    /// changed is encoded from it, one whose `octets` changed has them, and the others
+    /// keep their octets.
+    pub(crate) fn with_view(&self, view: oxirush_utils::tree::Value) -> Result<Self> {
         let edited = match self {
             Self::ServiceRequest(request) => {
                 let request = request.written(view, false);
@@ -325,31 +246,8 @@ impl Message {
         Ok(edited)
     }
 
-    /// The message that a view describes alone, which its `message-type`
-    /// names: an EMM or an ESM message, as [`EmmMessageType::from_view`]
-    /// and [`EsmMessageType::from_view`] make it of a type that is known.
-    /// A view without a `message-type` that has a `ksi-and-sequence-number`
-    /// is that of a SERVICE REQUEST, as [`ServiceRequest::from_view`]
-    /// reads it.
-    ///
-    /// The message is a plain one. The `security-header` that the view of a
-    /// protected message has is no entry of it: [`Self::with_view`] edits a
-    /// message under its header.
-    ///
-    /// ```
-    /// use oxirush_nas::nas_eps::Message;
-    /// use oxirush_nas::tree;
-    ///
-    /// let reject = Message::from_view(tree!({
-    ///     "protocol-discriminator": {"value": 7},
-    ///     "security-header-type": {"value": "plain-nas-message-not-security-protected"},
-    ///     "message-type": {"value": "attach-reject"},
-    ///     "emm-cause": {"value": "congestion"},
-    /// }))
-    /// .unwrap();
-    /// assert_eq!(reject.encode().unwrap(), [0x07, 0x44, 0x16]);
-    /// ```
-    pub fn from_view(view: oxirush_utils::tree::Value) -> Result<Self> {
+    /// The message that a view describes alone, which its `message-type` names.
+    pub(crate) fn from_view(view: oxirush_utils::tree::Value) -> Result<Self> {
         let Some(named) = view::message_type::<Self>(&view) else {
             let has = |entry: &str| {
                 (view.as_object().into_iter().flatten()).any(|(name, _)| same_name(name, entry))
@@ -367,11 +265,11 @@ impl Message {
         };
         match message_types().find(&named) {
             Some((0, place)) => match emm_types().nth(place) {
-                Some(kind) => kind.from_view(view),
+                Some(kind) => kind.message_from_view(view),
                 None => Err(Error::EncodingError(format!("no message `{named}`"))),
             },
             Some((_, place)) => match esm_types().nth(place) {
-                Some(kind) => kind.from_view(view),
+                Some(kind) => kind.message_from_view(view),
                 None => Err(Error::EncodingError(format!("no message `{named}`"))),
             },
             None => Err(Error::EncodingError(no_message(&named))),
@@ -531,25 +429,8 @@ const SERVICE_REQUEST: [&str; 4] = [
 ];
 
 impl ServiceRequest {
-    /// The SERVICE REQUEST that a view describes alone: every field of its
-    /// short header, as [`Message::to_view`] has them. The
-    /// `ksi-and-sequence-number` has its `value` or its `octets`, and the
-    /// `message-authentication-code` its two `octets`.
-    ///
-    /// ```
-    /// use oxirush_nas::nas_eps::ServiceRequest;
-    /// use oxirush_nas::tree;
-    ///
-    /// let request = ServiceRequest::from_view(tree!({
-    ///     "protocol-discriminator": {"value": 7},
-    ///     "security-header-type": {"value": "security-header-for-the-service-request-message"},
-    ///     "ksi-and-sequence-number": {"value": {"ksi": 1, "sequence-number": 5}},
-    ///     "message-authentication-code": {"octets": "abcd"},
-    /// }))
-    /// .unwrap();
-    /// assert_eq!(request.encode().unwrap(), [0xc7, 0x25, 0xab, 0xcd]);
-    /// ```
-    pub fn from_view(view: oxirush_utils::tree::Value) -> Result<Message> {
+    /// The message that a view describes alone, which its `message-type` names.
+    pub(crate) fn from_view(view: oxirush_utils::tree::Value) -> Result<Message> {
         let request = Self::new(0, 0).written(view, true);
         (request.map(Message::ServiceRequest))
             .map_err(Error::EncodingError)
@@ -775,10 +656,9 @@ impl Message {
     }
 
     /// This message as a tree: its `message-type` and its IEs by name, each
-    /// with its value as [`Self::to_view`] reads it, or with its `octets`
-    /// when it has no readable value.
+    /// with its value, or as `{"octets": "…"}` when it has no readable value.
     ///
-    /// A tree is the compact form of a view. What the type of the message
+    /// What the type of the message
     /// decides is left out (the protocol discriminator, and a plain security
     /// header type), and so are the optional IEs that the message does not
     /// have. The message in a container is its own tree, and the header that
@@ -811,8 +691,8 @@ impl Message {
     ///   and what a receiver ignores of one that it has, a repetition, an
     ///   IE out of sequence or one whose value is not one of its type.
     ///
-    /// [`Self::to_view`] has the octets of each IE beside its value, and
-    /// [`Self::with_view`] keeps every octet that an edit does not change.
+    /// [`Self::with_tree`] keeps the octets of every IE that an edit does not
+    /// change.
     ///
     /// ```
     /// use oxirush_nas::nas_eps::Message;
@@ -832,8 +712,7 @@ impl Message {
     /// `message-type` names it, and each other member is an IE or a field of
     /// its header with its value, or `{"octets": "…"}` for the octets of an
     /// IE as they are sent. What the type of the message decides of its
-    /// header is given where the tree leaves it out, and nothing else is:
-    /// the tree is read as [`Self::from_view`] reads a view, so that a
+    /// header is given where the tree leaves it out, and nothing else is: a
     /// mandatory IE that it leaves out is an error.
     ///
     /// The `message-type` is the name of the type or its number. A field of
@@ -874,6 +753,48 @@ impl Message {
         };
         sendable(Self::SecurityProtected(header, Box::new(message)))
     }
+
+    /// The message that an edited tree of this one writes: this message, with
+    /// what the tree changes.
+    ///
+    /// An IE that the tree leaves as [`Self::to_tree`] shows it keeps its octets.
+    /// An IE whose value the tree changes is encoded from it, and one written as
+    /// `{"octets": "…"}` has those octets, whatever they are: its length follows.
+    /// An IE that the tree leaves out is taken out of the message, and an optional
+    /// IE that the message does not have is added from what the tree writes. The
+    /// message is otherwise this one, with its unknown IEs.
+    ///
+    /// Nothing that the tree says is ignored: a name that does not exist, a member
+    /// that an IE or a value does not have, and a value that its IE cannot carry
+    /// are errors. The message authentication code of a security header is that of
+    /// the octets it was computed over: an edit of the message under the header that
+    /// keeps the code is an error, and the code that the tree writes in
+    /// `security-header` is taken as it is. The message that comes back is one that
+    /// [`Self::encode`] encodes; what it says is not checked against the rules of a
+    /// sender, which `validate()` has.
+    ///
+    /// ```
+    /// use oxirush_nas::nas_eps::Message;
+    /// use oxirush_nas::tree;
+    ///
+    /// // ATTACH REJECT with EMM cause #3
+    /// let reject = Message::decode(&[0x07, 0x44, 0x03]).unwrap();
+    /// let mut tree = reject.to_tree();
+    /// tree["emm-cause"] = tree!("congestion");
+    /// let edited = reject.with_tree(tree).unwrap();
+    /// assert_eq!(edited.encode().unwrap(), [0x07, 0x44, 0x16]);
+    /// ```
+    pub fn with_tree(&self, tree: oxirush_utils::tree::Value) -> Result<Self> {
+        let edited = view::edited_view(
+            self.to_view(),
+            self.to_tree(),
+            tree,
+            &decided,
+            view::Scope::NONE,
+        )
+        .map_err(Error::EncodingError)?;
+        self.with_view(edited)
+    }
 }
 
 /// The message `message` that a view or a tree wrote, if it is one that is
@@ -907,45 +828,8 @@ fn sendable(message: Message) -> Result<Message> {
 }
 
 impl EmmMessageType {
-    /// The message of this type that a view describes alone.
-    ///
-    /// The view has every field of the header with its `value`, every
-    /// mandatory IE and the optional IEs that the message has, each with
-    /// its `value` or its `octets`. It is read as
-    /// [`Message::with_view`] reads one: nothing that it says is
-    /// ignored, and a field of the header or a mandatory IE that it leaves
-    /// out is an error. A member that a `value` leaves out is zero. The
-    /// message in a container is the view that is the `value` of the
-    /// container, named by its `message-type`. A DETACH REQUEST is the one
-    /// from the UE if the view is one of it, else the one to the UE. The
-    /// `message-type` of the view is this type, by its name or by its
-    /// number, and another one is an error; its `security-header-type` is a
-    /// name or the number of one.
-    ///
-    /// The message is what the view writes, and is one that
-    /// [`Message::encode`] encodes, as that of
-    /// [`Message::with_view`] is: a field of the header that the
-    /// message is not sent with is an error, by the name of the field, and
-    /// so is an IE that has no octets. An IE that is written by its `octets`
-    /// has them whatever they are, where the encoding of the message has a
-    /// place for them. A `value` writes its IE or is an error: one without
-    /// any member, as `{}`, writes nothing of an IE.
-    ///
-    /// ```
-    /// use oxirush_nas::nas_eps::EmmMessageType;
-    /// use oxirush_nas::tree;
-    ///
-    /// let reject = EmmMessageType::AttachReject
-    ///     .from_view(tree!({
-    ///         "protocol-discriminator": {"value": 7},
-    ///         "security-header-type": {"value": "plain-nas-message-not-security-protected"},
-    ///         "message-type": {"value": "attach-reject"},
-    ///         "emm-cause": {"value": "congestion"},
-    ///     }))
-    ///     .unwrap();
-    /// assert_eq!(reject.encode().unwrap(), [0x07, 0x44, 0x16]);
-    /// ```
-    pub fn from_view(self, view: oxirush_utils::tree::Value) -> Result<Message> {
+    /// The message that a view describes alone, which its `message-type` names.
+    pub(crate) fn message_from_view(self, view: oxirush_utils::tree::Value) -> Result<Message> {
         let from = |kind: &str| view::from_view(&["Emm"], kind, view.clone(), view::Scope::NONE);
         if let Err(error) = view::typed::<Message>(&format!("{self:?}"), &view) {
             return Err(Error::EncodingError(error));
@@ -962,12 +846,12 @@ impl EmmMessageType {
         .and_then(sendable)
     }
 
-    /// The names of the entries that the view of a message of this type
-    /// has: the fields of its header, then its IEs in the order of the
+    /// The names of the members that the tree of a message of this type can
+    /// have: the fields of its header, then its IEs in the order of the
     /// message, with those that are optional. A type that the crate has no
-    /// message of has none. DETACH REQUEST has the names of its two
-    /// messages, the one from the UE and the one to it.
-    pub fn view_names(self) -> Vec<String> {
+    /// message of has none.
+    pub fn names(self) -> Vec<String> {
+        use crate::nas_eps::{EmmHeader, EmmMessage};
         match self {
             Self::DetachRequest => view::names::<EmmHeader, EmmMessage>(&[
                 "DetachRequestUeOriginating",
@@ -976,34 +860,11 @@ impl EmmMessageType {
             _ => view::names::<EmmHeader, EmmMessage>(&[&format!("{self:?}")]),
         }
     }
-
-    /// The view of a message of this type that has nothing written yet,
-    /// which [`Self::from_view`] fills: the fields of its header, each
-    /// mandatory IE with the `octets` of one without content, and `null`
-    /// for each optional IE. It says which entries a view has to write, and
-    /// is not a message to send: a field is zero and an IE is empty. `None`
-    /// for a type that the crate has no message of. DETACH REQUEST has the
-    /// view of the message from the UE.
-    pub fn blank_view(self) -> Option<oxirush_utils::tree::Value> {
-        let kind = match self {
-            Self::DetachRequest => "DetachRequestUeOriginating".to_string(),
-            _ => format!("{self:?}"),
-        };
-        let mut blank = view::blank_view::<Message>(&["Emm"], &kind)?;
-        // The message from the UE is not named as its type is: the view
-        // says the type that it is of.
-        if matches!(self, Self::DetachRequest) {
-            let named = crate::common::readable::to_value(&self).ok()?;
-            blank["message-type"]["value"] = named;
-        }
-        Some(blank)
-    }
 }
 
 impl EsmMessageType {
-    /// The message of this type that a view describes alone, as
-    /// [`EmmMessageType::from_view`] has it.
-    pub fn from_view(self, view: oxirush_utils::tree::Value) -> Result<Message> {
+    /// The message that a view describes alone, which its `message-type` names.
+    pub(crate) fn message_from_view(self, view: oxirush_utils::tree::Value) -> Result<Message> {
         let kind = format!("{self:?}");
         view::typed::<Message>(&kind, &view)
             .and_then(|()| view::from_view(&["Esm"], &kind, view, view::Scope::NONE))
@@ -1011,18 +872,12 @@ impl EsmMessageType {
             .and_then(sendable)
     }
 
-    /// The names of the entries that the view of a message of this type
-    /// has: the fields of its header, then its IEs in the order of the
+    /// The names of the members that the tree of a message of this type can
+    /// have: the fields of its header, then its IEs in the order of the
     /// message, with those that are optional. A type that the crate has no
     /// message of has none.
-    pub fn view_names(self) -> Vec<String> {
-        view::names::<EsmHeader, EsmMessage>(&[&format!("{self:?}")])
-    }
-
-    /// The view of a message of this type that has nothing written yet, as
-    /// [`EmmMessageType::blank_view`] has it.
-    pub fn blank_view(self) -> Option<oxirush_utils::tree::Value> {
-        view::blank_view::<Message>(&["Esm"], &format!("{self:?}"))
+    pub fn names(self) -> Vec<String> {
+        view::names::<crate::nas_eps::EsmHeader, EsmMessage>(&[&format!("{self:?}")])
     }
 }
 

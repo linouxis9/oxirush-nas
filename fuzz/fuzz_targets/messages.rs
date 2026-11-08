@@ -44,8 +44,9 @@ pub trait Message: Clone + PartialEq + Debug + Display + Validate + Sized + 'sta
 
     fn decode(octets: &[u8]) -> Result<Self, Error>;
     fn encode(&self) -> Result<Vec<u8>, Error>;
-    fn to_view(&self) -> Value;
-    fn with_view(&self, view: Value) -> Result<Self, Error>;
+    fn with_tree(&self, tree: Value) -> Result<Self, Error>;
+    /// The names of the members that the tree of the message can have.
+    fn names(&self) -> Vec<String>;
     fn to_tree(&self) -> Value;
     fn from_tree(tree: Value) -> Result<Self, Error>;
     fn means_the_same(&self, other: &Self) -> bool;
@@ -70,11 +71,16 @@ impl Message for nas_5gs::Message {
     fn encode(&self) -> Result<Vec<u8>, Error> {
         self.encode()
     }
-    fn to_view(&self) -> Value {
-        self.to_view()
+    fn with_tree(&self, tree: Value) -> Result<Self, Error> {
+        self.with_tree(tree)
     }
-    fn with_view(&self, view: Value) -> Result<Self, Error> {
-        self.with_view(view)
+    fn names(&self) -> Vec<String> {
+        match self {
+            Self::Gmm(_, message) => message.message_type().names(),
+            Self::Gsm(_, message) => message.message_type().names(),
+            Self::SecurityProtected(_, inner) => inner.names(),
+            _ => Vec::new(),
+        }
     }
     fn to_tree(&self) -> Value {
         self.to_tree()
@@ -116,11 +122,16 @@ impl Message for nas_eps::Message {
     fn encode(&self) -> Result<Vec<u8>, Error> {
         self.encode()
     }
-    fn to_view(&self) -> Value {
-        self.to_view()
+    fn with_tree(&self, tree: Value) -> Result<Self, Error> {
+        self.with_tree(tree)
     }
-    fn with_view(&self, view: Value) -> Result<Self, Error> {
-        self.with_view(view)
+    fn names(&self) -> Vec<String> {
+        match self {
+            Self::Emm(_, message) => message.message_type().names(),
+            Self::Esm(_, message) => message.message_type().names(),
+            Self::SecurityProtected(_, inner) => inner.names(),
+            _ => Vec::new(),
+        }
     }
     fn to_tree(&self) -> Value {
         self.to_tree()
@@ -302,7 +313,7 @@ pub fn faulty<M: Message>(message: &M) -> bool {
         .any(|finding| finding.severity == Severity::Error)
 }
 
-/// What holds of a message that the crate wrote, from a view or a tree.
+/// What holds of a message that the crate wrote, from a tree.
 ///
 /// It encodes, unless it is a plain message under a header that says it is
 /// ciphered, which has no octets yet (`from_tree` says so), and a receiver reads the same octets back, with no
@@ -310,7 +321,7 @@ pub fn faulty<M: Message>(message: &M) -> bool {
 /// nothing wrong with is the message that the receiver reads: a difference
 /// is a rule of a sender that `validate()` does not check, or one that the
 /// decoder reads otherwise. Its tree writes a message with the same tree
-/// that means the same, and its view gives it back.
+/// that means the same, and edits it into itself.
 pub fn written<M: Message>(message: &M) {
     let octets = match message.encode() {
         Ok(octets) => octets,
@@ -350,8 +361,8 @@ pub fn written<M: Message>(message: &M) {
         }
         Err(error) => panic!("the tree of a message is refused: {error}: {tree}"),
     }
-    match message.with_view(message.to_view()) {
+    match message.with_tree(tree) {
         Ok(same) => assert_eq!(&same, message),
-        Err(error) => panic!("the view of a message is refused: {error}: {message:?}"),
+        Err(error) => panic!("the tree of a message does not edit it: {error}: {message:?}"),
     }
 }

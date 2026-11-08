@@ -16,7 +16,7 @@
 */
 
 #![no_main]
-//! A 5GS message of the fixtures edited through its view: what `edit.rs`
+//! A 5GS message of the fixtures edited through its tree: what `edit.rs`
 //! holds.
 
 mod edit;

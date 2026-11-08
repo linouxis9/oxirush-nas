@@ -438,8 +438,10 @@ fn each_bit_of_the_capabilities_of_ts_24_301_has_its_member() {
             let mut tree = attach.clone();
             tree["ue-network-capability"] = value(member);
             let written = e::Message::from_tree(tree).unwrap();
-            let octets = &written.to_view()["ue-network-capability"]["octets"];
-            assert_eq!(*octets, tree!(expected(octet, bit, 2)), "{member}");
+            let mut octets = attach.clone();
+            octets["ue-network-capability"] = tree!({"octets": expected(octet, bit, 2)});
+            let octets = e::Message::from_tree(octets).unwrap();
+            assert_eq!(written.encode(), octets.encode(), "{member}");
             assert_eq!(
                 written.to_tree()["ue-network-capability"][member.split(' ').next().unwrap()],
                 value(member)[member.split(' ').next().unwrap()]
@@ -457,10 +459,13 @@ fn each_bit_of_the_capabilities_of_ts_24_301_has_its_member() {
             let mut tree = command.clone();
             tree["replayed-ue-security-capabilities"] = value(member);
             let written = e::Message::from_tree(tree).unwrap();
-            let octets = &written.to_view()["replayed-ue-security-capabilities"]["octets"];
             // Octets 5 and 6 come together (§9.9.3.36)
             let least = if octet >= 2 { 4 } else { 2 };
-            assert_eq!(*octets, tree!(expected(octet, bit, least)), "{member}");
+            let mut octets = command.clone();
+            octets["replayed-ue-security-capabilities"] =
+                tree!({"octets": expected(octet, bit, least)});
+            let octets = e::Message::from_tree(octets).unwrap();
+            assert_eq!(written.encode(), octets.encode(), "{member}");
         }
     }
 
@@ -476,16 +481,20 @@ fn each_bit_of_the_capabilities_of_ts_24_301_has_its_member() {
         let mut tree = request.clone();
         tree["s1-ue-network-capability"] = value(member);
         let written = f::Message::from_tree(tree).unwrap();
-        let octets = &written.to_view()["s1-ue-network-capability"]["octets"];
-        assert_eq!(*octets, tree!(expected(octet, bit, 2)), "{member}");
+        let mut octets = request.clone();
+        octets["s1-ue-network-capability"] = tree!({"octets": expected(octet, bit, 2)});
+        let octets = f::Message::from_tree(octets).unwrap();
+        assert_eq!(written.encode(), octets.encode(), "{member}");
     }
     let command = fgs("7e005d020002e0e01902e0e0").to_tree();
     for (octet, bit, member) in [(2, 7, "uea 7"), (3, 1, "uia 1"), (4, 7, "gea 7")] {
         let mut tree = command.clone();
         tree["replayed-s1-ue-security-capabilities"] = value(member);
         let written = f::Message::from_tree(tree).unwrap();
-        let octets = &written.to_view()["replayed-s1-ue-security-capabilities"]["octets"];
-        assert_eq!(*octets, tree!(expected(octet, bit, 4)), "{member}");
+        let mut octets = command.clone();
+        octets["replayed-s1-ue-security-capabilities"] = tree!({"octets": expected(octet, bit, 4)});
+        let octets = f::Message::from_tree(octets).unwrap();
+        assert_eq!(written.encode(), octets.encode(), "{member}");
     }
 }
 
@@ -605,10 +614,6 @@ fn the_ies_that_a_table_has_no_place_for_are_in_the_tree() {
             "unknown-ies": "69021234 50020400",
         })
     );
-    assert_eq!(
-        message.to_view()["unknown-ies"],
-        tree!({"value": "69021234 50020400"})
-    );
     let written = f::Message::from_tree(tree.clone()).unwrap();
     assert_eq!(hex::encode(written.encode().unwrap()), wire);
 
@@ -628,18 +633,18 @@ fn the_ies_that_a_table_has_no_place_for_are_in_the_tree() {
     let other = f::Message::decode(&hex::decode("7e004e6902123550020200").unwrap()).unwrap();
     assert!(!other.means_the_same(&message));
 
-    // Written by hand, in a tree and in a view
+    // Written by hand, in a tree, and as an edit
     let mut tree = tree!({"message-type": "registration-complete", "unknown-ies": "c0 6a0101"});
     let complete = f::Message::from_tree(tree.clone()).unwrap();
     assert_eq!(hex::encode(complete.encode().unwrap()), "7e0043c06a0101");
     let plain = f::Message::decode(&[0x7e, 0x00, 0x43]).unwrap();
-    let mut view = plain.to_view();
-    view["unknown-ies"] = tree!({"value": "c0"});
-    let edited = plain.with_view(view).unwrap();
+    let mut edit = plain.to_tree();
+    edit["unknown-ies"] = tree!("c0");
+    let edited = plain.with_tree(edit).unwrap();
     assert_eq!(hex::encode(edited.encode().unwrap()), "7e0043c0");
-    // A view that leaves the entry as it is keeps the order that was received
+    // A tree that leaves the entry as it is keeps the order that was received
     let message = f::Message::decode(&hex::decode(wire).unwrap()).unwrap();
-    assert_eq!(message.with_view(message.to_view()).unwrap(), message);
+    assert_eq!(message.with_tree(message.to_tree()).unwrap(), message);
 
     // What is no list of octets is refused
     for refused in [
@@ -667,7 +672,7 @@ fn the_ies_that_a_table_has_no_place_for_are_in_the_tree() {
     assert_eq!(hex::encode(written.encode().unwrap()), wire);
 }
 
-/// An EMM TRANSPORT has a view and a tree, which write it: found by the
+/// An EMM TRANSPORT has a tree, which writes it: found by the
 /// `view_eps` fuzz target, which had `{}` for it.
 #[test]
 fn an_emm_transport_is_shown_and_written() {
@@ -688,8 +693,7 @@ fn an_emm_transport_is_shown_and_written() {
         })
     );
     assert_eq!(e::Message::from_tree(tree).unwrap(), message);
-    assert_eq!(message.with_view(message.to_view()).unwrap(), message);
-    assert_eq!(e::Message::from_view(message.to_view()).unwrap(), message);
+    assert_eq!(message.with_tree(message.to_tree()).unwrap(), message);
 
     // Without a container, and with one that was deciphered
     let empty = e::Message::decode(&wire[..6]).unwrap();

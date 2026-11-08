@@ -15,12 +15,11 @@
    limitations under the License.
 */
 
-//! Read and edit a 5GS REGISTRATION REQUEST through its view: each IE by
-//! its name, with its value as a reader writes it and its octets, at the
-//! paths of the `view` module.
+//! Read and edit a 5GS REGISTRATION REQUEST through its tree: each IE by its
+//! name, with its value as a reader writes it, at the paths of the `paths`
+//! module.
 
-use oxirush_nas::tree;
-use oxirush_nas::{nas_5gs::Message, view};
+use oxirush_nas::{nas_5gs::Message, paths, tree};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initial registration with a SUCI of PLMN 208-93, a security
@@ -32,68 +31,65 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     .expect("hex");
     let message = Message::decode(&bytes).expect("decode failed");
 
-    // The message to its view, and each value with the path that selects it.
-    let mut tree = message.to_view();
-    for (path, value) in view::paths(&tree) {
+    // The message to its tree, and each value with the path that selects it.
+    let mut tree = message.to_tree();
+    for (path, value) in paths::paths(&tree) {
         println!("{path} = {value}");
     }
 
     // A coded value reads by the name the specification gives it.
-    let registration_type = "/nas/5gs-registration-type";
-    let kind = format!("{registration_type}/value/registration-type");
-    let name = view::select(&tree, &kind)?;
-    assert_eq!(name, [&tree!("initial-registration")]);
-
-    // The octets of its IE are beside it.
-    let octets = view::select(&tree, &format!("{registration_type}/octets"))?;
-    assert_eq!(octets, [&tree!("79")]);
+    let kind = "/nas/5gs-registration-type/registration-type";
+    assert_eq!(
+        paths::select(&tree, kind)?,
+        [&tree!("initial-registration")]
+    );
 
     // A structured IE is matched through its value, in the usual notation:
     // an identity by its parts,
-    let select = |path| view::select(&tree, path);
-    let suci = select("/nas/5gs-mobile-identity/value/suci/imsi")?;
+    let select = |path| paths::select(&tree, path);
+    let suci = select("/nas/5gs-mobile-identity/suci/imsi")?;
     assert_eq!(suci[0]["plmn"], tree!("208-93"));
     assert_eq!(suci[0]["msin"], tree!("0000000120"));
 
     // each entry of a list (`*`),
-    let sst = select("/nas/requested-nssai/value/*/sst")?;
+    let sst = select("/nas/requested-nssai/*/sst")?;
     assert_eq!(sst, [&tree!(1)]);
 
     // a whole value, and the algorithms of a capability.
-    let tai = select("/nas/last-visited-registered-tai/value")?;
+    let tai = select("/nas/last-visited-registered-tai")?;
     assert_eq!(tai, [&tree!({"plmn": "208-93", "tac": 1})]);
-    let ea = select("/nas/ue-security-capability/value/ea")?;
+    let ea = select("/nas/ue-security-capability/ea")?;
     assert_eq!(ea, [&tree!([0, 1, 2])]);
 
     // The same members are written, in any case.
-    view::set(&mut tree, &kind, tree!("Mobility Registration Update"))?;
-    let msin = "/nas/5gs-mobile-identity/value/suci/imsi/msin";
-    view::set(&mut tree, msin, tree!("0000000121"))?;
+    paths::set(&mut tree, kind, tree!("Mobility Registration Updating"))?;
+    let msin = "/nas/5gs-mobile-identity/suci/imsi/msin";
+    paths::set(&mut tree, msin, tree!("0000000121"))?;
 
     // A list loses a member of an entry, and takes an entry at its end (`-`).
-    let slices = "/nas/requested-nssai/value";
-    view::remove(&mut tree, &format!("{slices}/0/sd"))?;
+    paths::remove(&mut tree, "/nas/requested-nssai/0/sd")?;
     let slice = tree!({"sst": 2, "sd": "0000ff"});
-    view::insert(&mut tree, &format!("{slices}/-"), slice)?;
+    paths::insert(&mut tree, "/nas/requested-nssai/-", slice)?;
 
     // A number is also written in hexadecimal.
-    let tac = "/nas/Last Visited Registered TAI/value/tac";
-    view::set(&mut tree, tac, tree!("0x2a"))?;
+    let tac = "/nas/Last Visited Registered TAI/tac";
+    paths::set(&mut tree, tac, tree!("0x2a"))?;
 
     // The octets of an IE are written to say them as they are.
-    let capability = "/nas/ue-security-capability/octets";
-    view::set(&mut tree, capability, tree!("ffff"))?;
+    let capability = "/nas/ue-security-capability";
+    paths::set(&mut tree, capability, tree!({"octets": "ffff"}))?;
 
     // An optional IE that the message does not have selects nothing, and is
     // added by its value or its octets.
-    let mico = "/nas/mico-indication/value";
-    assert!(view::select(&tree, mico)?.is_empty());
-    view::set(&mut tree, mico, tree!({"raai": true}))?;
+    let mico = "/nas/mico-indication";
+    assert!(paths::select(&tree, mico)?.is_empty());
+    paths::set(&mut tree, mico, tree!({"raai": true}))?;
 
-    // And back to octets: each IE is encoded from what was written.
+    // And back to octets: each IE that changed is encoded from what was
+    // written, and the others keep their octets.
     let edited = message
-        .with_view(tree.clone())
-        .expect("the view is a message");
+        .with_tree(tree.clone())
+        .expect("the tree is a message");
     let edited_bytes = edited.encode().expect("encode failed");
 
     // The octets before and after.
@@ -104,10 +100,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
          ff5202f83900002ab1"
     );
 
-    // Nothing that a view says is ignored: a name that does not exist is an
-    // error, and so are octets and a value that disagree.
-    view::set(&mut tree, &kind, tree!("mobility"))?;
-    let error = message.with_view(tree).unwrap_err();
+    // Nothing that a tree says is ignored: a name that does not exist is an
+    // error.
+    paths::set(&mut tree, kind, tree!("mobility"))?;
+    let error = message.with_tree(tree).unwrap_err();
     println!("\n{error}");
 
     Ok(())

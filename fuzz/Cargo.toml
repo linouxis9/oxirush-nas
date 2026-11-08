@@ -41,15 +41,15 @@ doc = false
 bench = false
 
 [[bin]]
-name = "view_5gs"
-path = "fuzz_targets/view_5gs.rs"
+name = "tree_5gs"
+path = "fuzz_targets/tree_5gs.rs"
 test = false
 doc = false
 bench = false
 
 [[bin]]
-name = "view_eps"
-path = "fuzz_targets/view_eps.rs"
+name = "tree_eps"
+path = "fuzz_targets/tree_eps.rs"
 test = false
 doc = false
 bench = false

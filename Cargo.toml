@@ -67,11 +67,11 @@ name = "security_nas_eps"
 required-features = ["security"]
 
 [[example]]
-name = "view_message_nas_5gs"
+name = "tree_message_nas_5gs"
 required-features = ["tree"]
 
 [[example]]
-name = "view_message_nas_eps"
+name = "tree_message_nas_eps"
 required-features = ["tree"]
 
 [package.metadata.docs.rs]

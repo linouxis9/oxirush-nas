@@ -94,7 +94,7 @@
 //! | Change a decoded message | the `set_*`, `with_*` and `clear_*` of a message, as [`nas_5gs::RegistrationReject::with_t3346_value`] |
 //! | A 5GSM message in UL NAS TRANSPORT | [`nas_5gs::UlNasTransport`], [`nas_5gs::PayloadContainer`] |
 //! | Validate a message, and answer one that is faulty | [`Validate`], [`nas_5gs::Message::answer_to`], [`nas_5gs::Message::decode_lenient`] |
-//! | A message as JSON, by path, and with serde | [`view`], [`Message::to_tree`], [`Message::to_view`] |
+//! | A message as JSON, by path, and with serde | [`paths`], [`Message::to_tree`], [`Message::with_tree`] |
 //!
 //! The four protocols:
 //!
@@ -207,7 +207,7 @@
 //! # }
 //! ```
 //!
-//! [Message views](#message-views) below has the other JSON forms.
+//! [A message as a tree](#a-message-as-a-tree) below says more.
 //!
 //! # Errors
 //!
@@ -270,7 +270,7 @@
 //! | Display | `fmt::Display` for every message and for the IEs that it shows, in these forms: a cause as `#22 (Congestion)`, a timer with its unit, an identity whole as the service based interfaces write it, a key never. `Debug` prints no key either: of RES, RES\*, the ciphering keys of positioning, an MSK and K_NR_ProSe, of the IEs that hold one and of an IE kept unread it shows the length, and of an EAP message its header |
 //! | Round trip | Decoding then encoding keeps unknown IEs, ignored repetitions, the order of the optional IEs and the spare half octet of a header |
 //! | `security` | Integrity and ciphering with NAS COUNT tracking and replay protection per TS 33.501 and TS 33.401, the EPS short MAC, partial ciphering of CONTROL PLANE SERVICE REQUEST containers and 5GS↔EPS mapped contexts |
-//! | `tree` | Each message as a tree and a view: every IE by its name, with its value in the usual notation and its octets; `Serialize` and `Deserialize` through the trees |
+//! | `tree` | Each message as a tree: every IE by its name, with its value in the usual notation, or its octets; `Serialize` and `Deserialize` through the tree |
 //!
 //! # What the crate does not cover
 //!
@@ -279,7 +279,7 @@
 //! | Procedures | It is a codec: no NAS procedure, timer or transport. Its only state is that of a security context. |
 //! | Validity | `validate()` sees one message, not the state of a procedure. Encoding accepts every value a type can represent, so a message that encodes is not thereby valid. |
 //! | Security state | A context does not persist itself: the caller keeps the next COUNT values and restores it from them. |
-//! | JSON | 13 5GS and 19 EPS IE types have octets alone ([which][ie types with a value]). A view and a tree compute no message authentication code. |
+//! | JSON | 13 5GS and 19 EPS IE types have octets alone ([which][ie types with a value]). A tree computes no message authentication code. |
 //! | Serde form | It is the tree: a message read from it means what the message means, with its octets where its values decide them (174 of the 191 fixtures), and the order of its optional IEs is that of the table. |
 //! | Release 19 | Two items follow Release 20 and differ from V19.8.0 on the wire ([Specification versions](#specification-versions)). |
 //! | Evidence | The tests of the crate itself ([Tests](#tests)), and 170 messages that two open-source cores and one UE simulator sent in a lab, with their source: no commercial UE, RAN or core, and no conformance test suite. The provenance of the 15 legacy 5GS wire values was not recorded. |
@@ -323,8 +323,8 @@
 //! | `tests/fixtures/captured.tsv`: 170 messages that Open5GS v2.8.0 (as AMF and as MME), free5GC v4.2.3 and PacketRusher sent in a lab run, with the source of each, the name that the dissector of the capture gives it, and for the 114 that were protected their keys and NAS COUNT | Each decodes to the message of that name and encodes to its octets, with no `validate()` finding but for one IMEISV; with `security`, a context of the crate verifies and deciphers each protected one as it was on the wire. The head of the file says how they were captured and what they are not. |
 //! | One constructed 5GS REGISTRATION REQUEST that carries a protected EPS ATTACH REQUEST | It round-trips. |
 //! | An embedded EPS corpus: the NAS PDUs of two S1AP-carried attach attempts | They round-trip octet for octet. Their envelopes use EEA0, so the inner messages are decoded too and, with `security`, the HashMME of the SECURITY MODE COMMAND is checked against the ATTACH REQUEST. |
-//! | `tests/fixtures`: 94 5GS and 97 EPS messages, at least one of each 5GMM, 5GSM, EMM and ESM message type of the codec | Each decodes, has no `validate()` error and encodes to its octets, also through its view written alone. Through its tree, which is its serde form, each is a message that means the same (`means_the_same()`), and 174 of the 191 have the same octets. |
-//! | The Rust blocks of the README, of this page and of the pages of [`view`], [`nas_eps`] and the two `security` modules | They compile and run as documentation tests, with the `tree` and `security` features, and `tests/readme.rs` compares what each prints with the output shown under it. |
+//! | `tests/fixtures`: 94 5GS and 97 EPS messages, at least one of each 5GMM, 5GSM, EMM and ESM message type of the codec | Each decodes, has no `validate()` error and encodes to its octets. Through its tree, which is its serde form, each is a message that means the same (`means_the_same()`), and 174 of the 191 have the same octets. |
+//! | The Rust blocks of the README, of this page and of the pages of [`paths`], [`nas_eps`] and the two `security` modules | They compile and run as documentation tests, with the `tree` and `security` features, and `tests/readme.rs` compares what each prints with the output shown under it. |
 //!
 //! ```sh
 //! cargo test --all-features            # everything
@@ -336,8 +336,8 @@
 //! | Targets | What they hold |
 //! |---------|----------------|
 //! | `decode_5gs`, `decode_eps` | Of any octets: a message that decodes encodes to those octets, and decodes again to the same message. `decode_lenient` reads what `decode` reads, and a faulty mandatory IE as it came; the answer of `answer_to` encodes, decodes to itself and has no `validate()` error but for the identities that it copies. |
-//! | `view_5gs`, `view_eps` | Of any octets: the view of a message gives it back, and its tree writes a message with the same tree that means the same, IE by IE and after it is decoded again. |
-//! | `edit_5gs`, `edit_eps` | A message of the fixtures edited by the paths of its view: an edit is refused or changes only what it edits, and a message that `validate()` finds nothing wrong with is the one that a receiver reads. |
+//! | `view_5gs`, `view_eps` | Of any octets: the tree of a message writes a message with the same tree that means the same, IE by IE and after it is decoded again, and the tree edits the message into itself. |
+//! | `edit_5gs`, `edit_eps` | A message of the fixtures edited by the paths of its tree: an edit is refused or changes only what it edits, and a message that `validate()` finds nothing wrong with is the one that a receiver reads. |
 //! | `build_5gs`, `build_eps` | A message written from a tree whose IEs the fuzzer chooses, with values of the fixtures or of its own, deep in each IE: the same. |
 //! | `security_5gs`, `security_eps` | Two security contexts of one link, at any NAS COUNT and with any replay window, and messages protected, delivered, replayed, reordered, changed or cut short: each COUNT, code and refusal is the one that TS 24.501 and TS 24.301 §4.4.3 give, as a model of them written apart and oxirush-security compute it. |
 //!
@@ -363,7 +363,7 @@
 //! | `decode_message` | REGISTRATION REQUEST with typed accessors | ATTACH REQUEST with typed accessors | |
 //! | `validate_message` | registration, authentication, and security mode messages | attach, authentication, and security mode messages | |
 //! | `security` | protect and unprotect with keys from KAMF | protect and unprotect with keys from KASME | `security` |
-//! | `view_message` | REGISTRATION REQUEST read and edited through its view, by the paths of its IEs | ATTACH REQUEST read and edited through its view, by the paths of its IEs | `tree` |
+//! | `tree_message` | REGISTRATION REQUEST read and edited through its tree, by the paths of its IEs | ATTACH REQUEST read and edited through its tree, by the paths of its IEs | `tree` |
 //!
 //! # Feature flags
 //!
@@ -371,26 +371,22 @@
 //! [README](https://github.com/linouxis9/oxirush-nas#installation) says what
 //! each adds and brings.
 //!
-//! # Message views
+//! # A message as a tree
 //!
-//! With the `tree` feature, [`Message::to_view`] and
-//! [`nas_eps::Message::to_view`] give a message as a reader names it:
-//! each IE by the name the specification gives it, in lower case with
-//! hyphens, with its `value` in the usual notation (the name of a coded
-//! value, `"208-93"` for a PLMN identity, digits for an IMSI, a number for
-//! a TMSI or a TAC, text for a DNN or an IP address, the view of the
-//! message in a container) and its `octets` in hexadecimal. An optional IE
-//! that the message does not have is `null`. `with_view` returns the
-//! message of an edited view: an IE is encoded from a value that was
-//! changed, or takes the octets that were, an optional IE is added or taken
-//! out, and what the message cannot keep is an error. The [`view`] module
-//! reads and edits a view by paths such as `/nas/5g-guti/value/guti/plmn`.
-//!
-//! [`Message::to_tree`] and [`nas_eps::Message::to_tree`] show
-//! a message as a tree, which is the compact form of a view: its
-//! `message-type` and each IE that it has by its value alone, as in
-//! `{"message-type": "5gmm-status", "5gmm-cause": "congestion"}`.
-//! `from_tree` writes the message of a tree.
+//! With the `tree` feature, [`Message::to_tree`] and
+//! [`nas_eps::Message::to_tree`] give a message as a reader names it: its
+//! `message-type` and each IE that it has by the name the specification
+//! gives it, in lower case with hyphens, with its value in the usual
+//! notation (the name of a coded value, `"208-93"` for a PLMN identity,
+//! digits for an IMSI, a number for a TMSI or a TAC, text for a DNN or an IP
+//! address, the tree of the message in a container), or `{"octets": "…"}`
+//! where it has no readable value: `{"message-type": "5gmm-status",
+//! "5gmm-cause": "congestion"}`. `from_tree` writes the message of a tree,
+//! and [`Message::with_tree`] edits a message: an IE that the tree leaves
+//! as it was keeps its octets, one that it changes is encoded from its new
+//! value or takes its octets, an optional IE is added or taken out, and
+//! what the message cannot keep is an error. The [`paths`] module reads and
+//! edits a tree by paths such as `/nas/5g-guti/guti/plmn`.
 //!
 //! # The OxiRush family
 //!
@@ -405,12 +401,11 @@
 //!
 //! [`nas_5gs::SecurityContext`]: crate::nas_5gs::SecurityContext
 //! [`nas_eps::SecurityContext`]: crate::nas_eps::SecurityContext
-//! [`view`]: crate::view
-//! [`Message::to_view`]: crate::nas_5gs::Message::to_view
+//! [`paths`]: crate::paths
 //! [`Message::to_tree`]: crate::nas_5gs::Message::to_tree
-//! [`nas_eps::Message::to_view`]: crate::nas_eps::Message::to_view
+//! [`Message::with_tree`]: crate::nas_5gs::Message::with_tree
 //! [`nas_eps::Message::to_tree`]: crate::nas_eps::Message::to_tree
-//! [ie types with a value]: crate::view#ie-types-that-have-a-value
+//! [ie types with a value]: crate::paths#ie-types-that-have-a-value
 // What the features `security` and `tree` have is a link where the build
 // has them: the links are checked in the build of every feature, which
 // docs.rs makes.
@@ -437,7 +432,11 @@ mod common;
 pub mod nas_5gs;
 pub mod nas_eps;
 #[cfg(feature = "tree")]
-pub mod view;
+pub mod paths;
+#[cfg(all(test, feature = "tree"))]
+mod view_tests;
+#[cfg(all(test, feature = "tree"))]
+mod wireshark_tests;
 
 /// The examples of the README, which the documentation tests compile and run.
 #[cfg(all(doctest, feature = "tree", feature = "security"))]
@@ -461,7 +460,7 @@ pub use oxirush_security::{NasCount, SecurityError};
 /// [`nas_5gs`] and [`nas_eps`] name as their system does.
 pub use oxirush_utils::identity;
 /// The trees of the OxiRush crates, of the `oxirush-utils` that this crate is
-/// built with: the tree and the view of a message, [`tree::Value`], JSON
+/// built with: the tree of a message, [`tree::Value`], JSON
 /// whose objects keep their members in the order of the message, and
 /// `tree!`, which writes one in the code as `serde_json::json!` does.
 #[cfg(feature = "tree")]

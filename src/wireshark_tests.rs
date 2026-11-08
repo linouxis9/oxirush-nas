@@ -18,7 +18,8 @@
 //! The messages of `tests/wireshark/corpus.tsv` as Wireshark reads them and
 //! as this crate reads them, compared field by field.
 //!
-//! The crate's reading of each message is its view, written here as one
+//! The crate's reading of each message is its view, the internal form under
+//! its tree that has the octets of each IE beside its value, written here as one
 //! line of JSON; `tests/wireshark/compare.py` has tshark dissect the same
 //! octets and compares the two along `tests/wireshark/mapping.tsv`. A
 //! difference that `tests/wireshark/known.tsv` does not explain fails the
@@ -29,16 +30,16 @@
 //! Other messages are compared with `NAS_WIRESHARK_CORPUS=<rows>`, rows as
 //! those of the corpus (`tests/wireshark/extract.py` collects them from
 //! captures and other files), and `NAS_WIRESHARK_OUTPUT=<directory>` keeps
-//! the report: `cargo test --features tree --test wireshark`.
+//! the report: `cargo test --features tree wireshark`.
 
-#![cfg(feature = "tree")]
-
+use crate::prelude::*;
+use std::eprintln;
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-use oxirush_nas::nas_5gs;
-use oxirush_nas::nas_eps;
+use crate::nas_5gs;
+use crate::nas_eps;
 use serde_json::{Value, json};
 
 fn found(program: &str, argument: &str) -> bool {
@@ -75,7 +76,6 @@ fn codes_5gs(message: &nas_5gs::Message) -> Vec<Value> {
             codes
         }
         nas_5gs::Message::Opaque(_) => vec![json!({"ciphered": true})],
-        _ => vec![json!({"unknown": true})],
     }
 }
 
@@ -109,14 +109,13 @@ fn codes_eps(message: &nas_eps::Message) -> Vec<Value> {
         })],
         nas_eps::Message::EmmTransport(_) => vec![json!({"emm-transport": true})],
         nas_eps::Message::Opaque(_) => vec![json!({"ciphered": true})],
-        _ => vec![json!({"unknown": true})],
     }
 }
 
 /// What the crate reads of `octets`, as one object of JSON.
 fn reading(system: &str, octets: &[u8]) -> Value {
     let mut entry = json!({"system": system, "octets": hex::encode(octets)});
-    let unknown = |ies: &oxirush_nas::UnknownIes| -> Value {
+    let unknown = |ies: &crate::UnknownIes| -> Value {
         ies.iter()
             .map(|ie| json!({"iei": ie.iei, "data": hex::encode(ie.data)}))
             .collect()
@@ -195,7 +194,11 @@ fn wireshark_reads_the_messages_as_the_crate_does() {
     let corpus = std::env::var_os("NAS_WIRESHARK_CORPUS")
         .map_or_else(|| here.join("corpus.tsv"), PathBuf::from);
     let output = std::env::var_os("NAS_WIRESHARK_OUTPUT").map_or_else(
-        || Path::new(env!("CARGO_TARGET_TMPDIR")).join("wireshark"),
+        // Beside the test program, in the target directory
+        || {
+            let program = std::env::current_exe().expect("the test program");
+            program.parent().expect("its directory").join("wireshark")
+        },
         PathBuf::from,
     );
     std::fs::create_dir_all(&output).expect("the output directory");
