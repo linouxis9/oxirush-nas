@@ -1,0 +1,73 @@
+name: Wireshark
+
+# The comparison of the crate with Wireshark, every night and when the workflow is started
+# by hand: tshark dissects the messages of tests/wireshark/corpus.tsv, of tests/fixtures and
+# of the seeds of fuzz/, src/wireshark_tests.rs writes what the crate reads of them, and
+# tests/wireshark/compare.py compares the two field by field. tshark is 4.6.4, the version
+# that tests/wireshark/known.tsv was triaged with: the package 4.6.4-1 of the release of
+# Ubuntu 26.04, which its updates do not replace here. A difference that known.tsv does not
+# explain fails the job, and so does a run in which nothing was compared; the report is
+# kept for 30 days.
+on:
+  schedule:
+    - cron: "3 10 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  wireshark:
+    name: Wireshark 4.6.4
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: tshark 4.6.4
+        run: |
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            tshark=4.6.4-1 wireshark-common=4.6.4-1 libwireshark19=4.6.4-1 \
+            libwiretap16=4.6.4-1 libwsutil17=4.6.4-1 libwireshark-data=4.6.4-1
+          tshark --version | head -n 1
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # Each message once: the corpus of the comparison, a message of each type with
+      # and without its optional IEs, the messages that other implementations sent on
+      # the wire and deciphered, the initial NAS messages and the seeds of the fuzz
+      # targets. A ciphered message is counted, and compared by neither.
+      - name: The messages
+        run: |
+          python3 -I tests/wireshark/extract.py \
+            --tsv auto tests/wireshark/corpus.tsv \
+            --tsv 5gs tests/fixtures/nas-5gs.tsv \
+            --tsv eps tests/fixtures/nas-eps.tsv \
+            --tsv auto tests/fixtures/captured.tsv:9 \
+            --tsv auto tests/fixtures/captured.tsv:10 \
+            --tsv 5gs tests/fixtures/initial-nas.tsv:6 \
+            --tsv 5gs tests/fixtures/initial-nas.tsv:7 \
+            --tsv 5gs fuzz/seeds-5gs.tsv \
+            --tsv eps fuzz/seeds-eps.tsv \
+            --output "$RUNNER_TEMP/messages.tsv"
+      - name: Compare
+        env:
+          NAS_WIRESHARK_CORPUS: ${{ runner.temp }}/messages.tsv
+          NAS_WIRESHARK_OUTPUT: ${{ runner.temp }}/wireshark
+        run: cargo test --features tree --lib wireshark -- --nocapture
+      # The test passes without comparing anything where tshark or Python is missing, or
+      # where tshark is not the pinned one: compare.py writes the summary only once it
+      # has compared.
+      - name: Something was compared
+        if: always()
+        run: |
+          summary=$RUNNER_TEMP/wireshark/summary.txt
+          test -s "$summary" || { echo "::error::nothing was compared with Wireshark"; exit 1; }
+          { echo '```'; cat "$summary"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wireshark
+          path: ${{ runner.temp }}/wireshark
+          retention-days: 30
