@@ -19,7 +19,7 @@ fn the_flags_of_the_ue_policy_classmarks_are_their_bits() {
     // D.6.5: SupportANDSP (bit 1), EPSURSP (bit 2), SVPSU (bit 3) and
     // SupportRURE (bit 4)
     let flags = |octet: u8| {
-        let classmark = NasUePolicyClassmark::new(vec![octet]);
+        let classmark = UePolicyClassmark::new(vec![octet]);
         [
             classmark.support_andsp(),
             classmark.eps_ursp(),
@@ -34,18 +34,18 @@ fn the_flags_of_the_ue_policy_classmarks_are_their_bits() {
     assert_eq!(flags(0x08), [false, false, false, true]);
     assert_eq!(flags(0xf0), [false; 4]);
     assert_eq!(
-        NasUePolicyClassmark::from_flags(false, true, false, false).value,
+        UePolicyClassmark::from_flags(false, true, false, false).value,
         [0x02]
     );
     assert_eq!(
-        NasUePolicyClassmark::from_flags(true, true, true, true).value,
+        UePolicyClassmark::from_flags(true, true, true, true).value,
         [0x0f]
     );
     // D.6.7: NSSUI (bit 1)
-    assert!(NasUePolicyNetworkClassmark::new(vec![0x01]).nssui());
-    assert!(!NasUePolicyNetworkClassmark::new(vec![0x00]).nssui());
+    assert!(UePolicyNetworkClassmark::new(vec![0x01]).nssui());
+    assert!(!UePolicyNetworkClassmark::new(vec![0x00]).nssui());
     // D.6.6: OS Ids of sixteen octets
-    let os_id = NasUeOsId::from_os_ids(&[[1; 16], [2; 16]]).unwrap();
+    let os_id = UeOsId::from_os_ids(&[[1; 16], [2; 16]]).unwrap();
     assert_eq!(os_id.os_ids(), vec![[1; 16], [2; 16]]);
 }
 
@@ -120,7 +120,7 @@ fn sublists() -> Vec<UePolicySectionManagementSublist> {
 
 #[test]
 fn a_ue_policy_section_management_list_is_read_as_figures_d_6_2_3_to_d_6_2_7_code_it() {
-    let list = NasUePolicySectionManagementList::from_sublists(&sublists()).unwrap();
+    let list = UePolicySectionManagementList::from_sublists(&sublists()).unwrap();
     assert_eq!(
         list.value,
         octets(
@@ -133,7 +133,7 @@ fn a_ue_policy_section_management_list_is_read_as_figures_d_6_2_3_to_d_6_2_7_cod
     assert!(list.is_well_formed());
     // Each list cut short is one that ends in a sublist, or none
     for end in 0..list.value.len() {
-        let cut = NasUePolicySectionManagementList::new(list.value[..end].to_vec());
+        let cut = UePolicySectionManagementList::new(list.value[..end].to_vec());
         let read = cut.try_sublists();
         assert!(read.is_none() || end == 20, "{end}: {read:?}");
         assert!(!cut.is_well_formed() || end == 20, "{end}");
@@ -143,7 +143,7 @@ fn a_ue_policy_section_management_list_is_read_as_figures_d_6_2_3_to_d_6_2_7_cod
 #[test]
 fn a_ue_policy_section_management_list_that_overruns_is_none() {
     let none = |text: &str| {
-        let list = NasUePolicySectionManagementList::new(octets(text));
+        let list = UePolicySectionManagementList::new(octets(text));
         assert_eq!(list.try_sublists(), None, "{text}");
         assert_eq!(list.sublists(), Vec::new());
     };
@@ -180,7 +180,7 @@ fn subresults() -> Vec<UePolicySectionManagementSubresult> {
 
 #[test]
 fn a_ue_policy_section_management_result_is_read_as_figures_d_6_3_3_to_d_6_3_5_code_it() {
-    let result = NasUePolicySectionManagementResult::from_subresults(&subresults()).unwrap();
+    let result = UePolicySectionManagementResult::from_subresults(&subresults()).unwrap();
     assert_eq!(
         result.value,
         octets("02 02f839 0102 0304 6f 0506 0708 6f  01 130014 090a 0001 6f")
@@ -191,18 +191,18 @@ fn a_ue_policy_section_management_result_is_read_as_figures_d_6_3_3_to_d_6_3_5_c
     // A result of another cause than #111 is not sent
     let mut other = subresults();
     other[1].results[0].cause = UePolicySectionManagementResultCause::Other(0x22);
-    assert!(NasUePolicySectionManagementResult::from_subresults(&other).is_err());
+    assert!(UePolicySectionManagementResult::from_subresults(&other).is_err());
     // A subresult cut short after a complete one, or of more results than
     // the octets hold
     let mut cut = result.value.as_slice()[..14].to_vec();
     cut.extend_from_slice(&[0x01, 0x13]);
     assert_eq!(
-        NasUePolicySectionManagementResult::new(cut).try_subresults(),
+        UePolicySectionManagementResult::new(cut).try_subresults(),
         None
     );
     let overrun = octets("03 02f839 0102 0304 6f 0506 0708 6f");
     assert_eq!(
-        NasUePolicySectionManagementResult::new(overrun).try_subresults(),
+        UePolicySectionManagementResult::new(overrun).try_subresults(),
         None
     );
 }
@@ -213,7 +213,7 @@ fn a_upsi_list_is_read_as_figure_d_6_4_2_codes_it() {
         UpsiSublist::new(plmn("208", "93"), vec![0x0102]),
         UpsiSublist::new(plmn("310", "410"), vec![0x0304, 0x0506]),
     ];
-    let list = NasUpsiList::from_sublists(&lists).unwrap();
+    let list = UpsiList::from_sublists(&lists).unwrap();
     assert_eq!(
         list.value,
         octets("0005 02f839 0102  0007 130014 0304 0506")
@@ -221,14 +221,8 @@ fn a_upsi_list_is_read_as_figure_d_6_4_2_codes_it() {
     assert_eq!(list.try_sublists(), Some(lists.clone()));
     assert_eq!(list.sublists(), lists);
     assert!(list.is_well_formed());
-    assert!(!NasUpsiList::new(vec![0x00]).is_well_formed());
-    let none = |text: &str| {
-        assert_eq!(
-            NasUpsiList::new(octets(text)).try_sublists(),
-            None,
-            "{text}"
-        )
-    };
+    assert!(!UpsiList::new(vec![0x00]).is_well_formed());
+    let none = |text: &str| assert_eq!(UpsiList::new(octets(text)).try_sublists(), None, "{text}");
     // A sublist of no UPSC, of half a UPSC, longer than the list, or cut short
     none("0003 02f839");
     none("0006 02f839 0102 01");
@@ -236,8 +230,7 @@ fn a_upsi_list_is_read_as_figure_d_6_4_2_codes_it() {
     none("0005 02f839 0102 00");
     // The value of the IE has 65529 octets at most
     let upscs = vec![0x0101; 32762];
-    let longest =
-        NasUpsiList::from_sublists(&[UpsiSublist::new(plmn("208", "93"), upscs)]).unwrap();
+    let longest = UpsiList::from_sublists(&[UpsiSublist::new(plmn("208", "93"), upscs)]).unwrap();
     assert_eq!(longest.value.len(), 65529);
     assert!(longest.try_sublists().is_some());
     // Two sublists of one octet more are none
@@ -246,7 +239,7 @@ fn a_upsi_list_is_read_as_figure_d_6_4_2_codes_it() {
     over[0..2].copy_from_slice(&65521u16.to_be_bytes());
     over.extend_from_slice(&octets("0005 02f839 0102"));
     assert_eq!(over.len(), 65530);
-    assert_eq!(NasUpsiList::new(over).try_sublists(), None);
+    assert_eq!(UpsiList::new(over).try_sublists(), None);
 }
 
 #[test]
@@ -272,14 +265,14 @@ fn a_vps_ursp_configuration_is_read_as_figures_d_6_8_2_to_d_6_8_9_code_it() {
             ),
         ],
     );
-    let ie = NasVpsUrspConfiguration::from_parsed(&contents).unwrap();
+    let ie = VpsUrspConfiguration::from_parsed(&contents).unwrap();
     assert_eq!(
-        NasVpsUrspConfiguration::new(ie.value.clone()).parse(),
+        VpsUrspConfiguration::new(ie.value.clone()).parse(),
         Some(contents)
     );
     let none = |text: &str| {
         assert_eq!(
-            NasVpsUrspConfiguration::new(octets(text)).parse(),
+            VpsUrspConfiguration::new(octets(text)).parse(),
             None,
             "{text}"
         );
@@ -361,20 +354,18 @@ fn a_multiple_payload_container_has_each_entry_with_its_length() {
 }
 
 fn command() -> ManageUePolicyCommand {
-    ManageUePolicyCommand::new(
-        NasUePolicySectionManagementList::from_sublists(&sublists()).unwrap(),
-    )
+    ManageUePolicyCommand::new(UePolicySectionManagementList::from_sublists(&sublists()).unwrap())
 }
 
 #[test]
 fn two_messages_are_equal_when_each_of_their_ies_is() {
-    let classmark = NasUePolicyNetworkClassmark::from_nssui(true);
-    let configuration = NasVpsUrspConfiguration::new(octets("01"));
+    let classmark = UePolicyNetworkClassmark::from_nssui(true);
+    let configuration = VpsUrspConfiguration::new(octets("01"));
     let base = command();
     assert_eq!(base, command());
     let mut other_list = command();
     other_list.ue_policy_section_management_list =
-        NasUePolicySectionManagementList::from_sublists(&sublists()[1..]).unwrap();
+        UePolicySectionManagementList::from_sublists(&sublists()[1..]).unwrap();
     assert_ne!(base, other_list);
     let mut with_classmark = command();
     with_classmark.set_ue_policy_network_classmark(classmark.clone());
@@ -396,20 +387,20 @@ fn two_messages_are_equal_when_each_of_their_ies_is() {
 
     let indication = || {
         UeStateIndication::new(
-            NasUpsiList::new(octets("0005 02f839 0102")),
-            NasUePolicyClassmark::new(vec![0x01]),
+            UpsiList::new(octets("0005 02f839 0102")),
+            UePolicyClassmark::new(vec![0x01]),
         )
     };
     let state = indication();
     assert_eq!(state, indication());
     let mut other_upsi = indication();
-    other_upsi.upsi_list = NasUpsiList::new(Vec::new());
+    other_upsi.upsi_list = UpsiList::new(Vec::new());
     assert_ne!(state, other_upsi);
     let mut other_classmark = indication();
-    other_classmark.ue_policy_classmark = NasUePolicyClassmark::new(vec![0x02]);
+    other_classmark.ue_policy_classmark = UePolicyClassmark::new(vec![0x02]);
     assert_ne!(state, other_classmark);
     let mut with_os_id = indication();
-    let os_id = NasUeOsId::from_os_ids(&[[7; 16]]).unwrap();
+    let os_id = UeOsId::from_os_ids(&[[7; 16]]).unwrap();
     with_os_id.set_ue_os_id(os_id.clone());
     assert_eq!(with_os_id.ue_os_id, Some(os_id));
     assert_ne!(state, with_os_id);
@@ -429,10 +420,10 @@ fn envelope(message: UpdsMessage) -> UpdsEnvelope {
 fn a_message_is_read_back_from_its_octets_with_its_optional_ies_once() {
     // D.5.4: UE STATE INDICATION with a UE OS Id of one OS Id
     let mut indication = UeStateIndication::new(
-        NasUpsiList::new(octets("0005 02f839 0102")),
-        NasUePolicyClassmark::new(vec![0x01]),
+        UpsiList::new(octets("0005 02f839 0102")),
+        UePolicyClassmark::new(vec![0x01]),
     );
-    indication.set_ue_os_id(NasUeOsId::from_os_ids(&[[7; 16]]).unwrap());
+    indication.set_ue_os_id(UeOsId::from_os_ids(&[[7; 16]]).unwrap());
     let octets = envelope(UpdsMessage::UeStateIndication(indication))
         .encode()
         .unwrap();
@@ -441,7 +432,7 @@ fn a_message_is_read_back_from_its_octets_with_its_optional_ies_once() {
         panic!("{decoded:?}")
     };
     assert_eq!(
-        read.ue_os_id.as_ref().map(NasUeOsId::os_ids),
+        read.ue_os_id.as_ref().map(UeOsId::os_ids),
         Some(vec![[7; 16]])
     );
     assert_eq!(decoded.encode().unwrap(), octets);
@@ -455,7 +446,7 @@ fn a_message_is_read_back_from_its_octets_with_its_optional_ies_once() {
 fn a_repeated_or_malformed_optional_ie_is_kept_in_its_octets() {
     // TS 24.501 §7.6.3: an IE that is repeated is ignored after the first,
     // and kept as it came
-    let list = NasUePolicySectionManagementList::from_sublists(&sublists()).unwrap();
+    let list = UePolicySectionManagementList::from_sublists(&sublists()).unwrap();
     let mut wire = vec![0x01, 0x01];
     wire.extend_from_slice(&(list.value.len() as u16).to_be_bytes());
     wire.extend_from_slice(&list.value);
@@ -592,7 +583,7 @@ fn a_manage_ue_policy_command_has_classmark_and_configuration_of_their_clauses()
     let field = "ue_policy_network_classmark";
     let with = |octets: Vec<u8>| {
         let mut message = command();
-        message.ue_policy_network_classmark = Some(NasUePolicyNetworkClassmark::new(octets));
+        message.ue_policy_network_classmark = Some(UePolicyNetworkClassmark::new(octets));
         message.validate()
     };
     assert!(with(vec![0x01]).is_empty(), "{:?}", with(vec![0x01]));
@@ -602,9 +593,9 @@ fn a_manage_ue_policy_command_has_classmark_and_configuration_of_their_clauses()
     assert!(names(&with(vec![0x01, 0, 0, 0]), field));
     // D.6.8: a VPS URSP configuration that it reads
     let mut message = command();
-    message.vps_ursp_configuration = Some(NasVpsUrspConfiguration::new(octets("01")));
+    message.vps_ursp_configuration = Some(VpsUrspConfiguration::new(octets("01")));
     assert!(message.validate().is_empty(), "{:?}", message.validate());
-    message.vps_ursp_configuration = Some(NasVpsUrspConfiguration::new(octets("03")));
+    message.vps_ursp_configuration = Some(VpsUrspConfiguration::new(octets("03")));
     assert!(names(&message.validate(), "vps_ursp_configuration"));
 }
 
@@ -619,11 +610,10 @@ fn an_ignored_or_comprehension_required_ie_of_a_upds_message_is_a_finding() {
     assert!(names(&complete.validate(), "unknown_ies"));
     // A command reject has a result of its clause
     let reject = ManageUePolicyCommandReject::new(
-        NasUePolicySectionManagementResult::from_subresults(&subresults()).unwrap(),
+        UePolicySectionManagementResult::from_subresults(&subresults()).unwrap(),
     );
     assert!(reject.validate().is_empty());
-    let reject =
-        ManageUePolicyCommandReject::new(NasUePolicySectionManagementResult::new(vec![0x00]));
+    let reject = ManageUePolicyCommandReject::new(UePolicySectionManagementResult::new(vec![0x00]));
     assert!(names(
         &reject.validate(),
         "ue_policy_section_management_result"
@@ -634,8 +624,8 @@ fn an_ignored_or_comprehension_required_ie_of_a_upds_message_is_a_finding() {
 fn a_ue_state_indication_has_a_classmark_and_os_ids_of_their_clauses() {
     let indication = |upsi: &str, classmark: Vec<u8>| {
         UeStateIndication::new(
-            NasUpsiList::new(octets(upsi)),
-            NasUePolicyClassmark::new(classmark),
+            UpsiList::new(octets(upsi)),
+            UePolicyClassmark::new(classmark),
         )
     };
     let valid = indication("0005 02f839 0102", vec![0x01]);
@@ -660,7 +650,7 @@ fn a_ue_state_indication_has_a_classmark_and_os_ids_of_their_clauses() {
     // D.6.6: 1 to 15 OS Ids of sixteen octets
     let with_os_id = |octets: Vec<u8>| {
         let mut message = indication("", vec![0x01]);
-        message.ue_os_id = Some(NasUeOsId::new(octets));
+        message.ue_os_id = Some(UeOsId::new(octets));
         names(&message.validate(), "ue_os_id")
     };
     assert!(!with_os_id(vec![7; 16]));

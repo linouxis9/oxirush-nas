@@ -4122,7 +4122,7 @@ fn an_ie_of_one_octet_is_written_from_a_value_without_members() {
 #[test]
 fn an_ie_of_octets_alone_is_written_and_shown_by_its_octets() {
     use crate::tree::Tree;
-    let os_id = tree::from_value::<f::NasUeOsId>(&tree!({"octets": "0102"})).unwrap();
+    let os_id = tree::from_value::<f::UeOsId>(&tree!({"octets": "0102"})).unwrap();
     assert_eq!(os_id.value, [1, 2]);
     assert_eq!(os_id.to_tree(), tree!({"octets": "0102"}));
 }

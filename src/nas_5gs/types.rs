@@ -478,7 +478,7 @@ nas_ie_lv!(
 );
 nas_ie_lv!(
     /// Truncated 5G-S-TMSI Configuration (TS 24.501 §9.11.3.70). LV format.
-    TruncatedFGSTmsiConfiguration
+    Truncated5gSTmsiConfiguration
 );
 nas_ie_lv!(
     /// UE DS-TT Residence Time (TS 24.501 §9.11.4.26). LV format.
@@ -606,7 +606,7 @@ nas_ie_lve!(
 
 nas_ie_lv!(
     /// Extended 5GMM Cause (TS 24.501 §9.11.3.109). LV format.
-    ExtendedFGmmCause
+    ExtendedGmmCause
 );
 nas_ie_lv!(
     /// Alternative NSSAI (TS 24.501 §9.11.3.97). LV format.

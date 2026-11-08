@@ -80,7 +80,7 @@ crate::common::ie_rules! {
     EpsNasSecurityAlgorithms: sender;
     EthernetHeaderCompressionConfiguration: lengths(1, 1);
     ExtendedCagInformationList: lengths(0, usize::MAX), sender, receiver;
-    ExtendedFGmmCause: lengths(1, 1);
+    ExtendedGmmCause: lengths(1, 1);
     ExtendedLadnInformation: lengths(0, 1784);
     ExtendedRejectedNssai: lengths(3, 88), sender, receiver;
     FeatureAuthorizationIndication: lengths(1, 255);
@@ -172,7 +172,7 @@ crate::common::ie_rules! {
     TnanInformation: lengths(1, usize::MAX);
     TrackingAreaIdentity;
     TrackingAreaIdentityList: lengths(7, 112), sender, receiver;
-    TruncatedFGSTmsiConfiguration: lengths(1, 1), sender;
+    Truncated5gSTmsiConfiguration: lengths(1, 1), sender;
     Type6IeContainer: lengths(3, 65535), sender;
     UeDsTtResidenceTime: lengths(8, 8), sender;
     UeSecurityCapability: lengths(2, 8);
@@ -2912,8 +2912,8 @@ mod tests {
     #[test]
     fn test_upds_pti_must_match_ue_initiated_procedure() {
         let message = UpdsMessage::UeStateIndication(UeStateIndication::new(
-            NasUpsiList::new(Vec::new()),
-            NasUePolicyClassmark::from_flags(false, false, false, false),
+            UpsiList::new(Vec::new()),
+            UePolicyClassmark::from_flags(false, false, false, false),
         ));
         let envelope = UpdsEnvelope::new_with_pti(
             UpdsProcedureTransactionIdentity::from_network_initiated(0x80).unwrap(),

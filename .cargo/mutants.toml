@@ -243,10 +243,10 @@ exclude_re = [
     # UPSI sublist, are even when their sum with what was read is, as their difference is.
     # Every cause of a result is read as #111 (Table D.6.3.1), whichever octet it is read
     # from. And fields of distinct bits of one octet: `^` joins them as `|` does.
-    'src/nas_5gs/upds\.rs:(765:24|902:24|996:24|1069:24): replace > with >= in (NasUePolicySectionManagementList::try_sublists|NasUePolicySectionManagementResult::try_subresults|NasUpsiList::try_sublists|NasVpsUrspConfiguration::parse)$',
-    'src/nas_5gs/upds\.rs:(1091:72|1106:71): replace < with <= in NasVpsUrspConfiguration::parse$',
-    'src/nas_5gs/upds\.rs:(1002:34|1145:28): replace - with \+ in (NasUpsiList::try_sublists|NasVpsUrspConfiguration::parse)$',
-    'src/nas_5gs/upds\.rs:920:76: replace \+ with - in NasUePolicySectionManagementResult::try_subresults$',
+    'src/nas_5gs/upds\.rs:(765:24|902:24|996:24|1069:24): replace > with >= in (UePolicySectionManagementList::try_sublists|UePolicySectionManagementResult::try_subresults|UpsiList::try_sublists|VpsUrspConfiguration::parse)$',
+    'src/nas_5gs/upds\.rs:(1091:72|1106:71): replace < with <= in VpsUrspConfiguration::parse$',
+    'src/nas_5gs/upds\.rs:(1002:34|1145:28): replace - with \+ in (UpsiList::try_sublists|VpsUrspConfiguration::parse)$',
+    'src/nas_5gs/upds\.rs:920:76: replace \+ with - in UePolicySectionManagementResult::try_subresults$',
     'src/nas_5gs/upds\.rs:.*: replace \| with \^ in (UpdsMultiplePayloadContainer::encode|encode_mcc_pair|encode_odd_mcc)$',
     # The messages of the service: a network classmark is out of sequence after a VPS URSP
     # configuration alone, the rank 1 being reached by a classmark, which makes the next

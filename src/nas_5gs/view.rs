@@ -1055,7 +1055,7 @@ built_ie!(
 );
 built_ie!(ControlPlaneOnlyIndication, Self::from_cpoi, { cpoi: bool });
 built_ie!(
-    ExtendedFGmmCause,
+    ExtendedGmmCause,
     |not_allowed| Ok(Self::from_satellite_nr_not_allowed(not_allowed)),
     { satellite_nr_not_allowed: bool }
 );
@@ -1115,7 +1115,7 @@ built_ie!(
     |data_centric| Ok(Self::from_data_centric(data_centric)),
     { data_centric: bool }
 );
-built_ie!(TruncatedFGSTmsiConfiguration, Self::try_from_lengths, {
+built_ie!(Truncated5gSTmsiConfiguration, Self::try_from_lengths, {
     truncated_amf_set_id_length: u8 = |ie| ie.truncated_amf_set_id_length(),
     truncated_amf_pointer_length: u8 = |ie| ie.truncated_amf_pointer_length(),
 });
@@ -2120,7 +2120,7 @@ mod tests {
             sweep(Aun3Indication::new(vec![value]));
             sweep(ConfigurationUpdateIndication::new(value & 0x0f));
             sweep(ControlPlaneOnlyIndication::new(value & 0x0f));
-            sweep(ExtendedFGmmCause::new(vec![value]));
+            sweep(ExtendedGmmCause::new(vec![value]));
             sweep(GsmCongestionReAttemptIndicator::new(vec![value]));
             sweep(GsmNetworkFeatureSupport::new(vec![value]));
             sweep(FeatureAuthorizationIndication::new(vec![value]));
@@ -2135,7 +2135,7 @@ mod tests {
             sweep(RanTimingSynchronization::new(vec![value]));
             sweep(SmsIndication::new(value & 0x0f));
             sweep(UeUsageSetting::new(vec![value]));
-            sweep(TruncatedFGSTmsiConfiguration::new(vec![value]));
+            sweep(Truncated5gSTmsiConfiguration::new(vec![value]));
             sweep(RegistrationWaitRange::new(vec![value, value]));
             sweep(Aun3DeviceSecurityKey::new(vec![value & 1, 2, 0xaa, 0xbb]));
             sweep(PduSessionIdentity2::new(value));

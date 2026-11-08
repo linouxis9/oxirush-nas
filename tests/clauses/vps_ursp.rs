@@ -5,7 +5,7 @@
 
 use oxirush_nas::identity::Plmn;
 use oxirush_nas::nas_5gs::{
-    NasVpsUrspConfiguration, VpsUrspConfigurationContents as Contents,
+    VpsUrspConfiguration, VpsUrspConfigurationContents as Contents,
     VpsUrspNetworkDescriptorEntry as Entry, VpsUrspReplacementType as Replacement,
     VpsUrspTuple as Tuple,
 };
@@ -45,9 +45,9 @@ fn a_tuple_has_its_id_its_network_descriptor_and_its_upscs() {
         "02  000f 07 02 01 02 02f839 130014 03 01020304  \
          0009 08 01 02 03 020813 5406",
     );
-    let ie = NasVpsUrspConfiguration::from_parsed(&contents).unwrap();
+    let ie = VpsUrspConfiguration::from_parsed(&contents).unwrap();
     assert_eq!(ie.value, value);
-    assert_eq!(NasVpsUrspConfiguration::new(value).parse(), Some(contents));
+    assert_eq!(VpsUrspConfiguration::new(value).parse(), Some(contents));
 }
 
 #[test]
@@ -61,12 +61,10 @@ fn each_digit_of_an_mcc_pair_is_in_its_half_octet() {
     );
     let value = octets("01  0007 01 01 02 02 216354");
     assert_eq!(
-        NasVpsUrspConfiguration::from_parsed(&contents)
-            .unwrap()
-            .value,
+        VpsUrspConfiguration::from_parsed(&contents).unwrap().value,
         value
     );
-    assert_eq!(NasVpsUrspConfiguration::new(value).parse(), Some(contents));
+    assert_eq!(VpsUrspConfiguration::new(value).parse(), Some(contents));
 }
 
 #[test]
@@ -90,13 +88,13 @@ fn a_receiver_refuses_a_configuration_that_is_not_coded_as_the_annex_codes_it() 
     ];
     for value in refused {
         assert_eq!(
-            NasVpsUrspConfiguration::new(octets(value)).parse(),
+            VpsUrspConfiguration::new(octets(value)).parse(),
             None,
             "{value}"
         );
     }
     let reserved = Contents::new(Replacement::Reserved(3), vec![]);
-    assert!(NasVpsUrspConfiguration::from_parsed(&reserved).is_err());
+    assert!(VpsUrspConfiguration::from_parsed(&reserved).is_err());
 }
 
 #[test]
@@ -106,10 +104,10 @@ fn a_configuration_has_65530_octets_at_most() {
     let upscs: Vec<u16> = (0..32_762).collect();
     let tuple = Tuple::new(1, vec![Entry::AnyVplmn], upscs.clone());
     let contents = Contents::new(Replacement::FullListOfTuples, vec![tuple]);
-    let ie = NasVpsUrspConfiguration::from_parsed(&contents).unwrap();
+    let ie = VpsUrspConfiguration::from_parsed(&contents).unwrap();
     assert_eq!(ie.value.len(), 65_530);
     assert_eq!(
-        NasVpsUrspConfiguration::new(ie.value.to_vec()).parse(),
+        VpsUrspConfiguration::new(ie.value.to_vec()).parse(),
         Some(contents)
     );
     // A network descriptor of two entries makes it one octet too long
@@ -119,5 +117,5 @@ fn a_configuration_has_65530_octets_at_most() {
         value.extend_from_slice(&upsc.to_be_bytes());
     }
     assert_eq!(value.len(), 65_531);
-    assert_eq!(NasVpsUrspConfiguration::new(value).parse(), None);
+    assert_eq!(VpsUrspConfiguration::new(value).parse(), None);
 }

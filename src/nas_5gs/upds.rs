@@ -59,15 +59,15 @@ macro_rules! upds_raw_ie {
     };
 }
 
-upds_raw_ie!(NasUePolicySectionManagementList);
-upds_raw_ie!(NasUePolicySectionManagementResult);
-upds_raw_ie!(NasUpsiList);
-upds_raw_ie!(NasUePolicyClassmark);
-upds_raw_ie!(NasUeOsId);
-upds_raw_ie!(NasUePolicyNetworkClassmark);
-upds_raw_ie!(NasVpsUrspConfiguration);
+upds_raw_ie!(UePolicySectionManagementList);
+upds_raw_ie!(UePolicySectionManagementResult);
+upds_raw_ie!(UpsiList);
+upds_raw_ie!(UePolicyClassmark);
+upds_raw_ie!(UeOsId);
+upds_raw_ie!(UePolicyNetworkClassmark);
+upds_raw_ie!(VpsUrspConfiguration);
 
-impl NasUePolicyClassmark {
+impl UePolicyClassmark {
     /// Return whether ANDSP.
     pub fn support_andsp(&self) -> bool {
         self.value.first().map(|b| b & 0x01 != 0).unwrap_or(false)
@@ -132,7 +132,7 @@ crate::common::readable::readable!(
 #[cfg(feature = "tree")]
 crate::common::readable::serde_by_readable!(NonSubscribedSnpnUrspHandling);
 
-impl NasUePolicyNetworkClassmark {
+impl UePolicyNetworkClassmark {
     /// Return NSSUI.
     pub fn nssui(&self) -> bool {
         self.value.first().map(|b| b & 0x01 != 0).unwrap_or(false)
@@ -158,7 +158,7 @@ impl NasUePolicyNetworkClassmark {
     }
 }
 
-impl NasUeOsId {
+impl UeOsId {
     /// Return OS identifiers.
     pub fn os_ids(&self) -> Vec<[u8; 16]> {
         self.value
@@ -752,7 +752,7 @@ impl VpsUrspConfigurationContents {
     }
 }
 
-impl NasUePolicySectionManagementList {
+impl UePolicySectionManagementList {
     /// Parse all sublists, returning `None` for malformed internal framing.
     pub fn try_sublists(&self) -> Option<Vec<UePolicySectionManagementSublist>> {
         let data = &self.value;
@@ -889,7 +889,7 @@ impl NasUePolicySectionManagementList {
     }
 }
 
-impl NasUePolicySectionManagementResult {
+impl UePolicySectionManagementResult {
     /// Parse all subresults, returning `None` for malformed internal framing.
     pub fn try_subresults(&self) -> Option<Vec<UePolicySectionManagementSubresult>> {
         let data = &self.value;
@@ -980,7 +980,7 @@ impl NasUePolicySectionManagementResult {
     }
 }
 
-impl NasUpsiList {
+impl UpsiList {
     /// Parse all UPSI sublists, returning `None` for malformed internal framing.
     pub fn try_sublists(&self) -> Option<Vec<UpsiSublist>> {
         let data = &self.value;
@@ -1050,7 +1050,7 @@ impl NasUpsiList {
     }
 }
 
-impl NasVpsUrspConfiguration {
+impl VpsUrspConfiguration {
     /// Parse the typed contents, requiring exact Annex D.6.8 framing.
     pub fn parse(&self) -> Option<VpsUrspConfigurationContents> {
         let data = &self.value;
@@ -1710,11 +1710,11 @@ impl TryFrom<u8> for UpdsMessageType {
 /// Typed representation of NAS manage UE policy command.
 pub struct ManageUePolicyCommand {
     /// UE policy section management list.
-    pub ue_policy_section_management_list: NasUePolicySectionManagementList,
+    pub ue_policy_section_management_list: UePolicySectionManagementList,
     /// UE policy network classmark.
-    pub ue_policy_network_classmark: Option<NasUePolicyNetworkClassmark>,
+    pub ue_policy_network_classmark: Option<UePolicyNetworkClassmark>,
     /// VPS URSP configuration.
-    pub vps_ursp_configuration: Option<NasVpsUrspConfiguration>,
+    pub vps_ursp_configuration: Option<VpsUrspConfiguration>,
     /// Unrecognized and receiver-ignored information elements preserved verbatim.
     pub unknown_ies: Vec<UpdsUnknownIe>,
     pub(crate) optional_ie_order: Vec<OptionalIeOrder>,
@@ -1738,7 +1738,7 @@ impl Eq for ManageUePolicyCommand {}
 
 impl ManageUePolicyCommand {
     /// Construct a new value.
-    pub fn new(ue_policy_section_management_list: NasUePolicySectionManagementList) -> Self {
+    pub fn new(ue_policy_section_management_list: UePolicySectionManagementList) -> Self {
         Self {
             ue_policy_section_management_list,
             ue_policy_network_classmark: None,
@@ -1751,7 +1751,7 @@ impl ManageUePolicyCommand {
     /// Set the UE policy network classmark, and return the value.
     pub fn with_ue_policy_network_classmark(
         mut self,
-        ue_policy_network_classmark: NasUePolicyNetworkClassmark,
+        ue_policy_network_classmark: UePolicyNetworkClassmark,
     ) -> Self {
         self.ue_policy_network_classmark = Some(ue_policy_network_classmark);
         self
@@ -1760,7 +1760,7 @@ impl ManageUePolicyCommand {
     /// Set the UE policy network classmark.
     pub fn set_ue_policy_network_classmark(
         &mut self,
-        ue_policy_network_classmark: NasUePolicyNetworkClassmark,
+        ue_policy_network_classmark: UePolicyNetworkClassmark,
     ) -> &mut Self {
         self.ue_policy_network_classmark = Some(ue_policy_network_classmark);
         self
@@ -1769,7 +1769,7 @@ impl ManageUePolicyCommand {
     /// Set the VPS URSP configuration, and return the value.
     pub fn with_vps_ursp_configuration(
         mut self,
-        vps_ursp_configuration: NasVpsUrspConfiguration,
+        vps_ursp_configuration: VpsUrspConfiguration,
     ) -> Self {
         self.vps_ursp_configuration = Some(vps_ursp_configuration);
         self
@@ -1778,7 +1778,7 @@ impl ManageUePolicyCommand {
     /// Set the VPS URSP configuration.
     pub fn set_vps_ursp_configuration(
         &mut self,
-        vps_ursp_configuration: NasVpsUrspConfiguration,
+        vps_ursp_configuration: VpsUrspConfiguration,
     ) -> &mut Self {
         self.vps_ursp_configuration = Some(vps_ursp_configuration);
         self
@@ -1861,7 +1861,7 @@ impl ManageUePolicyComplete {
 /// Typed representation of NAS manage UE policy command reject.
 pub struct ManageUePolicyCommandReject {
     /// UE policy section management result.
-    pub ue_policy_section_management_result: NasUePolicySectionManagementResult,
+    pub ue_policy_section_management_result: UePolicySectionManagementResult,
     /// Unrecognized information elements preserved for round-trip encoding.
     pub unknown_ies: Vec<UpdsUnknownIe>,
 }
@@ -1873,7 +1873,7 @@ crate::common::readable::serde_by_readable!(ManageUePolicyCommandReject);
 
 impl ManageUePolicyCommandReject {
     /// Construct a new value.
-    pub fn new(ue_policy_section_management_result: NasUePolicySectionManagementResult) -> Self {
+    pub fn new(ue_policy_section_management_result: UePolicySectionManagementResult) -> Self {
         Self {
             ue_policy_section_management_result,
             unknown_ies: Vec::new(),
@@ -1885,11 +1885,11 @@ impl ManageUePolicyCommandReject {
 /// Typed representation of NAS UE state indication.
 pub struct UeStateIndication {
     /// UPSI list.
-    pub upsi_list: NasUpsiList,
+    pub upsi_list: UpsiList,
     /// UE policy classmark.
-    pub ue_policy_classmark: NasUePolicyClassmark,
+    pub ue_policy_classmark: UePolicyClassmark,
     /// UE OS identifier.
-    pub ue_os_id: Option<NasUeOsId>,
+    pub ue_os_id: Option<UeOsId>,
     /// Unrecognized and receiver-ignored information elements preserved verbatim.
     pub unknown_ies: Vec<UpdsUnknownIe>,
     pub(crate) optional_ie_order: Vec<OptionalIeOrder>,
@@ -1913,7 +1913,7 @@ impl Eq for UeStateIndication {}
 
 impl UeStateIndication {
     /// Construct a new value.
-    pub fn new(upsi_list: NasUpsiList, ue_policy_classmark: NasUePolicyClassmark) -> Self {
+    pub fn new(upsi_list: UpsiList, ue_policy_classmark: UePolicyClassmark) -> Self {
         Self {
             upsi_list,
             ue_policy_classmark,
@@ -1924,13 +1924,13 @@ impl UeStateIndication {
     }
 
     /// Set UE OS identifier and return the updated value.
-    pub fn with_ue_os_id(mut self, ue_os_id: NasUeOsId) -> Self {
+    pub fn with_ue_os_id(mut self, ue_os_id: UeOsId) -> Self {
         self.ue_os_id = Some(ue_os_id);
         self
     }
 
     /// Set UE OS identifier.
-    pub fn set_ue_os_id(&mut self, ue_os_id: NasUeOsId) -> &mut Self {
+    pub fn set_ue_os_id(&mut self, ue_os_id: UeOsId) -> &mut Self {
         self.ue_os_id = Some(ue_os_id);
         self
     }
@@ -2237,7 +2237,7 @@ impl Decode for UpdsEnvelope {
 
         let message = match UpdsMessageType::try_from(message_type_code) {
             Ok(UpdsMessageType::ManageUePolicyCommand) => {
-                let list = NasUePolicySectionManagementList::new(decode_lve(buffer)?);
+                let list = UePolicySectionManagementList::new(decode_lve(buffer)?);
                 if list.try_sublists().is_none() {
                     return Err(Error::InvalidMandatoryIe {
                         ie: IeName::of("ue_policy_section_management_list"),
@@ -2276,7 +2276,7 @@ impl Decode for UpdsEnvelope {
                             } else {
                                 *buffer = probe;
                                 message.ue_policy_network_classmark =
-                                    contents.map(NasUePolicyNetworkClassmark::new);
+                                    contents.map(UePolicyNetworkClassmark::new);
                                 message
                                     .optional_ie_order
                                     .push(OptionalIeOrder::Known(IEI_UE_POLICY_NETWORK_CLASSMARK));
@@ -2292,7 +2292,7 @@ impl Decode for UpdsEnvelope {
                                 .map(|_| buffer.remaining() - probe.remaining());
                             let parsed = contents
                                 .as_ref()
-                                .map(|value| NasVpsUrspConfiguration::new(value.clone()));
+                                .map(|value| VpsUrspConfiguration::new(value.clone()));
                             let reason = if message.vps_ursp_configuration.is_some() {
                                 Some(IgnoredIeReason::Repeated)
                             } else if parsed.as_ref().is_none_or(|value| value.parse().is_none()) {
@@ -2334,7 +2334,7 @@ impl Decode for UpdsEnvelope {
                 UpdsMessage::ManageUePolicyComplete(message)
             }
             Ok(UpdsMessageType::ManageUePolicyCommandReject) => {
-                let result = NasUePolicySectionManagementResult::new(decode_lve(buffer)?);
+                let result = UePolicySectionManagementResult::new(decode_lve(buffer)?);
                 if result.try_subresults().is_none() {
                     return Err(Error::InvalidMandatoryIe {
                         ie: IeName::of("ue_policy_section_management_result"),
@@ -2349,7 +2349,7 @@ impl Decode for UpdsEnvelope {
                 UpdsMessage::ManageUePolicyCommandReject(message)
             }
             Ok(UpdsMessageType::UeStateIndication) => {
-                let upsi_list = NasUpsiList::new(decode_lve(buffer)?);
+                let upsi_list = UpsiList::new(decode_lve(buffer)?);
                 if upsi_list.try_sublists().is_none() {
                     return Err(Error::InvalidMandatoryIe {
                         ie: IeName::of("upsi_list"),
@@ -2357,7 +2357,7 @@ impl Decode for UpdsEnvelope {
                         reason: None,
                     });
                 }
-                let ue_policy_classmark = NasUePolicyClassmark::new(decode_lv(buffer)?);
+                let ue_policy_classmark = UePolicyClassmark::new(decode_lv(buffer)?);
                 if ue_policy_classmark.value.is_empty() {
                     return Err(Error::InvalidMandatoryIe {
                         ie: IeName::of("ue_policy_classmark"),
@@ -2391,7 +2391,7 @@ impl Decode for UpdsEnvelope {
                                 );
                             } else {
                                 *buffer = probe;
-                                message.ue_os_id = contents.map(NasUeOsId::new);
+                                message.ue_os_id = contents.map(UeOsId::new);
                                 message
                                     .optional_ie_order
                                     .push(OptionalIeOrder::Known(IEI_UE_OS_ID));
@@ -2656,7 +2656,7 @@ mod tests {
 
     #[test]
     fn test_ue_policy_classmark_helpers() {
-        let classmark = NasUePolicyClassmark::from_flags(true, false, true, true);
+        let classmark = UePolicyClassmark::from_flags(true, false, true, true);
         assert!(classmark.support_andsp());
         assert!(!classmark.eps_ursp());
         assert!(classmark.svpsu());
@@ -2669,7 +2669,7 @@ mod tests {
             UpdsProcedureTransactionIdentity::from_network_initiated(0x80).unwrap(),
             UpdsMessage::ManageUePolicyCommand(
                 ManageUePolicyCommand::new(
-                    NasUePolicySectionManagementList::from_sublists(&[
+                    UePolicySectionManagementList::from_sublists(&[
                         UePolicySectionManagementSublist {
                             plmn: Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap(),
                             instructions: vec![UePolicySectionManagementInstruction {
@@ -2683,11 +2683,11 @@ mod tests {
                     ])
                     .unwrap(),
                 )
-                .with_ue_policy_network_classmark(NasUePolicyNetworkClassmark::from_handling(
+                .with_ue_policy_network_classmark(UePolicyNetworkClassmark::from_handling(
                     NonSubscribedSnpnUrspHandling::Disallow,
                 ))
                 .with_vps_ursp_configuration(
-                    NasVpsUrspConfiguration::from_parsed(&VpsUrspConfigurationContents {
+                    VpsUrspConfiguration::from_parsed(&VpsUrspConfigurationContents {
                         replacement_type: VpsUrspReplacementType::PerTupleReplacement,
                         tuples: vec![VpsUrspTuple {
                             tuple_id: 1,
@@ -2711,14 +2711,14 @@ mod tests {
             UpdsProcedureTransactionIdentity::from_ue_initiated(0x01).unwrap(),
             UpdsMessage::UeStateIndication(
                 UeStateIndication::new(
-                    NasUpsiList::from_sublists(&[UpsiSublist {
+                    UpsiList::from_sublists(&[UpsiSublist {
                         plmn: Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap(),
                         upscs: vec![0x0102, 0x0103],
                     }])
                     .unwrap(),
-                    NasUePolicyClassmark::from_flags(true, false, true, false),
+                    UePolicyClassmark::from_flags(true, false, true, false),
                 )
-                .with_ue_os_id(NasUeOsId::from_os_ids(&[[0x11; 16], [0x22; 16]]).unwrap()),
+                .with_ue_os_id(UeOsId::from_os_ids(&[[0x11; 16], [0x22; 16]]).unwrap()),
             ),
         );
 
@@ -2861,7 +2861,7 @@ mod tests {
     #[test]
     fn annex_d_result_cause_uses_receiver_fallback() {
         let result =
-            NasUePolicySectionManagementResult::new(hex::decode("0102f8390001000100").unwrap());
+            UePolicySectionManagementResult::new(hex::decode("0102f8390001000100").unwrap());
         let parsed = result.try_subresults().unwrap();
         assert_eq!(
             parsed[0].results[0].cause,
@@ -2886,15 +2886,15 @@ mod tests {
     #[test]
     fn annex_d_vps_ursp_rejects_reserved_and_trailing_values() {
         for value in [vec![0x00, 0xaa], vec![0x03]] {
-            let configuration = NasVpsUrspConfiguration::new(value);
+            let configuration = VpsUrspConfiguration::new(value);
             assert!(configuration.parse().is_none());
             assert!(!configuration.is_well_formed());
         }
         // Spare bit 8 is ignored on receipt and reported to the sender.
-        let spare = NasVpsUrspConfiguration::new(vec![0x81]);
+        let spare = VpsUrspConfiguration::new(vec![0x81]);
         assert!(spare.parse().is_some());
         assert!(!spare.is_well_formed());
-        let empty_full_list = NasVpsUrspConfiguration::from_parsed(&VpsUrspConfigurationContents {
+        let empty_full_list = VpsUrspConfiguration::from_parsed(&VpsUrspConfigurationContents {
             replacement_type: VpsUrspReplacementType::FullListOfTuples,
             tuples: Vec::new(),
         })
@@ -2960,9 +2960,8 @@ mod tests {
         assert!(configuration.parse().is_some());
         assert!(!configuration.is_well_formed());
 
-        let odd_mcc = NasVpsUrspConfiguration::new(
-            hex::decode("0100060101020102 18".replace(' ', "")).unwrap(),
-        );
+        let odd_mcc =
+            VpsUrspConfiguration::new(hex::decode("0100060101020102 18".replace(' ', "")).unwrap());
         let parsed = odd_mcc.parse().unwrap();
         assert_eq!(
             parsed.tuples[0].network_descriptor,

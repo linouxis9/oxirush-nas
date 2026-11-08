@@ -488,7 +488,7 @@ nas_message! {
             0x39 => pending_nssai: Nssai {wire_len 4, 146},
             0x74 => ciphering_key_data: CipheringKeyData {wire_len 34, usize::MAX},
             0x75 => cag_information_list: CagInformationList {wire_len 3, usize::MAX},
-            0x1B => truncated_fg_s_tmsi_configuration: TruncatedFGSTmsiConfiguration {wire_len 3, 3},
+            0x1B => truncated_fg_s_tmsi_configuration: Truncated5gSTmsiConfiguration {wire_len 3, 3},
             0x1C => negotiated_wus_assistance_information: WusAssistanceInformation {wire_len 3, 3},
             0x29 => negotiated_nb_n1_mode_drx_parameters: NbN1ModeDrxParameters {wire_len 3, 3},
             0x68 => extended_rejected_nssai: ExtendedRejectedNssai {wire_len 5, 90},
@@ -563,7 +563,7 @@ nas_message! {
             0x1E | 0x3C => forbidden_tais_for_the_list_of_fgs_forbidden_tracking_areas_for_regional_provision_of_service: TrackingAreaIdentityList {wire_len 9, 114},
             0x3E => n3iwf_identifier: N3iwfIdentifier {wire_len 7, usize::MAX},
             0x4D => tnan_information: TnanInformation {wire_len 3, usize::MAX},
-            0x62 => extended_5gmm_cause: ExtendedFGmmCause {wire_len 3, 3},
+            0x62 => extended_5gmm_cause: ExtendedGmmCause {wire_len 3, 3},
             0x63 => access_technology_utilization_control: AccessTechnologyUtilizationControl {wire_len 4, 5}
         }
     }
@@ -704,7 +704,7 @@ nas_message! {
             0x67 => ue_radio_capability_id: UeRadioCapabilityId {wire_len 3, usize::MAX},
             0xA0 => ue_radio_capability_id_deletion_indication: UeRadioCapabilityIdDeletionIndication [tv1] {wire_len 1, 1},
             0x44 => fgs_registration_result: RegistrationResult {wire_len 3, 3},
-            0x1B => truncated_fg_s_tmsi_configuration: TruncatedFGSTmsiConfiguration {wire_len 3, 3},
+            0x1B => truncated_fg_s_tmsi_configuration: Truncated5gSTmsiConfiguration {wire_len 3, 3},
             0xC0 => additional_configuration_indication: AdditionalConfigurationIndication [tv1] {wire_len 1, 1},
             0x68 => extended_rejected_nssai: ExtendedRejectedNssai {wire_len 5, 90},
             0x72 => service_level_aa_container: ServiceLevelAaContainer {wire_len 4, 65538},

@@ -179,7 +179,7 @@ fn values_refuse_what_their_field_cannot_hold() {
     assert!(tnan.set_ssid(Some(&[0; 33])).is_err());
     assert_eq!(tnan.ssid(), Some(&b"ssid"[..]));
     // A setter that refuses leaves the IE as it was.
-    let mut truncated = TruncatedFGSTmsiConfiguration::new(vec![0x45]);
+    let mut truncated = Truncated5gSTmsiConfiguration::new(vec![0x45]);
     assert!(truncated.set_set_id_length(11).is_err());
     assert!(truncated.set_set_id_length(0).is_err());
     assert!(truncated.set_pointer_length(7).is_err());

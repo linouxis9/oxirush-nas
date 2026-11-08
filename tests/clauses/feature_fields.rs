@@ -6,13 +6,13 @@ use oxirush_nas::nas_5gs::{
     AdditionalInformationRequested, Aun3DeviceSecurityKey, Aun3DeviceSecurityKeyType as KeyType,
     Aun3Indication, CiotSmallDataDownlinkDataExpected as Ddx, DsTtCorrectionField, EcsAddress,
     EcsAddressType, EcsSpatialValidityType, EthernetHeaderCompressionConfiguration,
-    ExtendedFGmmCause, FeatureAuthMbsraiValue as Mbsrai,
+    ExtendedGmmCause, FeatureAuthMbsraiValue as Mbsrai,
     FeatureAuthorizationIndication as FeatureAuthorization, LpWusStatus,
     LpWuspsAssistanceInformation as LpWusps, N3iwfAddress, N3iwfIdentifier, N3iwfIdentifierType,
     NbN1ModeDrxParameters, Non3GppAccessPathSwitchingIndication, Non3GppPathSwitchingInformation,
     NssrgInformation, PagingRestrictionType, PayloadContainerInformation,
     PeipsAssistanceInformation, PeipsAssistanceInformationEntry, ProseRelayTransactionIdentity,
-    RelayKeyRequestParameters, SnpnList, TnanInformation, TruncatedFGSTmsiConfiguration,
+    RelayKeyRequestParameters, SnpnList, TnanInformation, Truncated5gSTmsiConfiguration,
     UeDsTtResidenceTime, UeParametersUpdateDataSetType, UrspRuleEnforcementReports,
 };
 
@@ -22,7 +22,7 @@ fn a_truncated_5g_s_tmsi_configuration_has_two_lengths() {
     // pointer length in bits 4 to 1, 1 to 6; another code is read as the largest
     // (TS 24.501 §9.11.3.70)
     for octet in 0..=u8::MAX {
-        let configuration = TruncatedFGSTmsiConfiguration::new(vec![octet]);
+        let configuration = Truncated5gSTmsiConfiguration::new(vec![octet]);
         let (set_id, pointer) = (octet >> 4, octet & 0x0f);
         let set_id = if (1..=10).contains(&set_id) {
             set_id
@@ -46,13 +46,13 @@ fn a_truncated_5g_s_tmsi_configuration_has_two_lengths() {
         );
     }
     // Eight bits at least in both
-    let written = TruncatedFGSTmsiConfiguration::try_from_lengths(2, 6).unwrap();
+    let written = Truncated5gSTmsiConfiguration::try_from_lengths(2, 6).unwrap();
     assert_eq!(written.value, [0x26]);
     assert!(written.is_well_formed());
-    assert!(TruncatedFGSTmsiConfiguration::try_from_lengths(1, 6).is_err());
-    assert!(!TruncatedFGSTmsiConfiguration::new(vec![0x11]).is_well_formed());
-    assert!(!TruncatedFGSTmsiConfiguration::new(vec![0x26, 0x00]).is_well_formed());
-    let mut pointer = TruncatedFGSTmsiConfiguration::new(vec![0xa1]);
+    assert!(Truncated5gSTmsiConfiguration::try_from_lengths(1, 6).is_err());
+    assert!(!Truncated5gSTmsiConfiguration::new(vec![0x11]).is_well_formed());
+    assert!(!Truncated5gSTmsiConfiguration::new(vec![0x26, 0x00]).is_well_formed());
+    let mut pointer = Truncated5gSTmsiConfiguration::new(vec![0xa1]);
     pointer.set_pointer_length(6).unwrap();
     assert_eq!(pointer.value, [0xa6]);
 }
@@ -152,7 +152,7 @@ fn a_flag_or_a_short_field_of_a_later_ie_is_its_bits() {
         assert_eq!((naps, nsonr, aun3reg), (set, set, set), "{octet}");
         assert_eq!(PayloadContainerInformation::new(octet).pru(), set);
         assert_eq!(LpWusStatus::new(octet).lp_wus_disabled(), set);
-        let cause = ExtendedFGmmCause::new(vec![octet]);
+        let cause = ExtendedGmmCause::new(vec![octet]);
         assert_eq!(
             (
                 cause.satellite_nr_not_allowed(),

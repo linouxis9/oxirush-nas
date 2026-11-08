@@ -12288,7 +12288,7 @@ impl Nid {
     }
 }
 
-impl TruncatedFGSTmsiConfiguration {
+impl Truncated5gSTmsiConfiguration {
     /// Raw truncated AMF Set ID length field (bits 8 through 5).
     pub fn truncated_amf_set_id_length(&self) -> Option<u8> {
         self.value.first().map(|octet| octet >> 4)
@@ -12399,7 +12399,7 @@ impl TruncatedFGSTmsiConfiguration {
     }
 }
 
-impl Default for TruncatedFGSTmsiConfiguration {
+impl Default for Truncated5gSTmsiConfiguration {
     fn default() -> Self {
         Self::new(vec![0])
     }
@@ -17080,7 +17080,7 @@ impl OnDemandNssai {
 
 // ── 9.11.3.109 Extended 5GMM cause ──────────────────────────────────────────
 
-impl ExtendedFGmmCause {
+impl ExtendedGmmCause {
     /// SAT_NR — Satellite NG-RAN allowed in PLMN (bit 1, mask 0x01).
     pub fn satellite_nr_allowed(&self) -> bool {
         !self.satellite_nr_not_allowed()
@@ -17705,13 +17705,13 @@ mod tests {
         let mut nid = Nid::new(vec![]);
         nid.set_assignment_mode_raw(1).unwrap();
         encodes(&nid);
-        let mut truncated = TruncatedFGSTmsiConfiguration::new(vec![]);
+        let mut truncated = Truncated5gSTmsiConfiguration::new(vec![]);
         truncated.set_set_id_length(4).unwrap();
         encodes(&truncated);
-        let mut truncated = TruncatedFGSTmsiConfiguration::new(vec![]);
+        let mut truncated = Truncated5gSTmsiConfiguration::new(vec![]);
         truncated.set_pointer_length(2).unwrap();
         encodes(&truncated);
-        let truncated = TruncatedFGSTmsiConfiguration::new(vec![]);
+        let truncated = Truncated5gSTmsiConfiguration::new(vec![]);
         encodes(&truncated.clone().with_set_id_length(4).unwrap());
         encodes(&truncated.clone().with_pointer_length(2).unwrap());
         assert!(truncated.clone().with_set_id_length(11).is_err());
@@ -18602,15 +18602,15 @@ mod tests {
     #[test]
     fn test_truncated_tmsi_config() {
         // TS 24.501 §9.11.3.70: set ID length in upper nibble, pointer length in lower.
-        let ie = TruncatedFGSTmsiConfiguration::new(vec![(6 << 4) | 4]);
+        let ie = Truncated5gSTmsiConfiguration::new(vec![(6 << 4) | 4]);
         assert_eq!(ie.truncated_amf_set_id_length(), Some(6));
         assert_eq!(ie.truncated_amf_pointer_length(), Some(4));
         assert!(ie.is_well_formed());
         assert_eq!(
-            TruncatedFGSTmsiConfiguration::try_from_lengths(6, 4),
+            Truncated5gSTmsiConfiguration::try_from_lengths(6, 4),
             Ok(ie)
         );
-        assert!(TruncatedFGSTmsiConfiguration::try_from_lengths(4, 3).is_err());
+        assert!(Truncated5gSTmsiConfiguration::try_from_lengths(4, 3).is_err());
     }
 
     #[test]
@@ -20129,17 +20129,13 @@ mod tests {
 
     #[test]
     fn test_extended_5gmm_cause() {
-        let ie = ExtendedFGmmCause::from_satellite_nr_allowed(true);
+        let ie = ExtendedGmmCause::from_satellite_nr_allowed(true);
         assert!(ie.satellite_nr_allowed());
         assert!(ie.spare_bits_are_zero());
         assert!(ie.validate_strict().is_ok());
+        assert!(ExtendedGmmCause::new(vec![0x02]).validate_strict().is_err());
         assert!(
-            ExtendedFGmmCause::new(vec![0x02])
-                .validate_strict()
-                .is_err()
-        );
-        assert!(
-            ExtendedFGmmCause::new(vec![0x00, 0x00])
+            ExtendedGmmCause::new(vec![0x00, 0x00])
                 .validate_strict()
                 .is_err()
         );
