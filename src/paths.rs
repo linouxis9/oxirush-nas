@@ -348,6 +348,17 @@
 //! container is under the name of the container, with the names of its own
 //! IEs: `/nas/esm-message-container/pdn-type`.
 //!
+//! A path is the names of the tree joined: after the name of an IE or of a
+//! field of the header, the next name is a member of its value. `octets` there
+//! is the octets of the IE: a tree has them where the value does not write
+//! them back, and [`set`] writes the IE by them, in the place of its value;
+//! the message has them for each IE, and its `select()`
+//! ([`nas_5gs::Message::select`](crate::nas_5gs::Message::select),
+//! [`nas_eps::Message::select`](crate::nas_eps::Message::select)) gives them.
+//! `value` after the name of an IE, which no tree has, is an error that says the
+//! path without it: ``a path is the tree's names joined: write
+//! `/nas/5g-guti/guti/tmsi`, at /nas/5g-guti/value/guti/tmsi``.
+//!
 //! An optional IE that the message does not have selects nothing, and so does
 //! anything under it; [`set`] adds it. Inside a value, a path names what the
 //! value has, as the tree shows it: a member that it does not have is an error,
@@ -369,7 +380,7 @@
 //! | Order | The order of the message: the header first, then the IEs in the order of the message table, and in a value its members in the order of the clause. A tree that is written may have them in any order. |
 //! | Errors | Nothing that is written is ignored. These are errors: a name that the message or a value does not have; a value that its IE cannot carry, with the member and the limit that it breaks as the constructor of the IE says them (``pdu-session-status: entry 1: `pdu-session-identity` is 16, and must be 1 to 15``); a mandatory IE that is taken out or not written; octets of a length that the message does not give the IE; a `message-type` that the IEs are not those of; an edit under a `security-header` that keeps its code. |
 //! | Not checked | The rules of a sender: `validate()` has them. |
-//! | Octets that a message came with | A tree has the value of an IE, and its octets where the value does not write them back. [`ie_octets()`] gives the octets of an IE as the message has them, by the path of the IE: `/nas/nas-message-container/5gmm-capability`. |
+//! | Octets that a message came with | A tree has the value of an IE, and its octets where the value does not write them back. [`select()`] of the message gives the octets of an IE as the message has them, by the path of the IE and `octets`: `/nas/nas-message-container/5gmm-capability/octets`. |
 //! | Octets after `with_tree()` | Only what was edited changes: an IE that the tree leaves as it was keeps its octets, and a tree that changes nothing gives the message back. |
 //! | Octets after `from_tree()` | The message means the same ([`means_the_same()`]) and may have other octets, in three cases: its optional IEs are in the order of the message table, with the unknown IEs after them; and a value that says all that its octets mean without deciding them is written in one form (the unit of a timer of one octet and of the rates of a session AMBR, octets of zeros at the end of the flags of a capability, the partial lists of an EPS tracking area identity list). Octets are the way to choose them. |
 //! | EPS SERVICE REQUEST | A short header, no IEs and no `message-type` (TS 24.301 §8.2.25). Its tree has `ksi-and-sequence-number`, whose value is a `ksi` and a `sequence-number`, and the two octets of `message-authentication-code`; the protocol discriminator, and a security header type of 12, are left out as the other headers leave out what their type decides. |
@@ -494,18 +505,38 @@
 //! [`means_the_same()`]: crate::nas_5gs::Message::means_the_same
 //! [`from_tree()`]: crate::nas_5gs::Message::from_tree
 //! [`with_tree()`]: crate::nas_5gs::Message::with_tree
-//! [`ie_octets()`]: crate::nas_5gs::Message::ie_octets
+//! [`select()`]: crate::nas_5gs::Message::select
 
 use crate::prelude::*;
+use alloc::rc::Rc;
+use core::cell::Cell;
 use oxirush_utils::tree::Value;
-use oxirush_utils::tree::{self, Absent, Error, ErrorKind, Family, Root};
+use oxirush_utils::tree::{
+    self, Absent, Edit, Error, ErrorKind, Family, Key, Next, Place, Root, Step,
+};
+
+/// The name after an IE that is its octets.
+const OCTETS: &str = "octets";
+/// The name that a path may write after the name of an IE for its value, which no tree
+/// has there.
+const VALUE: &str = "value";
 
 /// What a path knows of a place of a tree.
 #[derive(Clone, Default)]
 enum Shape {
-    /// The tree of a message, with the `message-type` that it writes by name:
-    /// that of the tree, or that of the message in a container.
+    /// The tree of a message, with the `message-type` that it writes by name.
     Message(Option<String>),
+    /// The value of an IE or of a field of the header of a message: the name after it is
+    /// a member of the value, or `octets`, the octets of the IE. `message` is the type
+    /// of the message that the value is, for a container; `at` the path of the IE, where
+    /// a message gives the octets of each IE.
+    Ie {
+        message: Option<String>,
+        at: Option<Rc<str>>,
+    },
+    /// The octets of an IE that the tree has by its value: those that the message has
+    /// for the IE at `at`, and for `set`, the octets that take the place of the value.
+    Octets(Option<Rc<str>>),
     /// A value, which the plain rules walk.
     #[default]
     Value,
@@ -520,7 +551,84 @@ fn kind_of(tree: &Value) -> Option<String> {
 /// The trees of the NAS messages of both systems, as the paths of oxirush-utils walk
 /// them: `/nas` stands for the tree, and the segment after it names an IE or a field of
 /// the header.
-struct Trees;
+#[derive(Default)]
+struct Trees {
+    /// Whether the paths are those of a message, which has the octets of each IE.
+    message: bool,
+    /// Where the path has `value` after the name of an IE, which the walk refused: the
+    /// position of that segment in the path as it is written.
+    joined: Cell<Option<usize>>,
+}
+
+impl Trees {
+    /// The paths of a message, whose places keep the paths of their IEs.
+    fn of_message() -> Self {
+        Self {
+            message: true,
+            ..Self::default()
+        }
+    }
+
+    /// `done`, the end of a walk of `path` in `tree`, or the error that says the path of
+    /// the names of the tree where the path has `value` after the name of an IE: without
+    /// it, and without each `value` after another IE that a walk of that path meets. An
+    /// edit that refused the path for another reason, as an IE that is not there, says
+    /// this, which a walk of `tree` that selects finds.
+    fn joined<T>(&self, done: Result<T, Error>, tree: &Value, path: &str) -> Result<T, Error> {
+        let walked = |path: &str| {
+            let again = Trees::default();
+            let _ = tree::places_in(&again, tree, path);
+            again.joined.get()
+        };
+        let index = match self.joined.get() {
+            None if done.is_err() => walked(path),
+            index => index,
+        };
+        let Some(mut index) = index else {
+            return done;
+        };
+        let mut parts = tree::segments(path)?;
+        let written = loop {
+            parts.remove(index);
+            let written: String = parts
+                .iter()
+                .map(|part| format!("/{}", tree::escape(part)))
+                .collect();
+            match walked(&written) {
+                Some(again) => index = again,
+                None => break written,
+            }
+        };
+        let reason = format!("a path is the tree's names joined: write `{written}`");
+        Err(Error::new(ErrorKind::NoSuchMember, path, reason))
+    }
+
+    /// What `octets` after the name of the IE at `at` selects at `place`, where the tree
+    /// has no member of that name there: the IE has its value, or the message does not
+    /// have it.
+    fn octets<'v>(
+        &self,
+        place: &Place<'v, Shape>,
+        at: &Option<Rc<str>>,
+        next: &mut Next<'v, Shape>,
+    ) -> Result<(), Error> {
+        let there = place.value().is_some_and(|value| !value.is_null());
+        match next.edit() {
+            // The IE is written by its octets, in the place of its value.
+            Some(Edit::Set) if next.is_last() => next.stay(place, Shape::Octets(None)),
+            // An IE that the message does not have has no octets.
+            None if !there => {}
+            // A message has the octets of each IE.
+            None if self.message => next.absent(OCTETS, Shape::Octets(at.clone())),
+            _ => {
+                let reason =
+                    "the tree has the value of this IE and not its octets, which the message has";
+                return Err(Error::new(ErrorKind::NoSuchMember, "", reason));
+            }
+        }
+        Ok(())
+    }
+}
 
 impl Family for Trees {
     type Shape = Shape;
@@ -533,25 +641,85 @@ impl Family for Trees {
         Shape::Message(kind_of(tree))
     }
 
-    fn member(&self, shape: &Shape, _name: &str, value: Option<&Value>) -> Shape {
-        match (shape, value.and_then(kind_of)) {
-            // The message in a container is a tree, whose members are IEs.
-            (Shape::Message(_), Some(kind)) => Shape::Message(Some(kind)),
-            _ => Shape::Value,
+    fn step<'v>(
+        &self,
+        place: &Place<'v, Shape>,
+        segment: &str,
+        next: &mut Next<'v, Shape>,
+    ) -> Result<Step<Shape>, Error> {
+        let Shape::Ie { at, .. } = place.shape() else {
+            return Ok(Step::Plain);
+        };
+        // A member of the value that has the name is that member.
+        let members = place.value().and_then(Value::as_object);
+        let has = |name: &str| members.is_some_and(|members| tree::member(members, name).is_some());
+        // No IE of the two systems has a value with a member `value`.
+        if tree::same_name(segment, VALUE) && !has(VALUE) {
+            self.joined.set(next.index());
+            let reason = "a path is the tree's names joined";
+            return Err(Error::new(ErrorKind::Refused, "", reason));
+        }
+        if !tree::same_name(segment, OCTETS) || has(OCTETS) {
+            return Ok(Step::Plain);
+        }
+        self.octets(place, at, next)?;
+        Ok(Step::Taken)
+    }
+
+    fn member(&self, shape: &Shape, name: &str, value: Option<&Value>) -> Shape {
+        // The members of a message, and of the message in a container, are its IEs.
+        let held = match shape {
+            Shape::Message(_) => None,
+            Shape::Ie {
+                message: Some(_),
+                at,
+            } => at.as_deref(),
+            _ => return Shape::Value,
+        };
+        let at = self.message.then(|| {
+            let held = held.unwrap_or("/nas");
+            Rc::from(format!("{held}/{}", tree::escape(name)))
+        });
+        Shape::Ie {
+            message: value.and_then(kind_of),
+            at,
         }
     }
 
     fn absent(&self, shape: &Shape, name: &str) -> Absent<Shape> {
-        let Shape::Message(Some(kind)) = shape else {
+        let (Shape::Message(Some(kind))
+        | Shape::Ie {
+            message: Some(kind),
+            ..
+        }) = shape
+        else {
             return Absent::Unknown;
         };
         match can_have(kind, name) {
-            true => Absent::Optional(Shape::Value),
+            true => Absent::Optional(self.member(shape, name, None)),
             false => Absent::Refused(Error::new(
                 ErrorKind::NoSuchMember,
                 "",
                 format!("`{name}` is no IE of a message `{kind}`"),
             )),
+        }
+    }
+
+    fn edited(&self, tree: &mut Value, at: &[Key], shape: &Shape, edit: Edit) {
+        // The octets that are set take the place of the value of the IE.
+        if !matches!((shape, edit), (Shape::Octets(_), Edit::Set)) {
+            return;
+        }
+        let mut place = Some(tree);
+        for key in at {
+            place = match (key, place) {
+                (Key::Name(name), Some(Value::Object(members))) => members.get_mut(name.as_str()),
+                _ => None,
+            };
+        }
+        if let Some(place) = place {
+            let octets = core::mem::take(place);
+            *place = oxirush_utils::tree!({ "octets": octets });
         }
     }
 }
@@ -581,7 +749,8 @@ fn can_have(kind: &str, name: &str) -> bool {
 /// The errors of [`tree::select_in`]: a path that is none, more than 4096 values, a
 /// name that the value at its place does not have, a segment that is no position in a
 /// list, a path that goes on into a number or a string, and the name of an IE that the
-/// message of the tree cannot have.
+/// message of the tree cannot have; `value` after the name of an IE, with the path that
+/// the names of the tree write, and `octets` after an IE that the tree has by its value.
 ///
 /// ```
 /// use oxirush_nas::{nas_5gs::Message, paths, tree};
@@ -598,22 +767,25 @@ fn can_have(kind: &str, name: &str) -> bool {
 /// # Ok::<(), tree::Error>(())
 /// ```
 pub fn select<'a>(tree: &'a Value, path: &str) -> Result<Vec<&'a Value>, Error> {
-    tree::select_in(&Trees, tree, path)
+    let trees = Trees::default();
+    trees.joined(tree::select_in(&trees, tree, path), tree, path)
 }
 
 /// Each value of the tree of a message with the path that selects it, in the order of
 /// the tree: the members of an object, the entries of a list, down to a number, a
 /// string, a boolean, `null` or an empty object or list.
 pub fn paths(tree: &Value) -> Vec<(String, Value)> {
-    tree::paths_in(&Trees, tree)
+    tree::paths_in(&Trees::default(), tree)
 }
 
 /// Set the value at `path` in the tree of a message to `value`, adding an optional IE
-/// that the message does not have, and the members of a value on the way to it.
+/// that the message does not have, and the members of a value on the way to it. At
+/// `octets` after the name of an IE, the IE has those octets in the place of its value.
 ///
 /// # Errors
 ///
-/// The errors of [`tree::set_in`], and the name of an IE that the message cannot have.
+/// The errors of [`tree::set_in`], the name of an IE that the message cannot have, and
+/// `value` after the name of an IE, with the path that the names of the tree write.
 ///
 /// ```
 /// use oxirush_nas::{nas_5gs::Message, paths, tree};
@@ -627,7 +799,9 @@ pub fn paths(tree: &Value) -> Vec<(String, Value)> {
 /// # Ok::<(), tree::Error>(())
 /// ```
 pub fn set(tree: &mut Value, path: &str, value: Value) -> Result<(), Error> {
-    tree::set_in(&Trees, tree, path, value)
+    let trees = Trees::default();
+    let done = tree::set_in(&trees, tree, path, value);
+    trees.joined(done, tree, path)
 }
 
 /// Take out the value at `path` in the tree of a message: an IE, a member of a value or
@@ -637,7 +811,9 @@ pub fn set(tree: &mut Value, path: &str, value: Value) -> Result<(), Error> {
 ///
 /// The errors of [`tree::remove_in`], and the name of an IE that the message cannot have.
 pub fn remove(tree: &mut Value, path: &str) -> Result<(), Error> {
-    tree::remove_in(&Trees, tree, path)
+    let trees = Trees::default();
+    let done = tree::remove_in(&trees, tree, path);
+    trees.joined(done, tree, path)
 }
 
 /// Insert `value` into a list of the tree of a message: at the position that the last
@@ -648,5 +824,32 @@ pub fn remove(tree: &mut Value, path: &str) -> Result<(), Error> {
 /// The errors of [`tree::insert_in`], and the name of an IE that the message cannot
 /// have.
 pub fn insert(tree: &mut Value, path: &str, value: Value) -> Result<(), Error> {
-    tree::insert_in(&Trees, tree, path, value)
+    let trees = Trees::default();
+    let done = tree::insert_in(&trees, tree, path, value);
+    trees.joined(done, tree, path)
+}
+
+/// The values at `path` in `tree`, the tree of a message, as [`select`] gives them, and
+/// the octets of each IE that the tree has by its value, which `octets` after its name
+/// selects: `ie_octets` gives those that the message has, by the path of the IE.
+pub(crate) fn of_message(
+    tree: &Value,
+    path: &str,
+    ie_octets: impl Fn(&str) -> Result<Option<Vec<u8>>, Error>,
+) -> Result<Vec<Value>, Error> {
+    let trees = Trees::of_message();
+    let places = trees.joined(tree::places_in(&trees, tree, path), tree, path)?;
+    let mut selected = Vec::new();
+    for place in places {
+        match (place.value(), place.shape()) {
+            (None, Shape::Octets(Some(ie))) => {
+                let octets = ie_octets(ie)
+                    .map_err(|error| Error::new(error.kind(), path, error.reason()))?;
+                selected.extend(octets.map(|octets| tree::octets(&octets)));
+            }
+            (Some(value), _) if !value.is_null() => selected.push(value.clone()),
+            _ => {}
+        }
+    }
+    Ok(selected)
 }

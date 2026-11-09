@@ -519,27 +519,41 @@ impl Message {
         sendable(Self::SecurityProtected(header, Box::new(message)))
     }
 
-    /// The octets of the IE at `path` in the [tree](Self::to_tree), as the
-    /// message has them: the value part of the IE, without its IEI and its
-    /// length. `path` is `/nas` and the name of an IE, then for a container the
-    /// name of an IE of its message: `/nas/nas-message-container/5gmm-capability`.
-    /// `None` for an optional IE that the message does not have.
-    ///
+    /// The values at `path` in the [tree](Self::to_tree) of the message, as
+    /// [`paths::select`](crate::paths::select) gives them, and the octets of
+    /// an IE that `octets` after its name selects as the message has them: the
+    /// value part of the IE, without its IEI and its length, in hexadecimal.
     /// A tree has the value of an IE, and its octets where the value does not
-    /// write them back: these are the octets that the message came with.
+    /// write them back; the message has the octets of each IE, also in a
+    /// container: `/nas/nas-message-container/5gmm-capability/octets`.
     ///
     /// ```
     /// use oxirush_nas::nas_5gs::Message;
+    /// use oxirush_nas::tree;
     ///
-    /// // 5GMM STATUS with cause #22
-    /// let status = Message::decode(&[0x7e, 0x00, 0x64, 0x16]).unwrap();
-    /// assert_eq!(status.ie_octets("/nas/5gmm-cause").unwrap(), Some(vec![0x16]));
+    /// // REGISTRATION ACCEPT with a 5G-GUTI
+    /// let octets = hex::decode("7e0042010177000bf202f8390100421122334415020101").unwrap();
+    /// let accept = Message::decode(&octets).unwrap();
+    /// let tmsi = accept.select("/nas/5g-guti/guti/tmsi")?;
+    /// assert_eq!(tmsi, [tree!(0x1122_3344)]);
+    ///
+    /// // The tree has the value of the 5G-GUTI, and the message its octets
+    /// let guti = accept.select("/nas/5g-guti/octets")?;
+    /// assert_eq!(guti, [tree!("f202f83901004211223344")]);
+    /// # Ok::<(), tree::Error>(())
     /// ```
-    pub fn ie_octets(
+    ///
+    /// # Errors
+    ///
+    /// Those of [`paths::select`](crate::paths::select), and `octets` after
+    /// a field of a header, which has no octets of its own.
+    pub fn select(
         &self,
         path: &str,
-    ) -> core::result::Result<Option<Vec<u8>>, oxirush_utils::tree::Error> {
-        view::ie_octets(&self.to_view(), path)
+    ) -> core::result::Result<Vec<oxirush_utils::tree::Value>, oxirush_utils::tree::Error> {
+        let view = self.to_view();
+        let tree = view::tree_of(self, &view, &decided, view::Scope::NONE);
+        crate::paths::of_message(&tree, path, |ie| view::ie_octets(&view, ie))
     }
 
     /// The message that an edited tree of this one writes: this message, with

@@ -168,8 +168,8 @@ pub fn edit<M: Message>(input: Edits) {
         .flat_map(|tree| tree.keys())
         .filter(|key| !edited.contains(key));
     for key in keys {
-        let path = format!("/nas/{key}");
-        match (message.ie_octets(&path), changed.ie_octets(&path)) {
+        let path = format!("/nas/{key}/octets");
+        match (message.select(&path), changed.select(&path)) {
             (Ok(octets), Ok(again)) => assert_eq!(
                 octets, again,
                 "the octets of `{key}` changed with an edit of {edited:?} of {message:?} to \

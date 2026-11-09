@@ -729,7 +729,7 @@ fn the_type_of_a_payload_container_says_how_its_octets_read() {
     )
     .unwrap();
     let message = f::Message::decode(&wire).unwrap();
-    let container = message.ie_octets("/nas/payload-container").unwrap();
+    let container = message.select("/nas/payload-container/octets").unwrap();
     let tree = message.to_tree();
     assert_eq!(
         tree["payload-container"]["message-type"],
@@ -739,10 +739,13 @@ fn the_type_of_a_payload_container_says_how_its_octets_read() {
     let mut edited = tree.clone();
     edited["payload-container-type"] = tree!("ciot");
     let ciot = message.with_tree(edited).unwrap();
-    assert_eq!(ciot.ie_octets("/nas/payload-container").unwrap(), container);
+    assert_eq!(
+        ciot.select("/nas/payload-container/octets").unwrap(),
+        container
+    );
     assert_eq!(
         ciot.to_tree()["payload-container"],
-        tree!({"octets": hex::encode(container.unwrap())})
+        tree!({"octets": container[0].clone()})
     );
     // On the wire, the type alone changes
     let mut changed = wire.clone();

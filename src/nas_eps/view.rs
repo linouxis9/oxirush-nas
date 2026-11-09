@@ -746,27 +746,36 @@ impl Message {
         sendable(Self::SecurityProtected(header, Box::new(message)))
     }
 
-    /// The octets of the IE at `path` in the [tree](Self::to_tree), as the
-    /// message has them: the value part of the IE, without its IEI and its
-    /// length. `path` is `/nas` and the name of an IE, then for a container the
-    /// name of an IE of its message: `/nas/nas-message-container/5gmm-capability`.
-    /// `None` for an optional IE that the message does not have.
-    ///
+    /// The values at `path` in the [tree](Self::to_tree) of the message, as
+    /// [`paths::select`](crate::paths::select) gives them, and the octets of
+    /// an IE that `octets` after its name selects as the message has them: the
+    /// value part of the IE, without its IEI and its length, in hexadecimal.
     /// A tree has the value of an IE, and its octets where the value does not
-    /// write them back: these are the octets that the message came with.
+    /// write them back; the message has the octets of each IE, also in a
+    /// container: `/nas/nas-message-container/5gmm-capability/octets`.
     ///
     /// ```
     /// use oxirush_nas::nas_eps::Message;
+    /// use oxirush_nas::tree;
     ///
     /// // ATTACH REJECT with EMM cause #3
     /// let reject = Message::decode(&[0x07, 0x44, 0x03]).unwrap();
-    /// assert_eq!(reject.ie_octets("/nas/emm-cause").unwrap(), Some(vec![0x03]));
+    /// assert_eq!(reject.select("/nas/emm-cause")?, [tree!("illegal-ue")]);
+    /// assert_eq!(reject.select("/nas/emm-cause/octets")?, [tree!("03")]);
+    /// # Ok::<(), tree::Error>(())
     /// ```
-    pub fn ie_octets(
+    ///
+    /// # Errors
+    ///
+    /// Those of [`paths::select`](crate::paths::select), and `octets` after
+    /// a field of a header, which has no octets of its own.
+    pub fn select(
         &self,
         path: &str,
-    ) -> core::result::Result<Option<Vec<u8>>, oxirush_utils::tree::Error> {
-        view::ie_octets(&self.to_view(), path)
+    ) -> core::result::Result<Vec<oxirush_utils::tree::Value>, oxirush_utils::tree::Error> {
+        let view = self.to_view();
+        let tree = view::tree_of(self, &view, &decided, view::Scope::NONE);
+        crate::paths::of_message(&tree, path, |ie| view::ie_octets(&view, ie))
     }
 
     /// The message that an edited tree of this one writes: this message, with

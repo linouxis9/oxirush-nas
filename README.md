@@ -528,7 +528,8 @@ list, a protected message, and octets sent as they are.
 
 ## Read and edit by path
 
-A path starts at `/nas`, then names an IE, in any case.
+A path starts at `/nas`, then names an IE, in any case, and the members of its
+value, as the tree names them; `octets` after an IE is its octets.
 
 ```rust
 use oxirush_nas::{nas_5gs::Message, paths, tree};
@@ -554,9 +555,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let edited = accept.with_tree(tree)?;
     println!("{}", hex::encode(edited.encode()?));
 
-    // A name that the message does not have is an error
-    if let Err(wrong) = paths::select(&accept.to_tree(), "/nas/t3512") {
-        println!("{wrong}");
+    // The octets of an IE, as the message has them
+    println!("{}", accept.select("/nas/5g-guti/octets")?[0]);
+
+    // A name that the message does not have is an error, and so is `value`
+    // after an IE, which the tree does not have
+    for wrong in ["/nas/t3512", "/nas/5g-guti/value/guti/tmsi"] {
+        if let Err(error) = paths::select(&accept.to_tree(), wrong) {
+            println!("{error}");
+        }
     }
     Ok(())
 }
@@ -566,7 +573,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 "208-93"
 1
 7e0042010177000bf202f839010042deadbeef1504010101025e0106
+"f202f83901004211223344"
 `t3512` is no IE of a message `registration-accept`, at /nas/t3512
+a path is the tree's names joined: write `/nas/5g-guti/guti/tmsi`, at /nas/5g-guti/value/guti/tmsi
 ```
 
 `paths::paths` gives each value of a tree with the path that selects it.

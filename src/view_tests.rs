@@ -1422,6 +1422,147 @@ fn a_path_names_an_ie_however_it_is_written_and_what_is_not_there_is_nothing() {
     }
 }
 
+/// A path is the names of the tree joined: the name after an IE is a member of its
+/// value. `value` there, which no tree has, is refused with the path that the names of
+/// the tree write, without each such `value`, whether the message has the IE or not, by
+/// each function that takes a path; the tree is as it was.
+#[test]
+fn a_path_is_the_names_of_the_tree() {
+    use crate::paths;
+    let joined = |written: &str, path: &str| {
+        format!("a path is the tree's names joined: write `{written}`, at {path}")
+    };
+    // REGISTRATION ACCEPT with a 5G-GUTI and an allowed NSSAI
+    let accept = fgs("7e0042010177000bf202f8390100421122334415020101").to_tree();
+    // UL NAS TRANSPORT with a PDU SESSION RELEASE REQUEST, cause #36
+    let transport = fgs("7e00670100062e0501d159241205").to_tree();
+    // ATTACH REQUEST with a PDN CONNECTIVITY REQUEST
+    let attach = eps("07410108298039000000001002e0e000040201d031").to_tree();
+    // 5GMM STATUS under an integrity protected header
+    let protected = fgs("7e01e73b901b007e006416").to_tree();
+    for (tree, path, written, value) in [
+        (
+            &accept,
+            "/nas/5g-guti/value/guti/tmsi",
+            "/nas/5g-guti/guti/tmsi",
+            Some(tree!(0x1122_3344)),
+        ),
+        (
+            &accept,
+            "/nas/allowed-nssai/value/*/sst",
+            "/nas/allowed-nssai/*/sst",
+            Some(tree!(1)),
+        ),
+        (
+            &accept,
+            "/nas/message-type/value",
+            "/nas/message-type",
+            Some(tree!("registration-accept")),
+        ),
+        (
+            &accept,
+            "/nas/MESSAGE TYPE/Value",
+            "/nas/MESSAGE TYPE",
+            Some(tree!("registration-accept")),
+        ),
+        (&accept, "/nas/*/value", "/nas/*", None),
+        // An IE that the message does not have
+        (&accept, "/nas/t3512-value/value", "/nas/t3512-value", None),
+        // The message of a container, each of whose IEs has its own `value`
+        (
+            &transport,
+            "/nas/payload-container/value/5gsm-cause/value",
+            "/nas/payload-container/5gsm-cause",
+            Some(tree!("regular-deactivation")),
+        ),
+        (
+            &attach,
+            "/nas/esm-message-container/value/pdn-type",
+            "/nas/esm-message-container/pdn-type",
+            Some(tree!("ipv4v6")),
+        ),
+        (
+            &protected,
+            "/nas/security-header/value/sequence-number",
+            "/nas/security-header/sequence-number",
+            Some(tree!(0)),
+        ),
+    ] {
+        let error = paths::select(tree, path).unwrap_err();
+        assert_eq!(error.kind(), tree::ErrorKind::NoSuchMember, "{path}");
+        assert_eq!(error.to_string(), joined(written, path));
+        let selected = paths::select(tree, written).unwrap();
+        if let Some(value) = value {
+            assert_eq!(selected, [&value], "{written}");
+        }
+        let mut edited = tree.clone();
+        for refused in [
+            paths::set(&mut edited, path, tree!(1)),
+            paths::remove(&mut edited, path),
+            paths::insert(&mut edited, path, tree!(1)),
+        ] {
+            let refused = refused.map_err(|error| error.to_string());
+            assert_eq!(refused, Err(joined(written, path)));
+        }
+        assert_eq!(&edited, tree, "{path}");
+    }
+}
+
+/// `octets` after the name of an IE is its octets: a tree has those of an IE that its
+/// value does not write back, the message has those of each IE, and an IE that is set
+/// by its octets has them in the place of its value.
+#[test]
+fn octets_after_the_name_of_an_ie_are_its_octets() {
+    use crate::paths;
+    // REGISTRATION ACCEPT with a 5G-GUTI and an allowed NSSAI
+    let accept = fgs("7e0042010177000bf202f8390100421122334415020101");
+    let mut tree = accept.to_tree();
+    let guti = "/nas/5g-guti/octets";
+    assert_eq!(
+        accept.select(guti),
+        Ok(vec![tree!("f202f83901004211223344")])
+    );
+    assert_eq!(
+        accept.select("/nas/5g-guti/guti/tmsi"),
+        Ok(vec![tree!(0x1122_3344)])
+    );
+    assert_eq!(accept.select("/nas/t3512-value/octets"), Ok(vec![]));
+    // The tree has the value of the 5G-GUTI, and not its octets
+    let error = paths::select(&tree, guti).unwrap_err();
+    assert_eq!(error.kind(), tree::ErrorKind::NoSuchMember);
+    assert_eq!(
+        error.to_string(),
+        "the tree has the value of this IE and not its octets, which the message has, at \
+         /nas/5g-guti/octets"
+    );
+    assert_eq!(paths::select(&tree, "/nas/t3512-value/octets"), Ok(vec![]));
+    // An IE set by its octets, which the message did not have or had by its value
+    paths::set(&mut tree, guti, tree!("f202f83901004211223355")).unwrap();
+    paths::set(&mut tree, "/nas/t3512-value/octets", tree!("21")).unwrap();
+    assert_eq!(tree["5g-guti"], tree!({"octets": "f202f83901004211223355"}));
+    assert_eq!(
+        paths::select(&tree, guti),
+        Ok(vec![&tree!("f202f83901004211223355")])
+    );
+    let edited = accept.with_tree(tree).unwrap();
+    assert_eq!(
+        hex::encode(edited.encode().unwrap()),
+        "7e0042010177000bf202f83901004211223355150201015e0121"
+    );
+    // A container and an IE of its message
+    let transport = fgs("7e00670100062e0501d159241205");
+    let container = "/nas/payload-container/octets";
+    assert_eq!(transport.select(container), Ok(vec![tree!("2e0501d15924")]));
+    let cause = "/nas/payload-container/5gsm-cause/octets";
+    assert_eq!(transport.select(cause), Ok(vec![tree!("24")]));
+    let attach = eps("07410108298039000000001002e0e000040201d031");
+    let pdn = "/nas/esm-message-container/pdn-type/octets";
+    assert_eq!(attach.select(pdn).map(|octets| octets.len()), Ok(1));
+    // A field of a header has no octets of its own
+    let header = accept.select("/nas/message-type/octets").unwrap_err();
+    assert_eq!(header.kind(), tree::ErrorKind::Refused);
+}
+
 /// An IE that a view does not name at all is one that its message may have, or is
 /// refused; a view of a message that no type names may have any. An IE taken out keeps
 /// its name, as `null`.
@@ -4138,29 +4279,32 @@ fn the_octets_of_an_ie_are_those_that_the_message_came_with() {
     use crate::tree::ErrorKind;
     // SECURITY MODE COMPLETE with the REGISTRATION REQUEST it replays
     let complete = fgs("7e005e7100137e004101000d0102f8390000000021436587f9");
-    let octets = |path| complete.ie_octets(path);
-    let replayed = hex::decode("7e004101000d0102f8390000000021436587f9").unwrap();
-    assert_eq!(octets("/nas/nas-message-container"), Ok(Some(replayed)));
+    let octets = |path| complete.select(path);
+    let replayed = tree!("7e004101000d0102f8390000000021436587f9");
+    assert_eq!(
+        octets("/nas/nas-message-container/octets"),
+        Ok(vec![replayed])
+    );
     // An IE of the message in a container, by a name written in any case
-    let identity = hex::decode("0102f8390000000021436587f9").unwrap();
-    let path = "/nas/NAS message container/5GS mobile identity";
-    assert_eq!(octets(path), Ok(Some(identity)));
+    let identity = tree!("0102f8390000000021436587f9");
+    let path = "/nas/NAS message container/5GS mobile identity/Octets";
+    assert_eq!(octets(path), Ok(vec![identity]));
     // An optional IE that the message does not have
-    assert_eq!(octets("/nas/imeisv"), Ok(None));
+    assert_eq!(octets("/nas/imeisv/octets"), Ok(vec![]));
     // What is no IE
     for (path, kind) in [
-        ("/nas/message-type", ErrorKind::Refused),
+        ("/nas/message-type/octets", ErrorKind::Refused),
         (
-            "/nas/nas-message-container/5gs-mobile-identity/suci",
-            ErrorKind::Refused,
-        ),
-        (
-            "/nas/nas-message-container/5gmm-cause",
+            "/nas/nas-message-container/5gs-mobile-identity/suci/octets",
             ErrorKind::NoSuchMember,
         ),
-        ("/nas/5gs-mobile-identity", ErrorKind::NoSuchMember),
-        ("/nas", ErrorKind::Path),
-        ("/ngap/Cause", ErrorKind::Path),
+        (
+            "/nas/nas-message-container/5gmm-cause/octets",
+            ErrorKind::NoSuchMember,
+        ),
+        ("/nas/5gs-mobile-identity/octets", ErrorKind::NoSuchMember),
+        ("/nas/octets", ErrorKind::NoSuchMember),
+        ("/ngap/Cause/octets", ErrorKind::Path),
     ] {
         assert_eq!(
             octets(path).map_err(|error| error.kind()),
@@ -4170,7 +4314,10 @@ fn the_octets_of_an_ie_are_those_that_the_message_came_with() {
     }
     // ATTACH REJECT with EMM cause #3
     let reject = eps("074403");
-    assert_eq!(reject.ie_octets("/nas/emm-cause"), Ok(Some(vec![3])));
+    assert_eq!(
+        reject.select("/nas/emm-cause/octets"),
+        Ok(vec![tree!("03")])
+    );
 }
 
 /// A tree leaves out the fields of a security header that the system decides,

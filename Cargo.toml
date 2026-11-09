@@ -36,7 +36,7 @@ tree = ["std", "oxirush-utils/tree"]
 [dependencies]
 pastey = "0.2"
 # The identities of the OxiRush crates: PLMN, digits, GUTI, TAI, SUPI, SUCI
-oxirush-utils = { version = "0.2.0", default-features = false, features = ["alloc"] }
+oxirush-utils = { version = "0.2.2", default-features = false, features = ["alloc"] }
 
 # Optional: NAS security envelope (integrity + ciphering). `alloc` for
 # `build_s`, which returns a `Vec`.

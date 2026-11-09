@@ -9,6 +9,42 @@ All notable changes to `oxirush-nas` are recorded here.
 - `innermost()` of a 5GS and of an EPS `Message`: the message inside its
   security envelopes, the plain message of an integrity protected one and
   the ciphertext of a ciphered one.
+- `select()` of a 5GS and of an EPS `Message`: the values at a path of its
+  tree, and the octets of each IE as the message has them, which `octets`
+  after the name of the IE selects in hexadecimal, `/nas/5g-guti/octets`,
+  also where the tree has the value of the IE.
+
+### Changed
+
+- A path is the names of the tree joined: after the name of an IE or of a
+  field of the header, the next name is a member of its value. `value` there,
+  which no tree has, is refused by `select`, `set`, `remove` and `insert` of
+  `paths`, and by `select()` of a message, with the path that the names of the
+  tree write, without it and without each such `value` after another IE:
+  ``a path is the tree's names joined: write `/nas/5g-guti/guti/tmsi`, at
+  /nas/5g-guti/value/guti/tmsi``. It was refused as a member that the value
+  has not, and selected nothing where the message does not have the IE.
+- `octets` after the name of an IE is its octets: `set` writes the IE by them,
+  in the place of its value, and adds an optional IE so; it added `octets`
+  beside the members of the value, which `with_tree()` refused. A path that
+  selects the octets of an IE that the tree has by its value is refused, with
+  why: the message has them, and its `select()` gives them.
+- oxirush-utils 0.2.2, whose `Next::index` says where a segment is in the path,
+  for the path that the refusal of `value` writes.
+
+### Removed
+
+- `ie_octets()` of a message, which is `select()` with `octets` after the name
+  of the IE: `message.ie_octets("/nas/5g-guti")` gives `Some(octets)`, and
+  `message.select("/nas/5g-guti/octets")` gives them in hexadecimal.
+
+### Migration from 0.6
+
+| 0.6 | 0.7 |
+|-----|-----|
+| `paths::select(&tree, "/nas/5g-guti/value/guti")`, refused | `paths::select(&tree, "/nas/5g-guti/guti")` |
+| `message.ie_octets("/nas/5g-guti")?`, `Some(vec![0xf2, ..])` | `message.select("/nas/5g-guti/octets")?`, `[tree!("f2..")]` |
+| `tree["5g-guti"] = tree!({"octets": "f2.."})` | the same, or `paths::set(&mut tree, "/nas/5g-guti/octets", tree!("f2.."))` |
 
 ## 0.6.0 - 2026-11-08
 

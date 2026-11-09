@@ -48,8 +48,8 @@ pub trait Message: Clone + PartialEq + Debug + Display + Validate + Sized + 'sta
     /// The names of the members that the tree of the message can have.
     fn names(&self) -> Vec<String>;
     fn to_tree(&self) -> Value;
-    /// The octets of the IE at `path`, as the message has them.
-    fn ie_octets(&self, path: &str) -> Result<Option<Vec<u8>>, tree::Error>;
+    /// The values at `path`, and the octets of an IE as the message has them.
+    fn select(&self, path: &str) -> Result<Vec<Value>, tree::Error>;
     fn from_tree(tree: Value) -> Result<Self, Error>;
     fn means_the_same(&self, other: &Self) -> bool;
     /// Whether the message is a plain one under a header that says it is
@@ -87,8 +87,8 @@ impl Message for nas_5gs::Message {
     fn to_tree(&self) -> Value {
         self.to_tree()
     }
-    fn ie_octets(&self, path: &str) -> Result<Option<Vec<u8>>, tree::Error> {
-        self.ie_octets(path)
+    fn select(&self, path: &str) -> Result<Vec<Value>, tree::Error> {
+        self.select(path)
     }
     fn from_tree(tree: Value) -> Result<Self, Error> {
         Self::from_tree(tree)
@@ -141,8 +141,8 @@ impl Message for nas_eps::Message {
     fn to_tree(&self) -> Value {
         self.to_tree()
     }
-    fn ie_octets(&self, path: &str) -> Result<Option<Vec<u8>>, tree::Error> {
-        self.ie_octets(path)
+    fn select(&self, path: &str) -> Result<Vec<Value>, tree::Error> {
+        self.select(path)
     }
     fn from_tree(tree: Value) -> Result<Self, Error> {
         Self::from_tree(tree)
