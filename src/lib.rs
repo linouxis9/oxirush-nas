@@ -280,7 +280,7 @@
 //! | Procedures | It is a codec: no NAS procedure, timer or transport. Its only state is that of a security context. |
 //! | Validity | `validate()` sees one message, not the state of a procedure. Encoding accepts every value a type can represent, so a message that encodes is not thereby valid. |
 //! | Security state | A context does not persist itself: the caller keeps the next COUNT values and restores it from them. |
-//! | JSON | 13 5GS and 19 EPS IE types have octets alone ([which][ie types with a value]). A tree computes no message authentication code. |
+//! | JSON | 11 5GS and 19 EPS IE types have octets alone ([which][ie types with a value]). A tree computes no message authentication code. |
 //! | Serde form | It is the tree: a message read from it means what the message means, with its octets where its values decide them (183 of the 202 fixtures), and the order of its optional IEs is that of the table. |
 //! | Release 19 | Two items follow Release 20 and differ from V19.8.0 on the wire ([Specification versions](#specification-versions)). |
 //! | Evidence | The tests of the crate itself ([Tests](#tests)), and 170 messages that two open-source cores and one UE simulator sent in a lab, with their source: no commercial UE, RAN or core, and no conformance test suite. The provenance of the 15 legacy 5GS wire values was not recorded. |

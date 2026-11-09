@@ -118,6 +118,76 @@ fn the_serde_form_of_an_ie_is_its_value_in_a_tree() {
     assert_eq!(Value::from(value), tree!({"native": 3}));
 }
 
+/// `ie` alone has the tree `shown`, and that tree and the octets of its value
+/// each write it back.
+fn alone<T: tree::Tree + PartialEq + core::fmt::Debug>(ie: &T, shown: &Value, octets: &str) {
+    assert_eq!(&ie.to_tree(), shown, "{}", T::NAME);
+    let written = tree::from_value::<T>(shown).map_err(|error| error.to_string());
+    assert_eq!(written.as_ref(), Ok(ie), "{}: {shown}", T::NAME);
+    let written = tree::from_value::<T>(&tree!({ "octets": octets }));
+    let written = written.map_err(|error| error.to_string());
+    assert_eq!(written.as_ref(), Ok(ie), "{}: {octets}", T::NAME);
+}
+
+/// The two NAS transparent containers of a handover, which NGAP and RRC carry
+/// and no NAS message does, are each the tree of the fields of their clause
+/// (TS 24.501 §9.11.2.6 and §9.11.2.9), which writes their octets back. One
+/// with a spare bit set, or of another length, is shown by its octets, which
+/// write it back as it was.
+#[test]
+fn the_nas_transparent_containers_of_a_handover_are_trees_of_their_fields() {
+    type S1ToN1 = f::S1ModeToN1ModeNasTransparentContainer;
+    type IntraN1 = f::IntraN1ModeNasTransparentContainer;
+    let s1_to_n1 = |octets: &str| S1ToN1::new(hex::decode(octets).unwrap());
+    let intra_n1 = |octets: &str| IntraN1::new(hex::decode(octets).unwrap());
+
+    // S1 mode to N1 mode: the MAC, 128-5G-EA2 and 128-5G-IA2, NCC 2 and the
+    // mapped ngKSI 1
+    let fields = tree!({
+        "message-authentication-code": 0x0102_0304,
+        "selected-nas-security-algorithms": {"ciphering": "nea2", "integrity": "nia2"},
+        "ncc": 2,
+        "ngksi": {"mapped": 1},
+    });
+    alone(&s1_to_n1("0102030422290000"), &fields, "0102030422290000");
+    // Bit 8 of octet 8, octets 9 and 10, and other lengths
+    for octets in [
+        "0102030422a90000",
+        "0102030422290001",
+        "0102030422291200",
+        "01020304222900",
+        "010203042229000000",
+    ] {
+        alone(&s1_to_n1(octets), &tree!({ "octets": octets }), octets);
+    }
+    // The NCC is three bits
+    let mut wrong = fields.clone();
+    wrong["ncc"] = tree!(8);
+    let error = tree::from_value::<S1ToN1>(&wrong).unwrap_err().to_string();
+    assert!(error.contains("ncc"), "{error}");
+
+    // Intra N1 mode: the MAC, 128-5G-EA1 and 128-5G-IA2, a new KAMF, the
+    // native ngKSI 3 and the sequence number 156
+    let fields = tree!({
+        "message-authentication-code": 0x0a0b_0c0d,
+        "selected-nas-security-algorithms": {"ciphering": "nea1", "integrity": "nia2"},
+        "k-amf-change-flag": true,
+        "ngksi": {"native": 3},
+        "sequence-number": 156,
+    });
+    alone(&intra_n1("0a0b0c0d12139c"), &fields, "0a0b0c0d12139c");
+    // Bits 6 to 8 of octet 8, and other lengths
+    for octets in [
+        "0a0b0c0d12339c",
+        "0a0b0c0d12539c",
+        "0a0b0c0d12939c",
+        "0a0b0c0d1213",
+        "0a0b0c0d12139c00",
+    ] {
+        alone(&intra_n1(octets), &tree!({ "octets": octets }), octets);
+    }
+}
+
 /// A message that is written from the tree of a fixture is one of the same
 /// tree, and means what the fixture means: the two are compared below
 /// their trees, IE by IE. Most are the same octets too; the others have a

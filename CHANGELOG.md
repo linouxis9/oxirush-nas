@@ -18,6 +18,13 @@ which `select()` of a message gives. It is not source compatible with 0.6.0:
   tree, and the octets of each IE as the message has them, which `octets`
   after the name of the IE selects in hexadecimal, `/nas/5g-guti/octets`,
   also where the tree has the value of the IE.
+- The intra N1 mode and the S1 mode to N1 mode NAS transparent containers
+  (TS 24.501 §9.11.2.6 and §9.11.2.9), the NASC of an NGAP HANDOVER REQUEST,
+  have a tree of their fields, which had their octets alone:
+  `message-authentication-code`, `selected-nas-security-algorithms` and
+  `ngksi` as a SECURITY MODE COMMAND names them, and `k-amf-change-flag` and
+  `sequence-number`, or `ncc`. One with a spare bit set, or of another
+  length, is shown by its octets.
 
 ### Changed
 

@@ -1599,6 +1599,73 @@ decoded_ie!(
     |ie| Some(ie.sequence_number()),
     |_, number| Ok(N1ModeToS1ModeNasTransparentContainer::from_sequence_number(number))
 );
+
+/// The fields of an intra N1 mode NAS transparent container (TS 24.501
+/// §9.11.2.6). The algorithms and the ngKSI are coded as in a SECURITY MODE
+/// COMMAND, whose names they have.
+struct IntraN1ModeFields {
+    message_authentication_code: u32,
+    selected_nas_security_algorithms: SecurityAlgorithms,
+    k_amf_change_flag: bool,
+    ngksi: KeySetIdentifier,
+    sequence_number: u8,
+}
+
+#[cfg(feature = "tree")]
+crate::common::readable::readable!(struct IntraN1ModeFields { message_authentication_code, selected_nas_security_algorithms as tree, k_amf_change_flag, ngksi as tree, sequence_number });
+
+decoded_ie!(
+    IntraN1ModeNasTransparentContainer: IntraN1ModeFields,
+    |ie| {
+        (ie.value.len() == 7).then_some(())?;
+        Some(IntraN1ModeFields {
+            message_authentication_code: ie.message_authentication_code()?,
+            selected_nas_security_algorithms: ie.security_algorithms()?,
+            k_amf_change_flag: ie.k_amf_change_flag()?,
+            ngksi: ie.key_set_identifier()?,
+            sequence_number: ie.sequence_number()?,
+        })
+    },
+    |_, fields| Ok(IntraN1ModeNasTransparentContainer::from_fields(
+        fields.message_authentication_code,
+        fields.selected_nas_security_algorithms,
+        fields.k_amf_change_flag,
+        fields.ngksi,
+        fields.sequence_number,
+    ))
+);
+
+/// The fields of an S1 mode to N1 mode NAS transparent container (TS 24.501
+/// §9.11.2.9), named as those of [`IntraN1ModeFields`]. Its octets 9 and 10
+/// are spare.
+struct S1ModeToN1ModeFields {
+    message_authentication_code: u32,
+    selected_nas_security_algorithms: SecurityAlgorithms,
+    ncc: u8,
+    ngksi: KeySetIdentifier,
+}
+
+#[cfg(feature = "tree")]
+crate::common::readable::readable!(struct S1ModeToN1ModeFields { message_authentication_code, selected_nas_security_algorithms as tree, ncc, ngksi as tree });
+
+decoded_ie!(
+    S1ModeToN1ModeNasTransparentContainer: S1ModeToN1ModeFields,
+    |ie| {
+        (ie.value.len() == 8).then_some(())?;
+        Some(S1ModeToN1ModeFields {
+            message_authentication_code: ie.message_authentication_code()?,
+            selected_nas_security_algorithms: ie.security_algorithms()?,
+            ncc: ie.ncc()?,
+            ngksi: ie.key_set_identifier()?,
+        })
+    },
+    |_, fields| S1ModeToN1ModeNasTransparentContainer::from_fields(
+        fields.message_authentication_code,
+        fields.selected_nas_security_algorithms,
+        fields.ncc,
+        fields.ngksi,
+    )
+);
 decoded_ie!(
     TimeDuration: u32,
     |ie| ie.seconds(),
@@ -2112,6 +2179,12 @@ mod tests {
                 value & 0xe0,
             ]));
             sweep(N1ModeToS1ModeNasTransparentContainer::new(value));
+            sweep(IntraN1ModeNasTransparentContainer::new(vec![
+                1, 2, 3, 4, value, value, value,
+            ]));
+            sweep(S1ModeToN1ModeNasTransparentContainer::new(vec![
+                1, 2, 3, 4, value, value, 0, 0,
+            ]));
             sweep(TimeDuration::new(vec![value, value]));
             sweep(EcnMarkingForL4sIndication::new(vec![value & 0x3f]));
             sweep(WusAssistanceInformation::new(vec![value]));

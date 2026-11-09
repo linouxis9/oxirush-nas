@@ -406,14 +406,14 @@
 //! | | 5GS | EPS |
 //! |---|-----|-----|
 //! | IE types | 169 | 153 |
-//! | with a `value` | 156 | 134 |
-//! | with `octets` alone | 13 | 19 |
+//! | with a `value` | 158 | 134 |
+//! | with `octets` alone | 11 | 19 |
 //!
 //! A value is read and written: octets that the crate reads and would not
 //! write back to the same value have no value, and are shown by their
 //! `octets`.
 //!
-//! The 32 types with octets alone:
+//! The 30 types with octets alone:
 //!
 //! | Kind | Types |
 //! |------|-------|
@@ -422,7 +422,6 @@
 //! | Getters and no constructor in the crate, or neither | ECS address, classmark 3, the A/Gb and Iu mode QoS, LCS client identity, UE coarse location information |
 //! | Typed accessors and constructors that a tree does not use | non-3GPP device information, whose constructor takes the type of the PDU session; negotiated LLC SAPI |
 //! | No content | spare half octet |
-//! | No NAS message has them as an IE | the two N1 mode NAS transparent containers |
 //!
 //! # Units of the protocol configuration options
 //!

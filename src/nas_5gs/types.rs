@@ -342,6 +342,10 @@ nas_ie_lv!(
 );
 nas_ie_lv!(
     /// Intra N1 mode NAS transparent container (TS 24.501 §9.11.2.6). LV format.
+    ///
+    /// No NAS message carries it: its value is the NASC of an NGAP HANDOVER
+    /// REQUEST within 5GS. Its tree has its fields by name, as that of
+    /// [`S1ModeToN1ModeNasTransparentContainer`] has.
     IntraN1ModeNasTransparentContainer
 );
 nas_ie_lv!(
@@ -446,6 +450,32 @@ nas_ie_lv!(
 );
 nas_ie_lv!(
     /// S1 mode to N1 mode NAS transparent container (TS 24.501 §9.11.2.9). LV format.
+    ///
+    /// No NAS message carries it: its value is the NASC of an NGAP HANDOVER
+    /// REQUEST from EPS, which the UE takes as an implicit SECURITY MODE
+    /// COMMAND. Its tree has its fields by name, the algorithms and the ngKSI
+    /// as a SECURITY MODE COMMAND names them; one with a spare bit set is
+    /// shown by its octets.
+    ///
+    /// ```
+    /// # #[cfg(feature = "tree")] {
+    /// use oxirush_nas::nas_5gs::S1ModeToN1ModeNasTransparentContainer;
+    /// use oxirush_nas::tree;
+    /// use oxirush_nas::tree::Tree;
+    ///
+    /// let octets = hex::decode("0102030422290000").unwrap();
+    /// let nasc = S1ModeToN1ModeNasTransparentContainer::new(octets);
+    /// let fields = tree!({
+    ///     "message-authentication-code": 0x0102_0304,
+    ///     "selected-nas-security-algorithms": {"ciphering": "nea2", "integrity": "nia2"},
+    ///     "ncc": 2,
+    ///     "ngksi": {"mapped": 1},
+    /// });
+    /// assert_eq!(nasc.to_tree(), fields);
+    /// let written: S1ModeToN1ModeNasTransparentContainer = tree::from_value(&fields).unwrap();
+    /// assert_eq!(written, nasc);
+    /// # }
+    /// ```
     S1ModeToN1ModeNasTransparentContainer
 );
 nas_ie_lv!(

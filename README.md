@@ -588,7 +588,7 @@ a path is the tree's names joined: write `/nas/5g-guti/guti/tmsi`, at /nas/5g-gu
   message belongs to.
 - `encode()` writes any value that a type can hold, so a test tool can send
   an invalid message.
-- 13 5GS and 19 EPS IE types have octets and no value in JSON
+- 11 5GS and 19 EPS IE types have octets and no value in JSON
   ([which](https://docs.rs/oxirush-nas/latest/oxirush_nas/paths/index.html#ie-types-that-have-a-value)).
 - Two items follow Release 20 and differ from V19.8.0 on the wire
   ([which](https://docs.rs/oxirush-nas#specification-versions)).
