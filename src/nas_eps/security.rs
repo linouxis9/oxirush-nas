@@ -94,6 +94,12 @@ pub struct Verified<M> {
     /// (TS 33.401 Annex A.3), for a message that starts the access stratum
     /// security.
     pub count: NasCount,
+    /// The plain octets that `message` was read from, deciphered: what
+    /// [`SecurityContext::unprotect_raw`] gives as its `message`, the data
+    /// container of an EMM TRANSPORT, so that a receiver that decodes the
+    /// message has its octets too, from the one NAS COUNT that the message
+    /// takes.
+    pub plain: Vec<u8>,
 }
 
 /// What `error` of the plain message `plain` is once the code of the
@@ -791,7 +797,7 @@ impl SecurityContext {
                 Message::EmmTransport(if plain.is_empty() {
                     EmmTransport::new(mac, data[5])
                 } else {
-                    EmmTransport::new(mac, data[5]).set_data_container(plain)
+                    EmmTransport::new(mac, data[5]).set_data_container(plain.clone())
                 })
             }
             (_, Some(message @ (Message::Emm(..) | Message::Esm(..)))) => message,
@@ -808,6 +814,7 @@ impl SecurityContext {
             message,
             security_header_type,
             count,
+            plain,
         })
     }
 
@@ -819,6 +826,7 @@ impl SecurityContext {
     ) -> Result<Verified<Vec<u8>>> {
         let (message, _, security_header_type, count) = self.unprotect_checked(data, direction)?;
         Ok(Verified {
+            plain: message.clone(),
             message,
             security_header_type,
             count,
@@ -1353,6 +1361,32 @@ mod tests {
         assert_eq!(decoded, message);
         assert_eq!(receiver.count_ref(Direction::Uplink), 1);
         assert!(receiver.unprotect(&wire, Direction::Uplink).is_err());
+    }
+
+    /// A verified message carries the octets that it was read from,
+    /// deciphered, which `unprotect_raw` gives: the receiver has both from
+    /// one NAS COUNT. The octets of an EMM TRANSPORT are its data container.
+    #[test]
+    fn a_verified_message_carries_its_plain_octets() {
+        let message = Message::new_emm(EmmStatus::new(EmmCause::new(3)));
+        let plain = message.encode().unwrap();
+        let sht = SecurityHeaderType::IntegrityProtectedAndCiphered;
+        let wire = context()
+            .protect(&message, sht, Direction::Downlink)
+            .unwrap();
+        assert_ne!(&wire[6..], &plain[..]);
+        let mut receiver = context();
+        let verified = receiver.unprotect(&wire, Direction::Downlink).unwrap();
+        assert_eq!((&verified.message, &verified.plain), (&message, &plain));
+        assert_eq!(receiver.count_ref(Direction::Downlink), 1);
+        let raw = context().unprotect_raw(&wire, Direction::Downlink).unwrap();
+        assert_eq!((&raw.plain, &raw.message), (&plain, &plain));
+
+        let transport = context()
+            .protect_emm_transport(Some(&[0x01, 0xab]), Direction::Uplink)
+            .unwrap();
+        let verified = context().unprotect(&transport, Direction::Uplink).unwrap();
+        assert_eq!(verified.plain, [0x01, 0xab]);
     }
 
     #[test]

@@ -2,6 +2,15 @@
 
 All notable changes to `oxirush-nas` are recorded here.
 
+## Unreleased
+
+### Added
+
+- `plain` of a 5GS and of an EPS `Verified`: the plain octets that its
+  message was read from, deciphered, which `unprotect_raw` gives as its
+  message. A receiver that decodes a message with `unprotect` has its octets
+  too, from the one NAS COUNT that the message takes.
+
 ## 0.7.0 - 2026-11-09
 
 A path is the names of the tree joined: `value` after the name of an IE is

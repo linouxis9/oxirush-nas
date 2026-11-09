@@ -93,6 +93,7 @@ fn an_initial_message_is_sent_and_read_as_the_vectors_have_it() {
             )
             .unwrap();
         assert_eq!(verified.message, complete, "{name}");
+        assert_eq!(verified.plain, vector.complete, "{name}");
         assert_eq!(verified.count, vector.count, "{name}");
         assert_eq!(
             verified.security_header_type,
@@ -112,6 +113,7 @@ fn an_initial_message_is_sent_and_read_as_the_vectors_have_it() {
         ))
         .unwrap();
         assert_eq!(raw.message, vector.complete, "{name}");
+        assert_eq!(raw.plain, vector.complete, "{name}");
         match name.contains("cleartext") {
             true => assert_eq!(raw.sent, None, "{name}"),
             false => assert_eq!(raw.sent.as_deref(), Some(&vector.protected[7..]), "{name}"),
@@ -398,6 +400,7 @@ fn an_eps_control_plane_service_request_is_partially_ciphered() {
         .unprotect(&sent, oxirush_nas::Direction::Uplink)
         .unwrap();
     assert_eq!(verified.message, request);
+    assert_eq!(verified.plain, request.encode().unwrap());
     assert_eq!(verified.security_header_type, partially);
     let e::Message::Emm(_, e::EmmMessage::ControlPlaneServiceRequest(received)) = verified.message
     else {

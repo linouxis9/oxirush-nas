@@ -129,6 +129,11 @@ pub struct Verified<M> {
     /// container, or the CIoT small data container, as they were received,
     /// ciphered. `None` for every other message.
     pub sent: Option<M>,
+    /// The plain octets that `message` was read from, deciphered: what
+    /// [`SecurityContext::unprotect_raw`] gives as its `message`, so that
+    /// a receiver that decodes the message has its octets too, from the one
+    /// NAS COUNT that the message takes.
+    pub plain: Vec<u8>,
 }
 
 /// What is under a security header: its octets, the message that they are,
@@ -1043,15 +1048,16 @@ impl SecurityContext {
     ) -> Result<Verified<Message>> {
         let (plain, security_header_type, count) =
             self.unprotect_checked(data, direction, connection)?;
-        let (message, sent) = match plain.initial {
-            Some((_, complete)) => (complete, Some(plain.message)),
-            None => (plain.message, None),
+        let (message, sent, octets) = match plain.initial {
+            Some((octets, complete)) => (complete, Some(plain.message), octets),
+            None => (plain.message, None, plain.octets),
         };
         Ok(Verified {
             message,
             security_header_type,
             count,
             sent,
+            plain: octets,
         })
     }
 
@@ -1072,6 +1078,7 @@ impl SecurityContext {
             None => (plain.octets, None),
         };
         Ok(Verified {
+            plain: message.clone(),
             message,
             security_header_type,
             count,
@@ -2149,6 +2156,33 @@ mod tests {
             rx.count_ref(Direction::Downlink, NasConnection::ThreeGpp),
             1
         );
+    }
+
+    /// A verified message carries the octets that it was read from,
+    /// deciphered, which `unprotect_raw` gives: the receiver has both from
+    /// one NAS COUNT.
+    #[test]
+    fn a_verified_message_carries_its_plain_octets() {
+        let kamf = KAmf::new(&[0x11; 32]);
+        let (nia, nea) = (Algorithm::Aes, Algorithm::Aes);
+        let context = || SecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
+        let accept = Message::new_5gmm(crate::nas_5gs::ServiceAccept::new());
+        let plain = accept.encode().unwrap();
+        let (downlink, access) = (Direction::Downlink, NasConnection::ThreeGpp);
+        let header = SecurityHeaderType::IntegrityProtectedAndCiphered;
+        let wire = context()
+            .protect(&accept, header, downlink, access)
+            .unwrap();
+        assert_ne!(&wire[7..], &plain[..]);
+
+        let mut ue = context();
+        let verified = ue.unprotect(&wire, downlink, access).unwrap();
+        assert_eq!(verified.message, accept);
+        assert_eq!(verified.plain, plain);
+        // One COUNT was taken for both
+        assert_eq!(ue.count_ref(downlink, access), 1);
+        let raw = context().unprotect_raw(&wire, downlink, access).unwrap();
+        assert_eq!((&raw.plain, &raw.message), (&plain, &plain));
     }
 
     #[test]
