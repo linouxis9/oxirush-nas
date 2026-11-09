@@ -51,10 +51,10 @@ Each example is followed by its output.
 
 ```toml
 [dependencies]
-oxirush-nas = "0.6"
+oxirush-nas = "0.7"
 hex = "0.4" # for the examples of this page
 # With NAS security and JSON:
-# oxirush-nas = { version = "0.6", features = ["security", "tree"] }
+# oxirush-nas = { version = "0.7", features = ["security", "tree"] }
 # The keys of the registration below:
 # oxirush-security = "0.4"
 ```

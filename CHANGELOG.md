@@ -2,7 +2,12 @@
 
 All notable changes to `oxirush-nas` are recorded here.
 
-## Unreleased
+## 0.7.0 - 2026-11-09
+
+A path is the names of the tree joined: `value` after the name of an IE is
+refused, with the path to write, and `octets` after it is the octets of the IE,
+which `select()` of a message gives. It is not source compatible with 0.6.0:
+`ie_octets()` is `select()`, and the table below has the paths.
 
 ### Added
 
