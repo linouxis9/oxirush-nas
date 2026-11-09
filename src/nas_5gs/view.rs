@@ -183,6 +183,13 @@ impl Viewed for Message {
 
     const FAMILIES: &'static [&'static str] = &["Gmm", "Gsm"];
 
+    fn decided(
+        container: Option<&str>,
+        kind: Option<&oxirush_utils::tree::Value>,
+    ) -> core::result::Result<Vec<(&'static str, oxirush_utils::tree::Value)>, String> {
+        decided(container, kind)
+    }
+
     const SPARE: &'static [&'static str] = &["spare-half-octet"];
 
     fn refused_header(&self) -> Option<String> {
@@ -727,7 +734,7 @@ impl Ie for N1SmContainer<'_> {
 
     fn tree(
         &self,
-        name: &str,
+        container: Option<&str>,
         decided: view::Decided<'_>,
         scope: view::Scope,
     ) -> Option<oxirush_utils::tree::Value> {
@@ -736,10 +743,14 @@ impl Ie for N1SmContainer<'_> {
         Some(view::tree_in(
             &message,
             &view::to_view(&message, inside),
-            Some(name),
+            container,
             decided,
             inside,
         ))
+    }
+
+    fn carried(&self) -> Option<view::Decided<'static>> {
+        Some(&decided)
     }
 }
 

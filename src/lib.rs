@@ -389,6 +389,11 @@
 //! what the message cannot keep is an error. The [`paths`] module reads and
 //! edits a tree by paths such as `/nas/5g-guti/guti/plmn`.
 //!
+//! An IE type is a [`tree::Tree`]: one IE alone, as an NGAP or S1AP IE
+//! carries the value of a NAS IE, has the tree that the tree of a message
+//! shows of it, and [`tree::from_value`] writes it back
+//! ([One IE alone](crate::paths#one-ie-alone)).
+//!
 //! # The OxiRush family
 //!
 //! - [oxirush-utils](https://docs.rs/oxirush-utils): the 3GPP identities, and the JSON tree with its paths that the others share.

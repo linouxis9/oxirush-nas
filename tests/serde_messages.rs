@@ -129,6 +129,67 @@ fn alone<T: tree::Tree + PartialEq + core::fmt::Debug>(ie: &T, shown: &Value, oc
     assert_eq!(written.as_ref(), Ok(ie), "{}: {octets}", T::NAME);
 }
 
+/// One IE outside a message has the tree that the tree of a message shows of
+/// it, which writes it back, and so do the octets of its value, without an
+/// IEI or a length, as an NGAP or S1AP IE carries a NAS IE: an IE of a fixed
+/// length, a TLV, and a container of a message of each system.
+#[test]
+fn one_ie_alone_is_the_tree_that_a_message_shows_of_it() {
+    // REGISTRATION REQUEST with a NAS message container, and a last visited
+    // registered TAI of six octets
+    let mut tree = fgs(
+        "7e004101000d0102f8390000000021436587f9c11001012e02f0702f020101400202005002020077000b\
+         f202f839010042112233447100137e004101000d0102f8390000000021436587f96a01017200031001\
+         313b0101",
+    )
+    .to_tree();
+    tree["last-visited-registered-tai"] = tree!({"plmn": "208-93", "tac": 1});
+    // and an EPS NAS message container with an ATTACH REQUEST
+    let attach = "07411108298039103254769802f07000040201d011";
+    tree["eps-nas-message-container"] = tree!({ "octets": attach });
+    let message = f::Message::from_tree(tree).unwrap();
+    let tree = message.to_tree();
+    let f::Message::Gmm(_, f::GmmMessage::RegistrationRequest(request)) = &message else {
+        panic!("{message:?}");
+    };
+    let tai = request.last_visited_registered_tai.as_ref().unwrap();
+    alone(tai, &tree["last-visited-registered-tai"], "02f839000001");
+    let container = request.nas_message_container.as_ref().unwrap();
+    let inner = "7e004101000d0102f8390000000021436587f9";
+    alone(container, &tree["nas-message-container"], inner);
+    assert_eq!(
+        tree["nas-message-container"]["message-type"],
+        tree!("registration-request")
+    );
+    let container = request.eps_nas_message_container.as_ref().unwrap();
+    alone(container, &tree["eps-nas-message-container"], attach);
+
+    // REGISTRATION REJECT with a T3346 value, a TLV
+    let message = fgs("7e0044165f012a");
+    let f::Message::Gmm(_, f::GmmMessage::RegistrationReject(reject)) = &message else {
+        panic!("{message:?}");
+    };
+    let timer = reject.t3346_value.as_ref().unwrap();
+    alone(timer, &message.to_tree()["t3346-value"], "2a");
+
+    // ATTACH REQUEST with a PDN CONNECTIVITY REQUEST in its ESM message
+    // container
+    let message = eps(attach);
+    let tree = message.to_tree();
+    let e::Message::Emm(_, e::EmmMessage::AttachRequest(request)) = &message else {
+        panic!("{message:?}");
+    };
+    alone(
+        &request.esm_message_container,
+        &tree["esm-message-container"],
+        "0201d011",
+    );
+    assert_eq!(
+        tree["esm-message-container"]["message-type"],
+        tree!("pdn-connectivity-request")
+    );
+}
+
 /// The two NAS transparent containers of a handover, which NGAP and RRC carry
 /// and no NAS message does, are each the tree of the fields of their clause
 /// (TS 24.501 §9.11.2.6 and §9.11.2.9), which writes their octets back. One

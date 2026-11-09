@@ -149,6 +149,41 @@
 //! }
 //! ```
 //!
+//! ## One IE alone
+//!
+//! An IE type is a [`tree::Tree`]: `to_tree()` gives the tree of one IE
+//! outside a message, which is the one that the tree of a message shows of it,
+//! and [`tree::from_value`] the IE that a tree writes, or `{"octets": "…"}`.
+//! The octets of an IE are its value, without an IEI or a length, as an NGAP
+//! or S1AP IE carries a NAS IE.
+//!
+//! ```rust
+//! use oxirush_nas::nas_5gs::{MessageContainer, S1ModeToN1ModeNasTransparentContainer};
+//! use oxirush_nas::tree;
+//! use oxirush_nas::tree::Tree;
+//!
+//! // The NASC of an NGAP HANDOVER REQUEST from EPS
+//! let octets = hex::decode("0102030422290000").unwrap();
+//! let nasc = S1ModeToN1ModeNasTransparentContainer::new(octets);
+//! println!("{}", nasc.to_tree());
+//!
+//! // The container that its tree writes, with another NCC
+//! let mut fields = nasc.to_tree();
+//! fields["ncc"] = tree!(3);
+//! let written: S1ModeToN1ModeNasTransparentContainer = tree::from_value(&fields).unwrap();
+//! println!("{}", hex::encode(&written.value));
+//!
+//! // A container of a message is the tree of its message
+//! let container = MessageContainer::new(vec![0x7e, 0x00, 0x64, 0x16]);
+//! println!("{}", container.to_tree());
+//! ```
+//!
+//! ```text
+//! {"message-authentication-code":16909060,"selected-nas-security-algorithms":{"ciphering":"nea2","integrity":"nia2"},"ncc":2,"ngksi":{"mapped":1}}
+//! 0102030422390000
+//! {"message-type":"5gmm-status","5gmm-cause":"congestion"}
+//! ```
+//!
 //! ## The protocol configuration options
 //!
 //! The value is the list of units. A unit is named by what it is in the

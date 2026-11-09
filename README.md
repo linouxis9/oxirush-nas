@@ -521,10 +521,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 {"message-type":"registration-reject","5gmm-cause":"illegal-ue","t3502-value":720}
 ```
 
-The [`paths`](https://docs.rs/oxirush-nas/latest/oxirush_nas/paths/index.html)
+One IE alone is a tree too, the one that a message shows of it: `to_tree()`
+of its type, and `tree::from_value` back, as an NGAP or S1AP IE carries a NAS
+IE such as the NASC of a handover. The
+[`paths`](https://docs.rs/oxirush-nas/latest/oxirush_nas/paths/index.html)
 module has the rules of the tree and the notation of each kind of value, with
-examples: a message in a container, the protocol configuration options, a
-list, a protected message, and octets sent as they are.
+examples: a message in a container, one IE alone, the protocol configuration
+options, a list, a protected message, and octets sent as they are.
 
 ## Read and edit by path
 

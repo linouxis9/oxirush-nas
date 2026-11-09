@@ -58,9 +58,21 @@ pub(crate) trait Decoded: Readable + Clone + PartialEq {
         self.clone()
     }
 
-    /// The tree of the message that the IE `name` carries: `None` for an
-    /// IE that carries no message.
-    fn tree(&self, _name: &str, _decided: Decided<'_>, _scope: Scope) -> Option<Value> {
+    /// The tree of the message that the IE carries, in the IE `container`
+    /// of a message or alone: `None` for an IE that carries no message.
+    fn tree(
+        &self,
+        _container: Option<&str>,
+        _decided: Decided<'_>,
+        _scope: Scope,
+    ) -> Option<Value> {
+        None
+    }
+
+    /// What decides the header of the message that the IE carries when the
+    /// IE is alone: the system of the message. `None` for an IE that
+    /// carries no message.
+    fn carried() -> Option<Decided<'static>> {
         None
     }
 }
@@ -84,9 +96,13 @@ pub(crate) trait Ie {
     /// mean what this one means, when it is another than this one.
     fn meant(&self, scope: Scope) -> Option<Value>;
 
-    /// The tree of the message that the IE `name` carries: `None` for an
-    /// IE that carries no message.
-    fn tree(&self, name: &str, decided: Decided<'_>, scope: Scope) -> Option<Value>;
+    /// The tree of the message that the IE carries, in the IE `container`
+    /// of a message or alone: `None` for an IE that carries no message.
+    fn tree(&self, container: Option<&str>, decided: Decided<'_>, scope: Scope) -> Option<Value>;
+
+    /// What decides the header of the message that the IE carries when the
+    /// IE is alone: `None` for an IE that carries no message.
+    fn carried(&self) -> Option<Decided<'static>>;
 }
 
 impl<T: Decoded> Ie for T {
@@ -109,8 +125,12 @@ impl<T: Decoded> Ie for T {
         (meant != *self).then(|| readable::to_value(&meant).ok())?
     }
 
-    fn tree(&self, name: &str, decided: Decided<'_>, scope: Scope) -> Option<Value> {
-        Decoded::tree(self, name, decided, scope)
+    fn tree(&self, container: Option<&str>, decided: Decided<'_>, scope: Scope) -> Option<Value> {
+        Decoded::tree(self, container, decided, scope)
+    }
+
+    fn carried(&self) -> Option<Decided<'static>> {
+        T::carried()
     }
 }
 
@@ -155,7 +175,18 @@ pub(crate) trait ViaWritten<T> {
 
 impl<T: Decoded> ViaWritten<T> for WrittenProbe<T> {
     fn writer(&self) -> Option<Writer<T>> {
-        Some(|value| T::unwritten().with_decoded(value, Scope::NONE))
+        Some(|value| {
+            let scope = Scope::NONE;
+            match T::carried() {
+                // The tree of the message that the IE carries, which its view is
+                // read from.
+                Some(decided) => {
+                    let view = from_tree(value, None, decided, scope)?;
+                    T::unwritten().with_decoded(&view, scope)
+                }
+                None => T::unwritten().with_decoded(value, scope),
+            }
+        })
     }
 }
 
@@ -170,14 +201,40 @@ impl<T> ViaNoWritten<T> for &WrittenProbe<T> {
     }
 }
 
-/// What the tree of a message shows of an IE alone, `ie` where its type has
-/// a value, whose value field is `octets`: its value where that writes it
-/// back, or its octets.
+/// The tree of an IE alone, `ie` where its type has a value, whose value
+/// field is `octets`: what the tree of a message shows of it ([`shown`]),
+/// the message that it carries by the decisions of its system, or else its
+/// octets.
 pub(crate) fn ie_shown(ie: Option<&dyn Ie>, octets: &dyn Shown) -> Value {
     let scope = Scope::NONE;
-    match ie.and_then(|ie| Some((ie, ie.value(scope)?))) {
-        Some((ie, value)) if ie.written_back(&value, scope) => without_absent(value),
-        _ => oxirush_utils::tree!({ "octets": octets.hex() }),
+    let decided: Decided<'_> = &|_, _| Ok(Vec::new());
+    let shown = ie.and_then(|ie| {
+        let decided = ie.carried().unwrap_or(decided);
+        shown(ie, &ie.value(scope)?, None, decided, scope)
+    });
+    shown.unwrap_or_else(|| oxirush_utils::tree!({ "octets": octets.hex() }))
+}
+
+/// What a tree shows of `ie`, whose value is `value`, in the IE `container`
+/// of a message or alone: the tree of the message that it carries, or its
+/// value, where that writes it back. `None` where it has its octets.
+fn shown(
+    ie: &dyn Ie,
+    value: &Value,
+    container: Option<&str>,
+    decided: Decided<'_>,
+    scope: Scope,
+) -> Option<Value> {
+    match ie.tree(container, decided, scope) {
+        // The message of a container, by its own tree: the container is the
+        // one that this tree writes.
+        Some(inner) => (from_tree(&inner, container, decided, scope))
+            .is_ok_and(|written| ie.written_back(&written, scope))
+            .then_some(inner),
+        None if is_message(value) => None,
+        None => ie
+            .written_back(value, scope)
+            .then(|| without_absent(value.clone())),
     }
 }
 
@@ -346,6 +403,14 @@ pub(crate) trait Viewed: Clone + Readable {
 
     /// The variants of the enum that hold a plain message.
     const FAMILIES: &'static [&'static str];
+
+    /// What the type of a message of the system decides of its header, as a
+    /// tree leaves it out, for the message that its `message-type` names in
+    /// the IE `container`, or alone: each field with its value.
+    fn decided(
+        container: Option<&str>,
+        kind: Option<&Value>,
+    ) -> Result<Vec<(&'static str, Value)>, String>;
 
     /// This message, which has nothing in it yet, ready for the view
     /// `view`: with the IE that says how another one is read.
@@ -1232,17 +1297,7 @@ pub(crate) fn tree_in<M: Viewed>(
         if tree.get(field.printed).is_none() {
             return;
         }
-        let shown = match ie.tree(field.printed, decided, field.scope) {
-            // The message of a container, by its own tree: the container
-            // is the one that this tree writes.
-            Some(inner) => (from_tree(&inner, Some(field.printed), decided, field.scope))
-                .is_ok_and(|written| ie.written_back(&written, field.scope))
-                .then_some(inner),
-            None if is_message(value) => None,
-            None => ie
-                .written_back(value, field.scope)
-                .then(|| without_absent(value.clone())),
-        };
+        let shown = shown(ie, value, Some(field.printed), decided, field.scope);
         tree[field.printed] = shown.unwrap_or_else(|| oxirush_utils::tree!({ "octets": octets }));
     });
     tree
@@ -2599,7 +2654,7 @@ macro_rules! container_ie {
 
             fn tree(
                 &self,
-                name: &str,
+                container: Option<&str>,
                 decided: $crate::common::view::Decided<'_>,
                 scope: $crate::common::view::Scope,
             ) -> Option<oxirush_utils::tree::Value> {
@@ -2610,10 +2665,14 @@ macro_rules! container_ie {
                 Some(tree_in(
                     &message,
                     &to_view(&message, inside),
-                    Some(name),
+                    container,
                     decided,
                     inside,
                 ))
+            }
+
+            fn carried() -> Option<$crate::common::view::Decided<'static>> {
+                Some(&<$message as $crate::common::view::Viewed>::decided)
             }
         }
     };

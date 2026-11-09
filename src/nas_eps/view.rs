@@ -158,6 +158,13 @@ impl Viewed for Message {
 
     const FAMILIES: &'static [&'static str] = &["Emm", "Esm"];
 
+    fn decided(
+        container: Option<&str>,
+        kind: Option<&oxirush_utils::tree::Value>,
+    ) -> core::result::Result<Vec<(&'static str, oxirush_utils::tree::Value)>, String> {
+        decided(container, kind)
+    }
+
     fn refused_header(&self) -> Option<String> {
         use crate::nas_eps::SecurityHeaderType::PlainNasMessageNotSecurityProtected;
         let discriminator = |written: u8, sublayer: &str, is: u8| {

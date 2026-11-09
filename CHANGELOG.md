@@ -25,6 +25,14 @@ which `select()` of a message gives. It is not source compatible with 0.6.0:
   `ngksi` as a SECURITY MODE COMMAND names them, and `k-amf-change-flag` and
   `sequence-number`, or `ncc`. One with a spare bit set, or of another
   length, is shown by its octets.
+- One IE alone as a tree, as an NGAP or S1AP IE carries the value of a NAS
+  IE: `to_tree()` of an IE type, which is a `tree::Tree`, is the tree that a
+  message shows of the IE, and `tree::from_value` writes the IE back from it
+  or from `{"octets": "…"}` (`paths`, "One IE alone"). A container of a
+  message alone, its serde form, and the `Display` of an EPS NAS message
+  container in a message, are the tree of the message, as the tree of a
+  message has it: they were a form of their own, with the fields that a tree
+  leaves out, or the octets.
 
 ### Changed
 
