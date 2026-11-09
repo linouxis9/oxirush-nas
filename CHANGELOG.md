@@ -2,7 +2,7 @@
 
 All notable changes to `oxirush-nas` are recorded here.
 
-## Unreleased
+## 0.7.1 - 2026-11-09
 
 ### Added
 
