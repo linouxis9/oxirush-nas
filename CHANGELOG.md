@@ -50,6 +50,13 @@ which `select()` of a message gives. It is not source compatible with 0.6.0:
   of the IE: `message.ie_octets("/nas/5g-guti")` gives `Some(octets)`, and
   `message.select("/nas/5g-guti/octets")` gives them in hexadecimal.
 
+### Fixed
+
+- The message of the ESM message container of an ATTACH REQUEST in the EPS
+  NAS message container of a 5GS message is its tree, as in the ATTACH
+  REQUEST alone: it had its octets, and a tree that wrote it was refused as
+  no 5GS message.
+
 ### Migration from 0.6
 
 | 0.6 | 0.7 |

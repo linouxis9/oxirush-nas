@@ -278,6 +278,33 @@ fn the_tree_of_a_protected_message_writes_it() {
     }
 }
 
+/// The EPS message that a 5GS message carries is the tree that it has alone,
+/// the message of its own container too: an ATTACH REQUEST with its PDN
+/// CONNECTIVITY REQUEST in the EPS NAS message container of a REGISTRATION
+/// REQUEST. The tree writes the message, and an edit of the PDN CONNECTIVITY
+/// REQUEST changes it.
+#[test]
+fn the_container_of_the_eps_message_of_a_5gs_one_is_the_tree_of_its_message() {
+    let attach = "07411108298039103254769802f07000040201d011";
+    let mut tree = fgs("7e004101000d0102f8390000000021436587f9").to_tree();
+    tree["eps-nas-message-container"] = tree!({ "octets": attach });
+    let message = f::Message::from_tree(tree).unwrap();
+    let tree = message.to_tree();
+    assert_eq!(tree["eps-nas-message-container"], eps(attach).to_tree());
+    assert_eq!(f::Message::from_tree(tree.clone()).unwrap(), message);
+
+    let mut edited = tree;
+    edited["eps-nas-message-container"]["esm-message-container"]["pdn-type"] = tree!("ipv6");
+    let edited = message.with_tree(edited).unwrap();
+    let octets = edited
+        .select("/nas/eps-nas-message-container/octets")
+        .unwrap();
+    assert_eq!(
+        octets,
+        [tree!("07411108298039103254769802f07000040201d021")]
+    );
+}
+
 /// The message that a tree writes has that tree, also where a value does
 /// not say all of its octets: found by the `tree_5gs` fuzz target. This
 /// SECURITY MODE COMPLETE carries a REGISTRATION REQUEST whose mobile

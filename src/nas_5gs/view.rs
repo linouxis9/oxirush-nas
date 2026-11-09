@@ -349,13 +349,19 @@ fn message_type_place(kind: &str) -> Option<(usize, usize)> {
 /// What the type of a 5GS message decides of its header, as a tree leaves it
 /// out: the extended protocol discriminator of its sublayer, and for 5GMM a
 /// plain security header type. The message of an EPS NAS message container
-/// is an EPS one.
+/// is an EPS one, and so is that of a container of the EPS message: no 5GS
+/// message has an IE of their names.
 fn decided(
     container: Option<&str>,
     kind: Option<&oxirush_utils::tree::Value>,
 ) -> core::result::Result<Vec<(&'static str, oxirush_utils::tree::Value)>, String> {
     use oxirush_utils::tree;
-    if container.is_some_and(|ie| readable::same_name(ie, "eps-nas-message-container")) {
+    const EPS: [&str; 3] = [
+        "eps-nas-message-container",
+        "esm-message-container",
+        "replayed-nas-message-container",
+    ];
+    if container.is_some_and(|ie| EPS.iter().any(|eps| readable::same_name(ie, eps))) {
         return crate::nas_eps::view::decided(None, kind);
     }
     // A security protected 5GS NAS message is one of 5GMM (§9.1.1).
