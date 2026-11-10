@@ -2,6 +2,19 @@
 
 All notable changes to `oxirush-nas` are recorded here.
 
+## Unreleased
+
+### Fixed
+
+- `validate()` says the length of an IE once. A value that the clause of
+  its IE finds too short or too long had a second finding from the table of
+  its message, the same range with the octets of the IEI and of the length:
+  the table says the length only of an IE that its clause has not faulted.
+- No finding prints `usize::MAX` for a length without an upper limit: "a
+  value of at least 2 octets" and "message-table length is under 3", where
+  the two read "2 to 18446744073709551615 octets" and
+  "outside 3..=18446744073709551615".
+
 ## 0.7.1 - 2026-11-09
 
 ### Added

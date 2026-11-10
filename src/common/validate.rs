@@ -242,7 +242,11 @@ macro_rules! ie_rules {
 
         fn sender_length_fault(&self) -> Option<String> {
             let within = ($least..=$most).contains(&self.value.len());
-            (!within).then(|| format!("a value of {} to {} octets", $least, $most))
+            // A clause that gives no upper limit has `usize::MAX` for it.
+            (!within).then(|| match $most {
+                usize::MAX => format!("a value of at least {} octets", $least),
+                most => format!("a value of {} to {most} octets", $least),
+            })
         }
     };
     (@sender) => {

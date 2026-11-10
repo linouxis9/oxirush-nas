@@ -167,6 +167,71 @@ fn an_authentication_request_has_rand_and_autn_or_an_eap_message() {
     assert!(request.validate().is_empty(), "{:?}", request.validate());
 }
 
+/// The findings that name `field`.
+fn of<'a>(errors: &'a [ValidationError], field: &str) -> Vec<&'a str> {
+    errors
+        .iter()
+        .filter(|error| error.field == field)
+        .map(|error| error.message.as_str())
+        .collect()
+}
+
+/// The length of an IE is in its clause and in the table of each message
+/// that has it, the same range but for the octets of the IEI and of the
+/// length. A value that its clause finds too short or too long is said by
+/// its clause, and the table does not say it again; a range with no upper
+/// end is said without one.
+#[test]
+fn a_length_that_an_ie_breaks_is_said_by_its_clause_alone() {
+    // Additional 5G security information, one octet (§9.11.3.12), an
+    // optional IE of three octets in the table (§8.2.25.1).
+    let mut command = security_mode_command();
+    command.additional_5g_security_information =
+        Some(Additional5gSecurityInformation::new(vec![0, 0]));
+    let command = GmmMessage::SecurityModeCommand(Box::new(command));
+    assert_eq!(
+        of(&command.validate(), "additional_5g_security_information"),
+        ["IE breaks a sender rule: a value of 1 to 1 octets"]
+    );
+
+    // Additional information, one octet or more (§9.11.2.1).
+    let mut transport =
+        DlNasTransport::new(PayloadContainerType::new(1), PayloadContainer::new(vec![1]));
+    transport.additional_information = Some(AdditionalInformation::new(Vec::new()));
+    let transport = GmmMessage::DlNasTransport(Box::new(transport));
+    assert_eq!(
+        of(&transport.validate(), "additional_information"),
+        ["IE breaks a sender rule: a value of at least 1 octets"]
+    );
+
+    // RAND has no rule of its own: the table's length says it.
+    let mut request = AuthenticationRequest::new(KeySetIdentifier::new(0), Abba::new(vec![0, 0]));
+    request.authentication_parameter_rand = Some(AuthenticationParameterRand::new(vec![0; 15]));
+    request.authentication_parameter_autn = Some(AuthenticationParameterAutn::new(vec![0; 16]));
+    let request = GmmMessage::AuthenticationRequest(Box::new(request));
+    assert!(says(
+        &request.validate(),
+        "authentication_parameter_rand",
+        "message-table length is outside 17..=17"
+    ));
+
+    // No finding prints the largest number of the machine for "no limit".
+    let short = GmmMessage::AuthenticationRequest(Box::new(AuthenticationRequest::new(
+        KeySetIdentifier::new(0),
+        Abba::new(vec![0]),
+    )));
+    for message in [&command, &transport, &request, &short] {
+        for error in message.validate() {
+            assert!(
+                !error.message.contains(&usize::MAX.to_string()),
+                "{}: {}",
+                error.field,
+                error.message
+            );
+        }
+    }
+}
+
 #[test]
 fn replayed_ue_security_capabilities_have_two_octets_at_least() {
     let mut command = security_mode_command();

@@ -375,14 +375,15 @@ pub(crate) fn check_table_length(
 ) {
     encoded.clear();
     if !(encode(encoded).is_ok() && range.contains(&encoded.len())) {
+        // A table that gives no upper limit has `usize::MAX` for it.
+        let message = match *range.end() {
+            usize::MAX => format!("message-table length is under {}", range.start()),
+            most => format!("message-table length is outside {}..={most}", range.start()),
+        };
         findings.push(ValidationError {
             severity: Severity::Error,
             field,
-            message: format!(
-                "message-table length is outside {}..={}",
-                range.start(),
-                range.end()
-            ),
+            message,
         });
     }
 }
@@ -589,11 +590,18 @@ macro_rules! nas_message {
                 // one buffer, one after the other.
                 #[allow(unused_mut, unused_variables)]
                 let mut encoded = Vec::<u8>::new();
+                // The fields whose length the rule of their IE type has
+                // found at fault: the table has the same length with the
+                // octets of the IEI and of the length, and does not say it
+                // again.
+                #[allow(unused_mut, unused_variables)]
+                let mut said = Vec::<&'static str>::new();
                 $(
                     if let Some(rule) = self.$mfield.sender_fault() {
                         findings.push(invalid_ie(stringify!($mfield), rule));
                     } else if let Some(rule) = self.$mfield.sender_length_fault() {
                         findings.push(invalid_ie(stringify!($mfield), &rule));
+                        said.push(stringify!($mfield));
                     }
                 )*
                 $(
@@ -602,16 +610,21 @@ macro_rules! nas_message {
                             findings.push(invalid_ie(stringify!($ofield), rule));
                         } else if let Some(rule) = value.sender_length_fault() {
                             findings.push(invalid_ie(stringify!($ofield), &rule));
+                            said.push(stringify!($ofield));
                         }
                     }
                 )*
                 $(
-                    nas_message!(@sender_mlength findings, encoded, self, $mfield
-                        $(, $mattr)? $({wire_len $mmin, $mmax})?);
+                    if !said.contains(&stringify!($mfield)) {
+                        nas_message!(@sender_mlength findings, encoded, self, $mfield
+                            $(, $mattr)? $({wire_len $mmin, $mmax})?);
+                    }
                 )*
                 $(
-                    nas_message!(@sender_olength findings, encoded, self, $ofield,
-                        ($($iei)|+) $(, $oattr)? $({wire_len $omin, $omax})?);
+                    if !said.contains(&stringify!($ofield)) {
+                        nas_message!(@sender_olength findings, encoded, self, $ofield,
+                            ($($iei)|+) $(, $oattr)? $({wire_len $omin, $omax})?);
+                    }
                 )*
                 findings
             }
