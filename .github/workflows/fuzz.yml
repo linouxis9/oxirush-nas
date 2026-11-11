@@ -223,8 +223,12 @@ jobs:
             tail -n 1 "$RUNNER_TEMP/coverage/report.txt"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+      # The report and the pages, for 30 days. An upload that fails, as when GitHub's
+      # artifact service is down, leaves the job green: its fuzzing found nothing, and
+      # the next weekly run reports the coverage again.
       - uses: actions/upload-artifact@v4
         if: needs.plan.outputs.weekly == 'true'
+        continue-on-error: true
         with:
           name: coverage-${{ matrix.target }}
           path: ${{ runner.temp }}/coverage
