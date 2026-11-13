@@ -2424,8 +2424,12 @@ macro_rules! decoded_ie {
                 ) -> core::result::Result<Self, $crate::common::ValueError> = $encode;
                 let value = $crate::common::readable::to_value(&decode(self)?).ok()?;
                 let typed: $form = $crate::common::readable::from_value(&value).ok()?;
-                let again = decode(&encode(self, typed).ok()?)?;
-                ($crate::common::readable::to_value(&again).ok()? == value).then_some(value)
+                // An IE that the value writes as this one reads as it.
+                let again = encode(self, typed).ok()?;
+                if again == *self {
+                    return Some(value);
+                }
+                ($crate::common::readable::to_value(&decode(&again)?).ok()? == value).then_some(value)
             }
 
             fn with_decoded(
@@ -2756,7 +2760,12 @@ macro_rules! built_ie {
                 // Octets that are read and that `$from` does not build have
                 // no value: what a view shows can be written.
                 let (members, built) = read(self)?;
-                (read(&built?)?.0 == members).then_some(members)
+                let built = built?;
+                // An IE built as this one reads as it.
+                if built == *self {
+                    return Some(members);
+                }
+                (read(&built)?.0 == members).then_some(members)
             }
 
             fn with_decoded(
