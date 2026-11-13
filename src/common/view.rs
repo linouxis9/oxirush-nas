@@ -1697,7 +1697,13 @@ pub(crate) fn ie_octets(view: &Value, path: &str) -> Result<Option<Vec<u8>>, tre
 /// The entries of a view by the letters of their names ([`letters`]), which
 /// are those of a name however it is written, in their order: an entry is
 /// found by a name without the letters of the name written out.
-struct Entries(Vec<(Vec<u8>, String, Value)>);
+struct Entries {
+    entries: Vec<(Vec<u8>, String, Value)>,
+    /// The first letter of each name, as a bit of its code (0 for a name
+    /// without letters), whether its entry is still there or not: a name
+    /// that starts with another is found without a search.
+    starts: u128,
+}
 
 impl Entries {
     /// The entries of `view`; an error names the first entry that a later
@@ -1713,12 +1719,13 @@ impl Entries {
         if let Some(pair) = twice {
             return Err(format!("`{}` is named twice", pair[0].2));
         }
+        let starts = (entries.iter()).fold(0, |starts, (key, ..)| starts | start(key.first()));
         let entries = entries.into_iter();
-        Ok(Self(
-            entries
-                .map(|(key, _, name, entry)| (key, name, entry))
-                .collect(),
-        ))
+        let entries = entries.map(|(key, _, name, entry)| (key, name, entry));
+        Ok(Self {
+            entries: entries.collect(),
+            starts,
+        })
     }
 
     /// The place of the entry that `name` names.
@@ -1726,26 +1733,34 @@ impl Entries {
         let letters = || {
             (name.bytes().filter(u8::is_ascii_alphanumeric)).map(|octet| octet.to_ascii_lowercase())
         };
-        (self
-            .0
-            .binary_search_by(|(key, ..)| key.iter().copied().cmp(letters())))
-        .ok()
+        if self.starts & start(letters().next().as_ref()) == 0 {
+            return None;
+        }
+        (self.entries)
+            .binary_search_by(|(key, ..)| key.iter().copied().cmp(letters()))
+            .ok()
     }
 
     /// The entry that `name` names.
     fn get(&self, name: &str) -> Option<&Value> {
-        self.find(name).map(|at| &self.0[at].2)
+        self.find(name).map(|at| &self.entries[at].2)
     }
 
     /// The entry that `name` names, taken out.
     fn remove(&mut self, name: &str) -> Option<Value> {
-        self.find(name).map(|at| self.0.remove(at).2)
+        self.find(name).map(|at| self.entries.remove(at).2)
     }
 
     /// The name of the first entry left, in the order of the letters.
     fn first(self) -> Option<String> {
-        self.0.into_iter().next().map(|(_, name, _)| name)
+        self.entries.into_iter().next().map(|(_, name, _)| name)
     }
+}
+
+/// The bit of the first letter `letter` of a name, which is ASCII, in
+/// [`Entries`]: bit 0 for a name without letters.
+fn start(letter: Option<&u8>) -> u128 {
+    1 << letter.map_or(0, |letter| letter & 0x7f)
 }
 
 /// The message that `view` describes: `original` as the view edits it, or
