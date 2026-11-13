@@ -4,6 +4,15 @@ All notable changes to `oxirush-nas` are recorded here.
 
 ## Unreleased
 
+### Changed
+
+- `to_tree()`, `from_tree()`, `with_tree()`, `select()` and `means_the_same()`
+  of a 5GS and of an EPS message are about twice as fast, with half the
+  allocations: a tree is made straight from the IEs of the message, and a
+  tree is written into the message itself, where both went through the
+  readable form of the whole message. The trees, the messages that they
+  write and the errors are the same.
+
 ### Fixed
 
 - `validate()` says the length of an IE once. A value that the clause of
