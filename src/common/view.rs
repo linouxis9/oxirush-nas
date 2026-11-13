@@ -20,7 +20,7 @@
 //! `octets` in hexadecimal.
 
 use crate::common::ppp::{Chap, Ipcp, Lcp, Packet, Pap};
-use crate::common::readable::{self, letters, printed, same_name};
+use crate::common::readable::{self, letters, letters_into, printed, same_name};
 use crate::common::ts24008::{Pco, PcoDirection, PcoEntry};
 use crate::common::{Plmn, ValueError, within};
 use crate::nas_5gs::{
@@ -29,7 +29,6 @@ use crate::nas_5gs::{
 };
 use crate::prelude::*;
 use alloc::collections::BTreeMap;
-use alloc::collections::btree_map::Entry;
 use core::net::{Ipv4Addr, Ipv6Addr};
 use oxirush_utils::tree::{self, ErrorKind, Map, Value};
 use readable::Readable;
@@ -1634,7 +1633,7 @@ fn written<M: Viewed>(original: &M, view: Value, alone: bool, scope: Scope) -> R
     // however it is written.
     let mut entries = BTreeMap::new();
     for (name, entry) in view {
-        if let Some((name, _)) = entries.insert(letters(&name), (name, entry)) {
+        if let Some((name, _)) = entries.insert(letters(&name).into_bytes(), (name, entry)) {
             return Err(format!("`{name}` is named twice"));
         }
     }
@@ -1651,7 +1650,8 @@ fn written<M: Viewed>(original: &M, view: Value, alone: bool, scope: Scope) -> R
     };
     let mut protection = None;
     if let Some((_, ciphered)) = original.protection() {
-        let mut taken = |name: &str| entries.remove(&letters(name)).map(|(_, entry)| entry);
+        let mut taken =
+            |name: &str| (entries.remove(letters(name).as_bytes())).map(|(_, entry)| entry);
         let header = match taken(SECURITY_HEADER).map(entry) {
             Some(Ok([Some(written), None])) => written,
             Some(Err(error)) => return Err(format!("{SECURITY_HEADER}: {error}")),
@@ -1683,12 +1683,15 @@ fn written<M: Viewed>(original: &M, view: Value, alone: bool, scope: Scope) -> R
     let mut absent = Vec::new();
     original.absent(&mut |name, _| absent.push(name));
     let mut added = Vec::new();
+    // The letters of a name, in one buffer for all of them.
+    let mut key = Vec::new();
     for name in absent {
-        let Entry::Occupied(entry) = entries.entry(letters(name)) else {
+        letters_into(name, &mut key);
+        let Some((_, entry)) = entries.get(&key) else {
             continue;
         };
-        if entry.get().1.is_null() {
-            entry.remove();
+        if entry.is_null() {
+            entries.remove(&key);
         } else if let Some(slot) = message.slot(name) {
             slot.read(&original.blank(name).unwrap_or_default())?;
             added.push(name);
@@ -1696,7 +1699,8 @@ fn written<M: Viewed>(original: &M, view: Value, alone: bool, scope: Scope) -> R
     }
     // An entry that is null is one left out.
     let mut take = |name: &str| {
-        let (_, entry) = entries.remove(&letters(name))?;
+        letters_into(name, &mut key);
+        let (_, entry) = entries.remove(&key)?;
         Some(entry).filter(|entry| !entry.is_null())
     };
     // The IEs that the table of the message has no place for, when the view

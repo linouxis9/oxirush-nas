@@ -41,6 +41,18 @@ pub(crate) fn letters(name: &str) -> String {
         .collect()
 }
 
+/// The octets of [`letters`], written into `letters` in the place of what
+/// it had. A character that is not ASCII is no letter or digit, and none of
+/// its octets is one either.
+pub(crate) fn letters_into(name: &str, letters: &mut Vec<u8>) {
+    letters.clear();
+    letters.extend(
+        (name.bytes())
+            .filter(u8::is_ascii_alphanumeric)
+            .map(|octet| octet.to_ascii_lowercase()),
+    );
+}
+
 /// Whether two names are the same: they are written alike, but for their
 /// case and their separators, or they have the same letters and digits.
 pub(crate) fn same_name(one: &str, other: &str) -> bool {
