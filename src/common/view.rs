@@ -1543,67 +1543,75 @@ pub(crate) fn octets_at<M: Viewed>(message: &M, names: &[String], scope: Scope) 
     }
 }
 
-/// The members of a tree by the letters of their names ([`letters`]), which
-/// are those of a name however it is written, in their order: a member is
-/// found by a name without the letters of the name written out. A member
-/// that is `None` is one that an edit takes out.
+/// The members of a tree, which are found by their names however these are
+/// written: by the letters of a name ([`letters`]). A member that is `None`
+/// is one that an edit takes out.
 struct Entries {
-    entries: Vec<(Vec<u8>, String, Option<Value>)>,
+    /// Each member by its name, in the order of the tree, until it is taken.
+    members: Vec<(String, Option<Option<Value>>)>,
     /// The first letter of each name, as a bit of its code (0 for a name
     /// without letters), whether its member is still there or not: a name
     /// that starts with another is found without a search.
     starts: u128,
 }
 
+/// The letters of `name`, in lower case, as [`letters`] has them.
+fn letters_of(name: &str) -> impl Iterator<Item = u8> + '_ {
+    (name.bytes().filter(u8::is_ascii_alphanumeric)).map(|octet| octet.to_ascii_lowercase())
+}
+
 impl Entries {
     /// The members `members`; an error names the first member that a later
     /// one names again.
     fn of(members: impl IntoIterator<Item = (String, Option<Value>)>) -> Result<Self, String> {
-        let mut entries: Vec<_> = (members.into_iter().enumerate())
-            .map(|(at, (name, entry))| (letters(&name).into_bytes(), at, name, entry))
+        let members: Vec<_> = (members.into_iter())
+            .map(|(name, member)| (name, Some(member)))
             .collect();
-        entries.sort_by(|one, other| (&one.0, one.1).cmp(&(&other.0, other.1)));
-        let twice = (entries.windows(2))
-            .filter(|pair| pair[0].0 == pair[1].0)
-            .min_by_key(|pair| pair[1].1);
-        if let Some(pair) = twice {
-            return Err(format!("`{}` is named twice", pair[0].2));
+        let firsts: Vec<_> = (members.iter())
+            .map(|(name, _)| letters_of(name).next())
+            .collect();
+        // The first member that a later one names again, as the later one
+        // that comes first has it.
+        for (at, (name, _)) in members.iter().enumerate() {
+            let twice = (0..at).rev().find(|&before| {
+                firsts[before] == firsts[at] && letters_of(&members[before].0).eq(letters_of(name))
+            });
+            if let Some(before) = twice {
+                return Err(format!("`{}` is named twice", members[before].0));
+            }
         }
-        let starts = (entries.iter()).fold(0, |starts, (key, ..)| starts | start(key.first()));
-        let entries = entries.into_iter();
-        let entries = entries.map(|(key, _, name, entry)| (key, name, entry));
-        Ok(Self {
-            entries: entries.collect(),
-            starts,
-        })
+        let starts = (firsts.iter()).fold(0, |starts, first| starts | start(first.as_ref()));
+        Ok(Self { members, starts })
     }
 
     /// The place of the member that `name` names.
     fn find(&self, name: &str) -> Option<usize> {
-        let letters = || {
-            (name.bytes().filter(u8::is_ascii_alphanumeric)).map(|octet| octet.to_ascii_lowercase())
-        };
-        if self.starts & start(letters().next().as_ref()) == 0 {
+        if self.starts & start(letters_of(name).next().as_ref()) == 0 {
             return None;
         }
-        (self.entries)
-            .binary_search_by(|(key, ..)| key.iter().copied().cmp(letters()))
-            .ok()
+        let left = |at: &usize| self.members[*at].1.is_some();
+        let places = || (0..self.members.len()).filter(left);
+        (places().find(|&at| self.members[at].0 == name))
+            .or_else(|| places().find(|&at| letters_of(&self.members[at].0).eq(letters_of(name))))
     }
 
     /// The member that `name` names.
     fn get(&self, name: &str) -> Option<&Option<Value>> {
-        self.find(name).map(|at| &self.entries[at].2)
+        self.find(name).and_then(|at| self.members[at].1.as_ref())
     }
 
     /// The member that `name` names, taken out.
     fn remove(&mut self, name: &str) -> Option<Option<Value>> {
-        self.find(name).map(|at| self.entries.remove(at).2)
+        self.find(name).and_then(|at| self.members[at].1.take())
     }
 
     /// The name of the first member left, in the order of the letters.
     fn first(self) -> Option<String> {
-        self.entries.into_iter().next().map(|(_, name, _)| name)
+        let left = self
+            .members
+            .into_iter()
+            .filter(|(_, member)| member.is_some());
+        left.map(|(name, _)| name).min_by_key(|name| letters(name))
     }
 }
 
