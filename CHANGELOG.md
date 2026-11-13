@@ -7,11 +7,15 @@ All notable changes to `oxirush-nas` are recorded here.
 ### Changed
 
 - `to_tree()`, `from_tree()`, `with_tree()`, `select()` and `means_the_same()`
-  of a 5GS and of an EPS message are about twice as fast, with half the
-  allocations: a tree is made straight from the IEs of the message, and a
-  tree is written into the message itself, where both went through the
-  readable form of the whole message. The trees, the messages that they
-  write and the errors are the same.
+  of a 5GS and of an EPS message are five to fifteen times as fast, with a
+  fifth of the allocations or fewer: for a REGISTRATION ACCEPT, to_tree
+  18.6 to 2.8 us, from_tree 51.7 to 5.8 us and with_tree 77 to 5.0 us. A
+  tree is made straight from the IEs of the message, and written into the
+  message itself, without the readable form of the whole message or a view
+  under the tree; whether an IE shows its value is decided on typed values.
+  The trees, the messages that they write and the errors are the same, but
+  for the message of a container: an edit of its tree edits it as
+  `with_tree` edits a message.
 
 ### Fixed
 
