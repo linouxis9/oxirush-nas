@@ -263,7 +263,7 @@
 //!
 //! | Area | Contents |
 //! |------|----------|
-//! | 5GS messages | All 5GMM and 5GSM messages of TS 24.501, and the UE policy delivery service (Annex D) |
+//! | 5GS messages | All 5GMM and 5GSM messages of TS 24.501 |
 //! | EPS messages | All EMM and ESM messages of TS 24.301 clause 8, with the short SERVICE REQUEST header, EMM TRANSPORT and security-protected envelopes |
 //! | IEs | 169 5GS and 153 EPS types, each the value of its IE, which a message has in the V, LV, LV-E, TV, TLV and TLV-E formats of TS 24.007 §11.2 |
 //! | Typed accessors | Enums, value structs and `set_*`/`with_*` builders instead of bit manipulation. One implementation for the IEs that both specifications code alike: UE network capability, KSI, NAS security algorithms, GPRS timers, PCO/ePCO units, APN/DNN, PLMN lists, network name, time zone, eDRX and emergency numbers, for example |
@@ -310,7 +310,7 @@
 //! | `Non3GppDeviceConnectionInformation::Ethernet::vlan_tag_id`, §9.11.4.41 | The 12-bit VLAN ID: bit 8 of the first octet to bit 5 of the second, with bits 4 to 1 spare. 100 is sent as 0x0640. | A 16-bit VLAN tag ID in the two octets. A peer that follows it sends 100 as 0x0064, which this crate reads as VLAN 6. |
 //! | 5GMM capability octet 13, bits 2 and 3, §9.11.3.1 | NSSAA-EPC (`nssaa_epc`) and AIoTUR (`aiot_ue_reader`). `validate()` accepts them. | Spare: its sender must leave them zero. |
 //!
-//! Clauses 8 and 9 and Annex D of TS 24.501 code nothing else differently in
+//! Clauses 8 and 9 of TS 24.501 code nothing else differently in
 //! V20.1.0, and clauses 8 and 9 of TS 24.301 are the same in both releases.
 //!
 //! # Tests
@@ -332,7 +332,7 @@
 //! cargo test --all-features capture_   # the EPS corpus
 //! ```
 //!
-//! Thirteen fuzz targets hold what the tests hold. Ten of them, five for each system:
+//! Twelve fuzz targets hold what the tests hold, six for each system:
 //!
 //! | Targets | What they hold |
 //! |---------|----------------|
@@ -341,6 +341,7 @@
 //! | `edit_5gs`, `edit_eps` | A message of the fixtures edited by the paths of its tree: an edit is refused or changes only what it edits, and a message that `validate()` finds nothing wrong with is the one that a receiver reads. |
 //! | `build_5gs`, `build_eps` | A message written from a tree whose IEs the fuzzer chooses, with values of the fixtures or of its own, deep in each IE: the same. |
 //! | `security_5gs`, `security_eps` | Two security contexts of one link, at any NAS COUNT and with any replay window, and messages protected, delivered, replayed, reordered, changed or cut short: each COUNT, code and refusal is the one that TS 24.501 and TS 24.301 §4.4.3 give, as a model of them written apart and oxirush-security compute it. |
+//! | `paths_5gs`, `paths_eps` | A path that the fuzzer writes on the tree of a message of the fixtures: no path and no value makes `select`, `set`, `insert`, `remove` or `paths` panic, an edit is done whole or not at all, and a tree that an edit changed writes a message that the crate wrote or is refused. |
 //!
 //! The continuous integration runs each for a minute at each commit, an hour
 //! each day but Sunday and four hours on Tuesday, when it also minimizes each

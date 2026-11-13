@@ -16,8 +16,8 @@
 */
 
 //! What a message is checked for: the findings of `validate()` in each system,
-//! the IEs that a receiver takes or ignores, the messages of the UE policy
-//! delivery service, and the words of `Display`.
+//! the IEs that a receiver takes or ignores, the contents of payload
+//! containers, and the words of `Display`.
 
 #[path = "checks/display.rs"]
 mod display;
@@ -25,5 +25,5 @@ mod display;
 mod eps_validation;
 #[path = "checks/fgs_validation.rs"]
 mod fgs_validation;
-#[path = "checks/upds.rs"]
-mod upds;
+#[path = "checks/payload.rs"]
+mod payload;

@@ -231,24 +231,6 @@ impl crate::common::readable::Readable for UnknownIes {
     }
 }
 
-/// Position of an optional IE in a decoded user equipment policy message,
-/// whose IEs are few: an entry has the place of its IE.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum OptionalIeOrder {
-    Known(u8),
-    Unknown(usize),
-    Ignored(usize, IgnoredIeReason),
-}
-
-#[cfg(feature = "tree")]
-crate::common::readable::readable!(
-    enum OptionalIeOrder {
-        Known(u8),
-        Unknown(usize),
-        Ignored(usize, IgnoredIeReason),
-    }
-);
-
 /// Where an optional IE of a decoded message came, among the others.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Placed {

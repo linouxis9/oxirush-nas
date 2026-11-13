@@ -171,9 +171,9 @@ jobs:
       - run: cargo fuzz run security_eps -- -max_total_time=60 -max_len=1024 -len_control=0
 
   # The targets beside those of the codec, in a job of their own: the paths of a
-  # message and the messages of the UE policy delivery service, a minute each.
+  # message, a minute each.
   fuzz-more:
-    name: Fuzz the paths and the UE policies (3 minutes)
+    name: Fuzz the paths (2 minutes)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -184,7 +184,6 @@ jobs:
       - run: cargo install cargo-fuzz --locked
       - run: cargo fuzz run paths_5gs -- -max_total_time=60 -max_len=512 -len_control=0
       - run: cargo fuzz run paths_eps -- -max_total_time=60 -max_len=512 -len_control=0
-      - run: cargo fuzz run upds -- -max_total_time=60 -max_len=1024
 
   fmt:
     name: Format

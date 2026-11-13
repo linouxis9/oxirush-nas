@@ -4033,13 +4033,13 @@ fn an_ie_of_one_octet_is_written_from_a_value_without_members() {
     assert!(tree::from_value::<f::RegistrationResult>(&tree!({})).is_err());
 }
 
-/// An IE of octets alone, of a UE policy, is written and shown by its octets.
+/// An IE of octets alone, the ABBA, is written and shown by its octets.
 #[test]
 fn an_ie_of_octets_alone_is_written_and_shown_by_its_octets() {
     use crate::tree::Tree;
-    let os_id = tree::from_value::<f::UeOsId>(&tree!({"octets": "0102"})).unwrap();
-    assert_eq!(os_id.value, [1, 2]);
-    assert_eq!(os_id.to_tree(), tree!({"octets": "0102"}));
+    let abba = tree::from_value::<f::Abba>(&tree!({"octets": "0102"})).unwrap();
+    assert_eq!(abba.value[..], [1, 2]);
+    assert_eq!(abba.to_tree(), tree!({"octets": "0102"}));
 }
 
 #[test]

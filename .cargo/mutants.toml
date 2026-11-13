@@ -230,27 +230,9 @@ exclude_re = [
     # being shown as such before.
     'src/nas_5gs/display\.rs:(\d+:71|\d+:83): replace & with (\^|\|) in <impl fmt::Display for (RegistrationRequest|IdentityRequest)>::fmt$',
     'src/nas_5gs/display\.rs:\d+:9: delete match arm MobileIdentityType5gs::NoIdentity in identity_type_name$',
-    # The IEs of the UE policy delivery service (TS 24.501 Annex D.6). Five octets left at
-    # the start of a sublist of instructions, four at the start of a subresult, five at
-    # the start of a UPSI sublist and four at the start of a tuple are too few for one,
-    # which the next check refuses all the same. A count of VPLMNs or of MCCs read from the
-    # octet after its tuple asks for octets after the end of that tuple, which the next
-    # check refuses. The octets left after a network descriptor, and after the PLMN of a
-    # UPSI sublist, are even when their sum with what was read is, as their difference is.
-    # Every cause of a result is read as #111 (Table D.6.3.1), whichever octet it is read
-    # from. And fields of distinct bits of one octet: `^` joins them as `|` does.
-    'src/nas_5gs/upds\.rs:(\d+:24|\d+:24|\d+:24|\d+:24): replace > with >= in (UePolicySectionManagementList::try_sublists|UePolicySectionManagementResult::try_subresults|UpsiList::try_sublists|VpsUrspConfiguration::parse)$',
-    'src/nas_5gs/upds\.rs:(\d+:72|\d+:71): replace < with <= in VpsUrspConfiguration::parse$',
-    'src/nas_5gs/upds\.rs:(\d+:34|\d+:28): replace - with \+ in (UpsiList::try_sublists|VpsUrspConfiguration::parse)$',
-    'src/nas_5gs/upds\.rs:\d+:76: replace \+ with - in UePolicySectionManagementResult::try_subresults$',
-    'src/nas_5gs/upds\.rs:.*: replace \| with \^ in (UpdsMultiplePayloadContainer::encode|encode_mcc_pair|encode_odd_mcc)$',
-    # The messages of the service: a network classmark is out of sequence after a VPS URSP
-    # configuration alone, the rank 1 being reached by a classmark, which makes the next
-    # one repeated before its rank is asked. An optional TLV or TLV-E IE of no octet at the
-    # end of a message is malformed, and is kept with its header whether it is read as its
-    # IE or as an unknown one.
-    'src/nas_5gs/upds\.rs:\d+:53: replace > with >= in <impl Decode for UpdsEnvelope>::decode_from$',
-    'src/nas_5gs/upds\.rs:\d+:27: replace < with (<=|==) in (decode_tlv|decode_tlve)$',
+    # The number of optional IEs and the type of a payload container entry are distinct
+    # bits of one octet: `^` joins them as `|` does.
+    'src/nas_5gs/payload\.rs:.*: replace \| with \^ in MultiplePayloadContainer::encode$',
     # A rate is on a step of 8, 64 or 100 kbps from the start of its range as from 0:
     # the starts 64, 576 and 8,600 are steps of their own, added or taken away.
     'src/common/ts24301\.rs:(\d+:27|\d+:30|\d+:33): replace - with \+ in (eps_bit_rate_octet|eps_extended_bit_rate_octet)$',

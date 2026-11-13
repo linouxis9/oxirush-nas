@@ -24,8 +24,8 @@
 pub(crate) mod ie;
 pub(crate) mod message_types;
 pub(crate) mod messages;
+pub(crate) mod payload;
 pub(crate) mod types;
-pub(crate) mod upds;
 pub(crate) mod validate;
 #[cfg(feature = "tree")]
 pub(crate) mod view;
@@ -36,8 +36,8 @@ pub(crate) mod security;
 pub use ie::*;
 pub use message_types::*;
 pub use messages::*;
+pub use payload::*;
 pub use types::*;
-pub use upds::*;
 
 #[cfg(feature = "security")]
 pub use oxirush_security::nas_5gs::{KAmf, KNasEnc, KNasInt, NasConnection};

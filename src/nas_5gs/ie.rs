@@ -1891,20 +1891,6 @@ impl PayloadContainer {
         Ok(Self::new(msg.encode()?))
     }
 
-    /// Decode the payload as a UE policy container message (TS 24.501 Annex D).
-    pub fn decode_as_ue_policy_message(
-        &self,
-    ) -> crate::nas_5gs::Result<crate::nas_5gs::UpdsEnvelope> {
-        crate::nas_5gs::UpdsEnvelope::decode(&self.value)
-    }
-
-    /// Build from a UE policy container message (TS 24.501 Annex D).
-    pub fn from_ue_policy_message(
-        message: &crate::nas_5gs::UpdsEnvelope,
-    ) -> crate::nas_5gs::Result<Self> {
-        Ok(Self::new(message.encode()?))
-    }
-
     /// Decode the payload as a SOR transparent container (§9.11.3.39 / §9.11.3.51).
     pub fn decode_as_sor_transparent_container(
         &self,
@@ -1972,13 +1958,13 @@ impl PayloadContainer {
     /// Decode the payload as an event notification container (§9.11.3.39).
     pub fn decode_as_event_notification_container(
         &self,
-    ) -> crate::nas_5gs::Result<crate::nas_5gs::UpdsEventNotificationContainer> {
-        crate::nas_5gs::UpdsEventNotificationContainer::decode(&self.value)
+    ) -> crate::nas_5gs::Result<crate::nas_5gs::EventNotificationContainer> {
+        crate::nas_5gs::EventNotificationContainer::decode(&self.value)
     }
 
     /// Build from an event notification container payload.
     pub fn from_event_notification_container(
-        container: &crate::nas_5gs::UpdsEventNotificationContainer,
+        container: &crate::nas_5gs::EventNotificationContainer,
     ) -> crate::nas_5gs::Result<Self> {
         Ok(Self::new(container.encode()?))
     }
@@ -1986,13 +1972,13 @@ impl PayloadContainer {
     /// Decode the payload as a multiple-payload container (§9.11.3.39).
     pub fn decode_as_multiple_payload_container(
         &self,
-    ) -> crate::nas_5gs::Result<crate::nas_5gs::UpdsMultiplePayloadContainer> {
-        crate::nas_5gs::UpdsMultiplePayloadContainer::decode(&self.value)
+    ) -> crate::nas_5gs::Result<crate::nas_5gs::MultiplePayloadContainer> {
+        crate::nas_5gs::MultiplePayloadContainer::decode(&self.value)
     }
 
     /// Build from a multiple-payload container payload.
     pub fn from_multiple_payload_container(
-        container: &crate::nas_5gs::UpdsMultiplePayloadContainer,
+        container: &crate::nas_5gs::MultiplePayloadContainer,
     ) -> crate::nas_5gs::Result<Self> {
         Ok(Self::new(container.encode()?))
     }
@@ -17328,17 +17314,14 @@ mod shown {
     }
 
     /// What a payload container carries: the 5GSM message that it decodes
-    /// to, or the UE policy message, or its octets. The container is read as
-    /// either: its type is another IE.
+    /// to, or its octets. The container is read as either: its type is
+    /// another IE.
     impl fmt::Display for PayloadContainer {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            if let Ok(message) = self.decode_as_n1_sm_message() {
-                return message.fmt(f);
+            match self.decode_as_n1_sm_message() {
+                Ok(message) => message.fmt(f),
+                Err(_) => display::Octets(&self.value).fmt(f),
             }
-            if let Ok(message) = self.decode_as_ue_policy_message() {
-                return message.fmt(f);
-            }
-            display::Octets(&self.value).fmt(f)
         }
     }
 

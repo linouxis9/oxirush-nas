@@ -148,7 +148,6 @@ jobs:
           - { target: security_eps, max_len: 1024, flags: -len_control=0 }
           - { target: paths_5gs, max_len: 512, flags: -len_control=0 }
           - { target: paths_eps, max_len: 512, flags: -len_control=0 }
-          - { target: upds, max_len: 1024 }
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly

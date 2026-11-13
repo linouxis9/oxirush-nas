@@ -673,7 +673,7 @@ impl Readable for crate::common::Octets {
 ///   and read by it, one `= default` may be left out, and one `= skip` is
 ///   neither shown nor read.
 /// - `struct Name(Type)` for a struct that holds one value, shown as it.
-/// - `enum Name { Unit, Newtype(Type), Pair(Type, Type), Struct { member, .. } }`.
+/// - `enum Name { Unit, Newtype(Type), Struct { member, .. } }`.
 macro_rules! readable {
     // A struct of named members.
     (struct $name:ident { $($member:ident $(as $form:ident)? $(= $how:ident)?),* $(,)? }) => {
@@ -785,26 +785,6 @@ macro_rules! readable {
             [$($read)* stringify!($variant) => {
                 let $contents = $contents.unwrap_or(&oxirush_utils::tree::Value::Null);
                 Ok(Self::$variant($crate::common::readable::readable!(@value $contents, $ty $(as $form)?)))
-            }]
-            [$($names)* (stringify!($variant))]
-            $($($rest)*)?);
-    };
-    (@enum $name:ident ($contents:ident, $held:ident) [$($show:tt)*] [$($read:tt)*] [$($names:tt)*]
-        $variant:ident ($first:ty, $second:ty $(,)?) $(, $($rest:tt)*)?) => {
-        $crate::common::readable::readable!(@enum $name ($contents, $held)
-            [$($show)* Self::$variant(first, second) => $crate::common::readable::tagged(
-                $crate::common::names::name!(stringify!($variant)),
-                $crate::common::readable::pair(
-                    $crate::common::names::name!(stringify!($variant)),
-                    first,
-                    second,
-                ),
-            ),]
-            [$($read)* stringify!($variant) => {
-                let $contents = $contents.unwrap_or(&oxirush_utils::tree::Value::Null);
-                let (first, second): ($first, $second) =
-                    $crate::common::readable::pair_items($contents)?;
-                Ok(Self::$variant(first, second))
             }]
             [$($names)* (stringify!($variant))]
             $($($rest)*)?);
@@ -938,14 +918,6 @@ pub(crate) fn index_of(
 ) -> Option<usize> {
     (variants.iter().position(|variant| *variant == name))
         .or_else(|| oxirush_utils::tree::named(names, name))
-}
-
-/// Two values that a variant holds: the two octets they are, or a list.
-pub(crate) fn pair<A: Readable, B: Readable>(held: &'static str, first: &A, second: &B) -> Value {
-    match (first.octet(), second.octet()) {
-        (Some(first), Some(second)) => octets_of(held, &[first, second]),
-        _ => Value::Array(vec![first.shown(held), second.shown(held)]),
-    }
 }
 
 #[cfg(test)]
@@ -1178,8 +1150,6 @@ mod tests {
             Ok(tree!("0102"))
         );
         assert_eq!(to_value(&(1u8, 2u8)), Ok(tree!("0102")));
-        assert_eq!(pair("value", &1u8, &2u8), tree!("0102"));
-        assert_eq!(pair("value", &1u8, &true), tree!([1, true]));
         // and read from what each kind of member writes
         let read = |value: Value, length: usize| {
             let mut octets = Vec::new();

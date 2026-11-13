@@ -17,6 +17,18 @@ All notable changes to `oxirush-nas` are recorded here.
   for the message of a container: an edit of its tree edits it as
   `with_tree` edits a message.
 
+### Removed
+
+- The UE policy delivery service of TS 24.501 Annex D: its six messages,
+  `UpdsEnvelope`, `UpdsMessage`, their IEs and their `validate()`, and
+  `decode_as_ue_policy_message()` and `from_ue_policy_message()` of
+  `PayloadContainer`. A payload container of the type "UE policy container"
+  is its octets, which `Display` shows as such. The contents of the payload
+  container types "event notification" and "multiple payloads" stay, named
+  without `Upds`: `EventNotificationContainer`, `EventNotificationIndicator`,
+  `EventNotificationIndicatorType`, `MultiplePayloadContainer` and
+  `MultiplePayloadEntry`. The fuzz target `upds` goes with them.
+
 ### Fixed
 
 - `validate()` says the length of an IE once. A value that the clause of

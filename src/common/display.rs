@@ -66,16 +66,6 @@ impl<'a, 'b> Items<'a, 'b> {
         ie.show(self.f)
     }
 
-    /// A word that says that a bit is set, or that an IE has no value to
-    /// show.
-    pub(crate) fn flag(&mut self, word: &str, set: bool) -> fmt::Result {
-        if !set {
-            return Ok(());
-        }
-        self.separate()?;
-        self.f.write_str(word)
-    }
-
     /// The closing parenthesis, when there was an item.
     pub(crate) fn end(self) -> fmt::Result {
         match self.open {

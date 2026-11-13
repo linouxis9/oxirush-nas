@@ -127,8 +127,7 @@ fn a_5gs_message_shows_its_payload_its_rules_and_its_flags() {
     );
     assert_eq!(
         f::Message::new_5gmm(downlink).to_string(),
-        "5GMM DlNasTransport (payload-container-type: ue-policy, payload-container: UPDS \
-         (PTI=0x01 (UE-initiated), type=0x02) ManageUePolicyComplete)"
+        "5GMM DlNasTransport (payload-container-type: ue-policy, payload-container: 0102)"
     );
     // QoS rules that do not read, or none, show their octets
     let accept = |rules: Vec<u8>| {

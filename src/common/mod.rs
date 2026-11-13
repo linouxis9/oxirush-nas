@@ -75,9 +75,7 @@ pub(crate) use plmn::{TaiParts, plmn_at, plmn_sequence_ie};
 pub use security::MAX_REPLAY_WINDOW;
 #[cfg(feature = "security")]
 pub(crate) use security::{Core, Keys, NextCount, System, wiped};
-pub(crate) use unknown_ie::{
-    IeOrder, IgnoredIeReason, NO_UNKNOWN_IES, OptionalIeOrder, Placed, generic_ie_length,
-};
+pub(crate) use unknown_ie::{IeOrder, IgnoredIeReason, NO_UNKNOWN_IES, Placed, generic_ie_length};
 pub use unknown_ie::{UnknownIe, UnknownIes, UnknownIesIter};
 pub(crate) use validate::{
     Bounded, IeRules, ReceiverSyntaxCheck, ie_rules, with_optional_ie_checks,
