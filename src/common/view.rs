@@ -1443,6 +1443,10 @@ pub(crate) fn with_edits<M: Viewed>(
     edits: Vec<(String, Option<Value>)>,
     scope: Scope,
 ) -> Result<M, String> {
+    // An edit that changes nothing leaves the message as it is.
+    if edits.is_empty() {
+        return Ok(original.clone());
+    }
     let entries = Entries::of(edits)?;
     written_entries(original, entries, Mode::Edit, scope)
 }
