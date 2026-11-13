@@ -165,6 +165,15 @@ impl Viewed for Message {
         }
     }
 
+    fn protected(&self) -> Option<(u32, &Self)> {
+        match self {
+            Self::SecurityProtected(header, inner) => {
+                Some((header.message_authentication_code, &**inner))
+            }
+            _ => None,
+        }
+    }
+
     fn slot(&mut self, name: &str) -> Option<&mut dyn view::Slot> {
         match self {
             Self::Emm(_, message) => message.body_mut().slot(name),

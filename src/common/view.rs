@@ -408,7 +408,7 @@ impl<T: crate::common::IeRules + Readable> Slot for Option<T> {
 
 /// A message enum: its serde form and the IEs of the message struct in it,
 /// read through a security header.
-pub(crate) trait Viewed: Clone + Readable {
+pub(crate) trait Viewed: Clone + PartialEq + Readable {
     /// Visit the IEs that the message struct has, in `scope`.
     fn ies(&self, scope: Scope, visit: &mut Visit<'_>);
 
@@ -427,6 +427,10 @@ pub(crate) trait Viewed: Clone + Readable {
 
     /// The readable serde form of the header that protects the message,
     /// with that of the octets of a message that is ciphered.
+    /// The message authentication code of the header that protects the
+    /// message, and the message that it protects.
+    fn protected(&self) -> Option<(u32, &Self)>;
+
     fn protection(&self) -> Option<(Value, Option<Value>)>;
 
     /// Give the message struct what the one of `original` keeps of how it
@@ -1088,16 +1092,6 @@ fn unknown_ies(written: Value) -> Result<crate::common::UnknownIes, String> {
     Ok(ies)
 }
 
-/// The security header and the message that it protects, in the readable
-/// serde form `{"security-protected": [header, message]}` of a message.
-fn protection(message: &mut Value) -> Option<(&mut Value, &mut Value)> {
-    let parts = message.as_object_mut()?.get_mut("security-protected")?;
-    let [header, body] = parts.as_array_mut()?.as_mut_slice() else {
-        return None;
-    };
-    Some((header, body))
-}
-
 pub(crate) fn to_view<M: Viewed>(message: &M, scope: Scope) -> Value {
     view_of(message, scope, true)
 }
@@ -1648,10 +1642,6 @@ fn written<M: Viewed>(original: &M, view: Value, alone: bool, scope: Scope) -> R
     let mut message = original.clone();
     // The header that protects the message is written whole, as a field of
     // a header is, and a message that is ciphered by its octets.
-    let protected = match original.protection() {
-        Some(_) => Some(readable::shown(original)?),
-        None => None,
-    };
     let mut protection = None;
     if let Some((_, ciphered)) = original.protection() {
         let mut taken =
@@ -1794,7 +1784,7 @@ fn written<M: Viewed>(original: &M, view: Value, alone: bool, scope: Scope) -> R
         }
     }
     if values.is_empty() {
-        return checked(message, protected, received, unknown);
+        return checked(message, received, unknown);
     }
     // The IEs of a written value, encoded from it. Octets written too are
     // kept: the value has to be the one they have.
@@ -1839,37 +1829,32 @@ fn written<M: Viewed>(original: &M, view: Value, alone: bool, scope: Scope) -> R
             slot.read(&encoded)?;
         }
     }
-    checked(message, protected, received, unknown)
+    checked(message, received, unknown)
 }
 
-/// `message`, which a view wrote from the one of the readable serde form
-/// `original`, with what `received` keeps of how it was received, unless it
-/// keeps the message authentication code of a message that it no longer
-/// protects: the code is that of the octets it was computed over. The IEs
-/// `unknown` that the view lists for those that the table has no place for
-/// are those of the message, after the IEs of its table, when they are
-/// others than `received` has.
+/// `message`, which a view wrote from `received`, with what `received`
+/// keeps of how it was received, unless it keeps the message
+/// authentication code of a message that it no longer protects: the code is
+/// that of the octets it was computed over. The IEs `unknown` that the view
+/// lists for those that the table has no place for are those of the
+/// message, after the IEs of its table, when they are others than
+/// `received` has.
 fn checked<M: Viewed>(
     mut message: M,
-    original: Option<Value>,
     received: &M,
     unknown: Option<crate::common::UnknownIes>,
 ) -> Result<M, String> {
     // A message that no header protected has no code to keep.
-    if let Some(mut original) = original {
-        let mut written = readable::shown(&message)?;
-        if let (Some((header, body)), Some((old_header, old_body))) =
-            (protection(&mut written), protection(&mut original))
-        {
-            let code = |header: &Value| header.get("message-authentication-code").cloned();
-            if body != old_body && code(header) == code(old_header) {
-                return Err(format!(
-                    "the message authentication code of `{SECURITY_HEADER}` is that of the \
-                     message as it was: write the code of the edited message, or edit the \
-                     plain message"
-                ));
-            }
-        }
+    if let (Some((code, body)), Some((old_code, old_body))) =
+        (message.protected(), received.protected())
+        && body != old_body
+        && code == old_code
+    {
+        return Err(format!(
+            "the message authentication code of `{SECURITY_HEADER}` is that of the \
+             message as it was: write the code of the edited message, or edit the \
+             plain message"
+        ));
     }
     message.keep_received(received);
     if let Some(unknown) = unknown.filter(|unknown| *unknown != received.unknown())

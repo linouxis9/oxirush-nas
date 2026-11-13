@@ -155,28 +155,6 @@ pub(crate) fn to_value<T: Readable>(value: &T) -> Result<Value, String> {
     Ok(value.shown(""))
 }
 
-/// What a message is held by in the form that a view shows: the message
-/// structs and the enums and boxes on the way to them give it on, and a
-/// message struct leaves out what it keeps of how it was received.
-pub(crate) const VIEWED: &str = "\u{0}viewed";
-
-/// What the variant `variant` of a value held by `held` gives on to what it
-/// holds: its name, but in the form that a view shows.
-pub(crate) fn given_on(held: &'static str, variant: &'static str) -> &'static str {
-    match held == VIEWED {
-        true => VIEWED,
-        false => variant,
-    }
-}
-
-/// The readable form of a message as a view shows it: without its unknown IEs
-/// and the order of its optional IEs, which no view has and which would take
-/// an entry of the form each. A message that is to be read back from its form
-/// is given by [`to_value`].
-pub(crate) fn shown<T: Readable>(value: &T) -> Result<Value, String> {
-    Ok(value.shown(VIEWED))
-}
-
 /// The typed value of a readable form.
 pub(crate) fn from_value<T: Readable>(value: &Value) -> Result<T, String> {
     T::read(value)
@@ -349,28 +327,17 @@ pub(crate) fn tagged(variant: &'static str, contents: Value) -> Value {
 /// The members of a struct, by the names that they print as.
 pub(crate) struct Members {
     members: Map,
-    /// Whether the struct is held in the form that a view shows.
-    viewed: bool,
 }
 
 impl Members {
     pub(crate) fn new() -> Self {
-        Self::of("")
-    }
-
-    /// The members of a struct held by `held`.
-    pub(crate) fn of(held: &'static str) -> Self {
         Self {
             members: Map::new(),
-            viewed: held == VIEWED,
         }
     }
 
     /// The member `name` of the struct, with its value.
     pub(crate) fn put<T: Readable>(&mut self, name: &'static str, value: &T) {
-        if matches!(name, "unknown-ies" | "optional-ie-order") && self.viewed {
-            return;
-        }
         self.members.insert(name.to_owned(), value.shown(name));
     }
 
@@ -833,7 +800,7 @@ macro_rules! readable {
         impl $crate::common::readable::Readable for $name {
             #[allow(unused_variables)]
             fn shown(&self, held: &'static str) -> oxirush_utils::tree::Value {
-                let mut members = $crate::common::readable::Members::of(held);
+                let mut members = $crate::common::readable::Members::new();
                 $($crate::common::readable::readable!(@put members, self.$member, $member $(as $form)? $(= $how)?);)*
                 members.finish()
             }
@@ -976,7 +943,7 @@ macro_rules! readable {
             [$($show)* Self::$variant(value) => $crate::common::readable::tagged(
                 $crate::common::names::name!(stringify!($variant)),
                 $crate::common::readable::readable!(
-                    @show $crate::common::readable::given_on($held, $crate::common::names::name!(stringify!($variant))),
+                    @show $crate::common::names::name!(stringify!($variant)),
                     [$($form)?] *value
                 ),
             ),]
@@ -998,7 +965,7 @@ macro_rules! readable {
             [$($show)* Self::$variant(first, second) => $crate::common::readable::tagged(
                 $crate::common::names::name!(stringify!($variant)),
                 $crate::common::readable::pair(
-                    $crate::common::readable::given_on($held, $crate::common::names::name!(stringify!($variant))),
+                    $crate::common::names::name!(stringify!($variant)),
                     first,
                     second,
                 ),
@@ -1469,18 +1436,6 @@ mod tests {
         assert_eq!(blank::<(u8, bool)>(&[]), Some((0, false)));
         assert_eq!(<Box<Option<u8>>>::missing(), Some(Box::new(None)));
         assert_eq!(fields::<u8>(""), None);
-    }
-
-    /// A struct that a view shows leaves out what it keeps of how it was received.
-    #[test]
-    fn a_struct_that_a_view_shows_leaves_out_how_it_was_received() {
-        let mut shown = Members::of(VIEWED);
-        shown.put("unknown-ies", &vec![1u8]);
-        shown.put("value", &1u8);
-        assert_eq!(shown.finish(), tree!({"value": 1}));
-        let mut read = Members::of("");
-        read.put("unknown-ies", &vec![1u8]);
-        assert_eq!(read.finish(), tree!({"unknown-ies": "01"}));
     }
 
     /// A struct written as a list has one item for each of its members.
