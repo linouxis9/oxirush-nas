@@ -1099,6 +1099,18 @@ fn protection(message: &mut Value) -> Option<(&mut Value, &mut Value)> {
 }
 
 pub(crate) fn to_view<M: Viewed>(message: &M, scope: Scope) -> Value {
+    view_of(message, scope, true)
+}
+
+/// The view of `message` that an edit by a tree starts from: [`to_view`]
+/// with the octets of each IE alone, which are what an IE that the edit
+/// leaves as it is keeps.
+pub(crate) fn edited<M: Viewed>(message: &M) -> Value {
+    view_of(message, Scope::NONE, false)
+}
+
+/// [`to_view`], with the value of each IE where `values`.
+fn view_of<M: Viewed>(message: &M, scope: Scope, values: bool) -> Value {
     // The view is made of the header and of each IE that the message has:
     // the message is not put in its serde form, which has every octet of
     // every IE as a number, and its unknown IEs.
@@ -1124,7 +1136,7 @@ pub(crate) fn to_view<M: Viewed>(message: &M, scope: Scope) -> Value {
     let mut ies = Vec::new();
     message.ies(scope, &mut |field| {
         let mut entry = Map::new();
-        if let Some(value) = field.ie.and_then(|ie| ie.value(field.scope)) {
+        if let Some(value) = (field.ie.filter(|_| values)).and_then(|ie| ie.value(field.scope)) {
             entry.insert("value".into(), value);
         }
         entry.insert("octets".into(), field.octets.hex().into());

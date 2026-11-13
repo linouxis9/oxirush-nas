@@ -646,7 +646,7 @@ impl Message {
     /// ```
     pub fn with_tree(&self, tree: oxirush_utils::tree::Value) -> Result<Self> {
         let edited = view::edited_view(
-            self.to_view(),
+            view::edited(self),
             self.to_tree(),
             tree,
             &decided,

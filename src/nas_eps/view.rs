@@ -869,14 +869,13 @@ impl Message {
     /// assert_eq!(edited.encode().unwrap(), [0x07, 0x44, 0x16]);
     /// ```
     pub fn with_tree(&self, tree: oxirush_utils::tree::Value) -> Result<Self> {
-        let edited = view::edited_view(
-            self.to_view(),
-            self.to_tree(),
-            tree,
-            &decided,
-            view::Scope::NONE,
-        )
-        .map_err(Error::EncodingError)?;
+        let view = match self {
+            // A message that has no table: the fields of its view.
+            Self::ServiceRequest(_) | Self::EmmTransport(_) => self.to_view(),
+            message => view::edited(message),
+        };
+        let edited = view::edited_view(view, self.to_tree(), tree, &decided, view::Scope::NONE)
+            .map_err(Error::EncodingError)?;
         self.with_view(edited)
     }
 }
