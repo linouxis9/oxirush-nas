@@ -894,14 +894,23 @@ impl Message {
     /// assert_eq!(edited.encode().unwrap(), [0x07, 0x44, 0x16]);
     /// ```
     pub fn with_tree(&self, tree: oxirush_utils::tree::Value) -> Result<Self> {
-        let view = match self {
-            // A message that has no table: the fields of its view.
-            Self::ServiceRequest(_) | Self::EmmTransport(_) => self.to_view(),
-            message => view::edited(message),
-        };
-        let edited = view::edited_view(view, self.to_tree(), tree, &decided, view::Scope::NONE)
-            .map_err(Error::EncodingError)?;
-        self.with_view(edited)
+        let before = self.to_tree();
+        // A message that has no table: the fields of its view.
+        if let Self::ServiceRequest(_) | Self::EmmTransport(_) = self {
+            let edited =
+                view::edited_view(self.to_view(), before, tree, &decided, view::Scope::NONE)
+                    .map_err(Error::EncodingError)?;
+            return self.with_view(edited);
+        }
+        let edits =
+            view::edits(before, tree, &decided, view::Scope::NONE).map_err(Error::EncodingError)?;
+        let edited =
+            view::with_edits(self, edits, view::Scope::NONE).map_err(Error::EncodingError)?;
+        // A message that the tree leaves as it is comes back as it is.
+        if edited != *self {
+            edited.encode()?;
+        }
+        Ok(edited)
     }
 }
 

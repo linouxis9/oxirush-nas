@@ -1109,18 +1109,6 @@ fn unknown_ies(written: Value) -> Result<crate::common::UnknownIes, String> {
 }
 
 pub(crate) fn to_view<M: Viewed>(message: &M, scope: Scope) -> Value {
-    view_of(message, scope, true)
-}
-
-/// The view of `message` that an edit by a tree starts from: [`to_view`]
-/// with the octets of each IE alone, which are what an IE that the edit
-/// leaves as it is keeps.
-pub(crate) fn edited<M: Viewed>(message: &M) -> Value {
-    view_of(message, Scope::NONE, false)
-}
-
-/// [`to_view`], with the value of each IE where `values`.
-fn view_of<M: Viewed>(message: &M, scope: Scope, values: bool) -> Value {
     // The view is made of the header and of each IE that the message has:
     // the message is not put in its serde form, which has every octet of
     // every IE as a number, and its unknown IEs.
@@ -1146,7 +1134,7 @@ fn view_of<M: Viewed>(message: &M, scope: Scope, values: bool) -> Value {
     let mut ies = Vec::new();
     message.ies(scope, &mut |field| {
         let mut entry = Map::new();
-        if let Some(value) = (field.ie.filter(|_| values)).and_then(|ie| ie.value(field.scope)) {
+        if let Some(value) = field.ie.and_then(|ie| ie.value(field.scope)) {
             entry.insert("value".into(), value);
         }
         entry.insert("octets".into(), field.octets.hex().into());
@@ -1186,8 +1174,36 @@ pub(crate) fn entry(entry: Value) -> Result<[Option<Value>; 2], String> {
     Ok(members)
 }
 
+/// The message that the entries `edits` of a view of `original` write
+/// ([`edits`]): [`with_view`] of the view of `original` with them.
+pub(crate) fn with_edits<M: Viewed>(original: &M, edits: Map, scope: Scope) -> Result<M, String> {
+    written(original, edits.into(), Mode::Edit, scope)
+}
+
+/// What a view that is written into a message is.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Mode {
+    /// The view of a message that it describes alone.
+    Alone,
+    /// The view of the message, edited.
+    Whole,
+    /// The entries of the view of the message that an edit changes
+    /// ([`edits`]): every other entry is the one of the message.
+    Edit,
+}
+
+/// What a view has of a member of the message written into.
+enum Taken {
+    /// Its entry.
+    Written(Value),
+    /// No entry, or `null`: the member is left out.
+    Out,
+    /// No entry in an edit: the member is kept.
+    Kept,
+}
+
 pub(crate) fn with_view<M: Viewed>(original: &M, view: Value, scope: Scope) -> Result<M, String> {
-    written(original, view, false, scope)
+    written(original, view, Mode::Whole, scope)
 }
 
 /// The message of the kind `kind` that the view `view` describes alone:
@@ -1203,7 +1219,7 @@ pub(crate) fn from_view<M: Viewed>(
     };
     for family in families {
         if let Some(blank) = M::blank_of(family, kind) {
-            return written(&blank.prepared(entries), view, true, scope);
+            return written(&blank.prepared(entries), view, Mode::Alone, scope);
         }
     }
     Err(format!("no message `{kind}`"))
@@ -1531,31 +1547,25 @@ pub(crate) fn from_tree(
     Ok(view.into())
 }
 
-/// The view that the tree `tree` writes as an edit of a message whose view is
-/// `view` and whose tree is `before`: `view`, in which each member that the tree
-/// changes is written by the tree, each member that the tree leaves out is taken
-/// out, and every other entry, the fields of the header that the tree leaves to
-/// its type among them, keeps its octets.
-pub(crate) fn edited_view(
-    view: Value,
+/// The entries that the tree `tree` writes as an edit of a message whose tree
+/// is `before`: each member that the tree changes, written by the tree, and
+/// `null` for each member that the tree leaves out. A member that the tree
+/// leaves as it is has no entry.
+pub(crate) fn edits(
     before: Value,
     tree: Value,
     decided: Decided<'_>,
     scope: Scope,
-) -> Result<Value, String> {
-    let (Value::Object(mut entries), Value::Object(before)) = (view, before) else {
-        return Err("a message is written as its IEs by name".into());
-    };
-    let Value::Object(members) = tree else {
+) -> Result<Map, String> {
+    let (Value::Object(before), Value::Object(members)) = (before, tree) else {
         return Err("a message is written as its IEs by name".into());
     };
     let named = |map: &Map, name: &str| (map.keys().find(|key| same_name(key, name))).cloned();
+    let mut edits = Map::new();
     // What the tree leaves out is taken out.
     for name in before.keys() {
-        if named(&members, name).is_none()
-            && let Some(entry) = entries.get_mut(name)
-        {
-            *entry = Value::Null;
+        if named(&members, name).is_none() {
+            edits.insert(name.clone(), Value::Null);
         }
     }
     // What the tree changes is written by it.
@@ -1583,8 +1593,39 @@ pub(crate) fn edited_view(
             }
             None => oxirush_utils::tree!({ "value": written }),
         };
-        let name = named(&entries, &name).unwrap_or(name);
-        entries.insert(name, entry);
+        let name = named(&edits, &name).unwrap_or(name);
+        edits.insert(name, entry);
+    }
+    Ok(edits)
+}
+
+/// The view `view` of a message whose tree is `before`, as the tree `tree`
+/// edits it ([`edits`]): every entry that the tree leaves as it is, the
+/// fields of the header that the tree leaves to its type among them, keeps
+/// its octets.
+pub(crate) fn edited_view(
+    view: Value,
+    before: Value,
+    tree: Value,
+    decided: Decided<'_>,
+    scope: Scope,
+) -> Result<Value, String> {
+    let Value::Object(mut entries) = view else {
+        return Err("a message is written as its IEs by name".into());
+    };
+    let named = |map: &Map, name: &str| (map.keys().find(|key| same_name(key, name))).cloned();
+    for (name, entry) in edits(before, tree, decided, scope)? {
+        match entry {
+            Value::Null => {
+                if let Some(entry) = entries.get_mut(&name) {
+                    *entry = Value::Null;
+                }
+            }
+            entry => {
+                let name = named(&entries, &name).unwrap_or(name);
+                entries.insert(name, entry);
+            }
+        }
     }
     Ok(entries.into())
 }
@@ -1689,11 +1730,12 @@ impl Entries {
 
 /// The message that `view` describes: `original` as the view edits it, or
 /// with `alone` a message that has nothing but what the view writes.
-fn written<M: Viewed>(original: &M, view: Value, alone: bool, scope: Scope) -> Result<M, String> {
+fn written<M: Viewed>(original: &M, view: Value, mode: Mode, scope: Scope) -> Result<M, String> {
     let Value::Object(view) = view else {
         return Err(format!("{view} is not a view: an object of IEs by name"));
     };
     let mut entries = Entries::of(view)?;
+    let (alone, edit) = (mode == Mode::Alone, mode == Mode::Edit);
     // The message is edited in place: each field that the view writes is
     // checked first, and then written, in the order of the fields of the
     // message, header first.
@@ -1702,9 +1744,13 @@ fn written<M: Viewed>(original: &M, view: Value, alone: bool, scope: Scope) -> R
     // The header that protects the message is written whole, as a field of
     // a header is, and a message that is ciphered by its octets.
     let mut protection = None;
-    if let Some((_, ciphered)) = original.protection() {
-        let mut taken = |name: &str| entries.remove(name);
-        let header = match taken(SECURITY_HEADER).map(entry) {
+    if let Some((kept, ciphered)) = original.protection() {
+        // What an edit does not write is the message's own.
+        let mut taken = |name: &str, member: &str, kept: Value| {
+            let kept = edit.then(|| Map::from_iter([(member.into(), kept)]).into());
+            entries.remove(name).or(kept)
+        };
+        let header = match taken(SECURITY_HEADER, "value", kept).map(entry) {
             Some(Ok([Some(written), None])) => written,
             Some(Err(error)) => return Err(format!("{SECURITY_HEADER}: {error}")),
             _ => {
@@ -1715,7 +1761,7 @@ fn written<M: Viewed>(original: &M, view: Value, alone: bool, scope: Scope) -> R
             }
         };
         let octets = match ciphered {
-            Some(_) => match taken(CIPHERED).map(entry) {
+            Some(kept) => match taken(CIPHERED, "octets", kept).map(entry) {
                 Some(Ok([None, Some(written)])) if written.as_str().is_some_and(is_hex) => {
                     Some(written)
                 }
@@ -1746,15 +1792,29 @@ fn written<M: Viewed>(original: &M, view: Value, alone: bool, scope: Scope) -> R
             added.push(name);
         }
     }
-    // An entry that is null is one left out.
-    let mut take = |name: &str| entries.remove(name).filter(|entry| !entry.is_null());
+    // An entry that is null is one left out, and one that an edit does not
+    // have is kept as the message has it.
+    let mut take = |name: &str| match entries.remove(name) {
+        Some(Value::Null) => Taken::Out,
+        Some(entry) => Taken::Written(entry),
+        None if edit => Taken::Kept,
+        None => Taken::Out,
+    };
     // The IEs that the table of the message has no place for, when the view
     // lists them.
-    let unknown = take(UNKNOWN_IES).map(unknown_ies).transpose()?;
+    let unknown = match take(UNKNOWN_IES) {
+        Taken::Written(written) => Some(unknown_ies(written)?),
+        _ => None,
+    };
     let mut failure = None;
     let mut header = message.header();
     for (name, value) in header.iter_mut().flat_map(Value::as_object_mut).flatten() {
-        match take(name).map(entry) {
+        let written = match take(name) {
+            Taken::Kept => continue,
+            Taken::Written(written) => Some(entry(written)),
+            Taken::Out => None,
+        };
+        match written {
             // A field that reads as a name takes the number of one too.
             Some(Ok([Some(written), None])) => {
                 let named = match (&*value, written.as_u64()) {
@@ -1782,7 +1842,12 @@ fn written<M: Viewed>(original: &M, view: Value, alone: bool, scope: Scope) -> R
         ie_names.push(name);
         let size = visited.octets.size();
         // An IE that the view leaves out is taken out of the message.
-        let [value, octets] = match take(name).map(entry) {
+        let written = match take(name) {
+            Taken::Kept => return,
+            Taken::Written(written) => Some(entry(written)),
+            Taken::Out => None,
+        };
+        let [value, octets] = match written {
             Some(Ok(written)) => written,
             Some(Err(error)) => return failure = Some(format!("{name}: {error}")),
             None if optional => return cleared.push(name),

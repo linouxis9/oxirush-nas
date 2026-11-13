@@ -353,6 +353,7 @@ impl Message {
     /// The message that an edited view of this one describes: an IE whose `value`
     /// changed is encoded from it, one whose `octets` changed has them, and the others
     /// keep their octets.
+    #[cfg(test)]
     pub(crate) fn with_view(&self, view: oxirush_utils::tree::Value) -> Result<Self> {
         let edited =
             view::with_view(self, view, view::Scope::NONE).map_err(Error::EncodingError)?;
@@ -670,15 +671,15 @@ impl Message {
     /// assert_eq!(edited.encode().unwrap(), [0x7e, 0x00, 0x64, 0x03]);
     /// ```
     pub fn with_tree(&self, tree: oxirush_utils::tree::Value) -> Result<Self> {
-        let edited = view::edited_view(
-            view::edited(self),
-            self.to_tree(),
-            tree,
-            &decided,
-            view::Scope::NONE,
-        )
-        .map_err(Error::EncodingError)?;
-        self.with_view(edited)
+        let edits = view::edits(self.to_tree(), tree, &decided, view::Scope::NONE)
+            .map_err(Error::EncodingError)?;
+        let edited =
+            view::with_edits(self, edits, view::Scope::NONE).map_err(Error::EncodingError)?;
+        // A message that the tree leaves as it is comes back as it is.
+        if edited != *self {
+            edited.encode()?;
+        }
+        Ok(edited)
     }
 }
 
