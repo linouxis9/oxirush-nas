@@ -332,7 +332,7 @@
 //! cargo test --all-features capture_   # the EPS corpus
 //! ```
 //!
-//! Ten fuzz targets hold what the tests hold, five for each system:
+//! Thirteen fuzz targets hold what the tests hold. Ten of them, five for each system:
 //!
 //! | Targets | What they hold |
 //! |---------|----------------|
