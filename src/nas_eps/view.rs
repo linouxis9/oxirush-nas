@@ -704,7 +704,13 @@ impl Message {
     /// assert_eq!(Message::from_tree(tree).unwrap(), reject);
     /// ```
     pub fn to_tree(&self) -> oxirush_utils::tree::Value {
-        view::tree_of(self, &self.to_view(), &decided, view::Scope::NONE)
+        match self {
+            // A message that has no table: the fields of its view.
+            Self::ServiceRequest(_) | Self::EmmTransport(_) => {
+                view::to_tree(&self.to_view(), None, &decided)
+            }
+            message => view::tree(message, None, &decided, view::Scope::NONE),
+        }
     }
 
     /// The message that a tree writes, as [`Self::to_tree`] shows one: its
@@ -780,9 +786,9 @@ impl Message {
         &self,
         path: &str,
     ) -> core::result::Result<Vec<oxirush_utils::tree::Value>, oxirush_utils::tree::Error> {
-        let view = self.to_view();
-        let tree = view::tree_of(self, &view, &decided, view::Scope::NONE);
-        crate::paths::of_message(&tree, path, |ie| view::ie_octets(&view, ie))
+        crate::paths::of_message(&self.to_tree(), path, |ie| {
+            view::ie_octets(&self.to_view(), ie)
+        })
     }
 
     /// The message that an edited tree of this one writes: this message, with

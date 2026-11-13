@@ -1265,42 +1265,83 @@ fn without_absent(mut value: Value) -> Value {
     value
 }
 
-/// The tree of `message`, whose view is `view`: [`to_tree`], with each IE
-/// whose value does not write it back shown by its octets. A tree is one
-/// that a message is written from, and the message that is written means
-/// what `message` means ([`meant`]).
-pub(crate) fn tree_of<M: Viewed>(
+/// The tree of `message`, in the IE `container` of a message or alone: its
+/// header without what the type of the message decides, then each IE that
+/// it has by its value where that writes it back ([`shown`]) and by its
+/// octets otherwise, then the IEs that its table has no place for. A tree
+/// is one that a message is written from, and the message that is written
+/// means what `message` means ([`meant`]). It is [`to_tree`] of the view of
+/// the message, made straight from the IEs.
+pub(crate) fn tree<M: Viewed>(
     message: &M,
-    view: &Value,
-    decided: Decided<'_>,
-    scope: Scope,
-) -> Value {
-    tree_in(message, view, None, decided, scope)
-}
-
-/// [`tree_of`] for the message of the IE `container`.
-pub(crate) fn tree_in<M: Viewed>(
-    message: &M,
-    view: &Value,
     container: Option<&str>,
     decided: Decided<'_>,
     scope: Scope,
 ) -> Value {
-    let mut tree = to_tree(view, container, decided);
-    message.ies(scope, &mut |field| {
-        let entry = &view[field.printed];
-        let (Some(ie), Some(value), Some(octets)) =
-            (field.ie, entry.get("value"), entry.get("octets"))
-        else {
-            return;
-        };
-        if tree.get(field.printed).is_none() {
-            return;
+    let mut tree = Map::new();
+    if let Some((header, ciphered)) = message.protection() {
+        let mut header = without_absent(header);
+        // The fields of a security header that the system decides.
+        if let Value::Object(fields) = &mut header {
+            let given = decided(Some(SECURITY_HEADER), None).unwrap_or_default();
+            fields.retain(|name, value| {
+                !given
+                    .iter()
+                    .any(|(field, given)| field == name && given == value)
+            });
         }
-        let shown = shown(ie, value, Some(field.printed), decided, field.scope);
-        tree[field.printed] = shown.unwrap_or_else(|| oxirush_utils::tree!({ "octets": octets }));
+        tree.insert(SECURITY_HEADER.into(), header);
+        if let Some(octets) = ciphered {
+            tree.insert(
+                CIPHERED.into(),
+                Map::from_iter([("octets".into(), octets)]).into(),
+            );
+        }
+    }
+    let Some(Value::Object(header)) = message.header() else {
+        return tree.into();
+    };
+    let given = decided(container, header.get("message-type")).unwrap_or_default();
+    for (name, value) in header {
+        if given
+            .iter()
+            .any(|(field, given)| *field == name && *given == value)
+        {
+            continue;
+        }
+        tree.insert(name, without_absent(value));
+    }
+    message.ies(scope, &mut |field| {
+        let value = field
+            .ie
+            .and_then(|ie| shown_in(ie, field.printed, decided, field.scope));
+        let value = value.unwrap_or_else(|| {
+            Map::from_iter([("octets".into(), field.octets.hex().into())]).into()
+        });
+        tree.insert(field.printed.to_owned(), value);
     });
-    tree
+    let unknown = message.unknown();
+    if !unknown.is_empty() {
+        tree.insert(UNKNOWN_IES.into(), unknown_text(&unknown).into());
+    }
+    tree.into()
+}
+
+/// What the tree of a message shows of its IE `ie` in the entry `name`, in
+/// `scope`: [`shown`] of the value of the IE, and `None` where it has its
+/// octets.
+fn shown_in(ie: &dyn Ie, name: &str, decided: Decided<'_>, scope: Scope) -> Option<Value> {
+    match ie.tree(Some(name), decided, scope) {
+        // The message of a container, by its own tree: the container is the
+        // one that this tree writes.
+        Some(inner) => (from_tree(&inner, Some(name), decided, scope))
+            .is_ok_and(|written| ie.written_back(&written, scope))
+            .then_some(inner),
+        None => {
+            let value = ie.value(scope)?;
+            (!is_message(&value) && ie.written_back(&value, scope)).then(|| without_absent(value))
+        }
+    }
 }
 
 /// The message that stands for all those that mean what `message` means:
@@ -2658,16 +2699,11 @@ macro_rules! container_ie {
                 decided: $crate::common::view::Decided<'_>,
                 scope: $crate::common::view::Scope,
             ) -> Option<oxirush_utils::tree::Value> {
-                use $crate::common::view::{to_view, tree_in};
                 let decode: fn(&Self) -> Option<$message> = $decode;
                 let inside = scope.inside()?;
                 let message = decode(self)?;
-                Some(tree_in(
-                    &message,
-                    &to_view(&message, inside),
-                    container,
-                    decided,
-                    inside,
+                Some($crate::common::view::tree(
+                    &message, container, decided, inside,
                 ))
             }
 
