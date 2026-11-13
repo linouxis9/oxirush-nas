@@ -74,6 +74,14 @@ pub(crate) trait Decoded: Readable + Clone + PartialEq {
     fn carried() -> Option<Decided<'static>> {
         None
     }
+
+    /// The value of the IE where it writes the IE back alone, as
+    /// [`Ie::written_back`] says of it; `None` where the IE has its octets.
+    fn shown_value(&self, scope: Scope) -> Option<Value> {
+        let value = self.decoded(scope)?;
+        let written = Self::unwritten().with_decoded(&value, scope).ok()?;
+        (written.meant(scope) == self.meant(scope)).then_some(value)
+    }
 }
 
 /// An IE of a message, as the view shows it, in the [`Scope`] of the
@@ -90,6 +98,13 @@ pub(crate) trait Ie {
     /// without octets before it, means what this one means. `value` is the
     /// value of the IE, or the view that the tree of its message writes.
     fn written_back(&self, value: &Value, scope: Scope) -> bool;
+
+    /// The value of the IE where it writes the IE back; `None` where the IE
+    /// has its octets.
+    fn shown_value(&self, scope: Scope) -> Option<Value> {
+        let value = self.value(scope)?;
+        self.written_back(&value, scope).then_some(value)
+    }
 
     /// The readable serde form of the IE that stands for all those that
     /// mean what this one means, when it is another than this one.
@@ -117,6 +132,10 @@ impl<T: Decoded> Ie for T {
     fn written_back(&self, value: &Value, scope: Scope) -> bool {
         let written = T::unwritten().with_decoded(value, scope);
         written.is_ok_and(|written| written.meant(scope) == Decoded::meant(self, scope))
+    }
+
+    fn shown_value(&self, scope: Scope) -> Option<Value> {
+        Decoded::shown_value(self, scope)
     }
 
     fn meant(&self, scope: Scope) -> Option<Value> {
@@ -1381,8 +1400,8 @@ fn shown_in(ie: &dyn Ie, name: &str, decided: Decided<'_>, scope: Scope) -> Opti
             .is_ok_and(|written| ie.written_back(&written, scope))
             .then_some(inner),
         None => {
-            let value = ie.value(scope)?;
-            (!is_message(&value) && ie.written_back(&value, scope)).then(|| without_absent(value))
+            let value = ie.shown_value(scope)?;
+            (!is_message(&value)).then(|| without_absent(value))
         }
     }
 }
@@ -2309,6 +2328,32 @@ macro_rules! decoded_ie {
                     $form,
                 ) -> core::result::Result<Self, $crate::common::ValueError> = $encode;
                 $crate::common::view::built(self, value, encode, scope)
+            }
+
+            // What `written_back` says of the value of the IE, without
+            // decoding the IE that the value writes again where it is this
+            // one: it has the same value.
+            fn shown_value(
+                &self,
+                scope: $crate::common::view::Scope,
+            ) -> Option<oxirush_utils::tree::Value> {
+                use $crate::common::readable::{from_value, to_value};
+                use $crate::common::view::Decoded;
+                let by_value: fn(&Self) -> bool = $meant;
+                let encode: fn(
+                    &Self,
+                    $form,
+                ) -> core::result::Result<Self, $crate::common::ValueError> = $encode;
+                let value = Decoded::decoded(self, scope)?;
+                let typed: $form = from_value(&value).ok()?;
+                let written = to_value(&typed).ok()?;
+                let new = encode(&Self::unwritten(), typed).ok()?;
+                if !by_value(self) && !by_value(&new) {
+                    return (new == *self && written == value).then_some(value);
+                }
+                let carried = Decoded::decoded(&new, scope) == Some(written);
+                (carried && Decoded::meant(&new, scope) == Decoded::meant(self, scope))
+                    .then_some(value)
             }
         }
     };
