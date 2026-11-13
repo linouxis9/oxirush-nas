@@ -747,6 +747,24 @@ impl N1SmContainer<'_> {
         matches!(message, Message::Gsm(..)).then_some(message)
     }
 
+    /// The container that the view `value` of its message writes in
+    /// `scope`, and that message.
+    fn written(
+        &self,
+        value: &oxirush_utils::tree::Value,
+        scope: view::Scope,
+    ) -> core::result::Result<(PayloadContainer, Message), String> {
+        let inside = scope.inside().ok_or(view::Scope::REFUSED)?;
+        let message = match self.message() {
+            Some(message) => view::with_view(&message, value.clone(), inside)?,
+            // A container without octets carries what the view names.
+            None if self.0.value.is_empty() => view::contained(value, inside)?,
+            None => return Err("the octets are not a 5GSM message: write them".into()),
+        };
+        let container = PayloadContainer::from_n1_sm_message(&message).map_err(view::unencoded)?;
+        Ok((container, message))
+    }
+
     /// The container of the message that stands for those that mean what
     /// the one it carries means.
     fn meant_container(&self, scope: view::Scope) -> Option<PayloadContainer> {
@@ -764,25 +782,19 @@ impl Ie for N1SmContainer<'_> {
         &self,
         value: &oxirush_utils::tree::Value,
         scope: view::Scope,
-    ) -> core::result::Result<
-        (
-            oxirush_utils::tree::Value,
-            Option<oxirush_utils::tree::Value>,
-        ),
-        String,
-    > {
+    ) -> core::result::Result<oxirush_utils::tree::Value, String> {
+        readable::to_value(&self.written(value, scope)?.0)
+    }
+
+    #[cfg(test)]
+    fn encoded_value(
+        &self,
+        value: &oxirush_utils::tree::Value,
+        scope: view::Scope,
+    ) -> core::result::Result<Option<oxirush_utils::tree::Value>, String> {
+        let (_, message) = self.written(value, scope)?;
         let inside = scope.inside().ok_or(view::Scope::REFUSED)?;
-        let message = match self.message() {
-            Some(message) => view::with_view(&message, value.clone(), inside)?,
-            // A container without octets carries what the view names.
-            None if self.0.value.is_empty() => view::contained(value, inside)?,
-            None => return Err("the octets are not a 5GSM message: write them".into()),
-        };
-        let container = PayloadContainer::from_n1_sm_message(&message).map_err(view::unencoded)?;
-        Ok((
-            readable::to_value(&container)?,
-            Some(view::to_view(&message, inside)),
-        ))
+        Ok(Some(view::to_view(&message, inside)))
     }
 
     fn written_back(&self, value: &oxirush_utils::tree::Value, scope: view::Scope) -> bool {
@@ -792,7 +804,7 @@ impl Ie for N1SmContainer<'_> {
         let written = N1SmContainer(&PayloadContainer::blank()).encoded(value, scope);
         let written = written
             .ok()
-            .and_then(|(written, _)| readable::from_value::<PayloadContainer>(&written).ok());
+            .and_then(|written| readable::from_value::<PayloadContainer>(&written).ok());
         let meant = written.and_then(|written| N1SmContainer(&written).meant_container(scope));
         meant.is_some() && meant == self.meant_container(scope)
     }

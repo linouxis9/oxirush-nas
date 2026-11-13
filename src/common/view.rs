@@ -90,9 +90,12 @@ pub(crate) trait Ie {
     /// The value of the IE; `None` when its octets have none.
     fn value(&self, scope: Scope) -> Option<Value>;
 
-    /// The readable serde form of the IE with the octets of `value`, and
-    /// the value of those octets.
-    fn encoded(&self, value: &Value, scope: Scope) -> Result<(Value, Option<Value>), String>;
+    /// The readable serde form of the IE with the octets of `value`.
+    fn encoded(&self, value: &Value, scope: Scope) -> Result<Value, String>;
+
+    /// The value of the octets of the IE that [`Self::encoded`] gives.
+    #[cfg(test)]
+    fn encoded_value(&self, value: &Value, scope: Scope) -> Result<Option<Value>, String>;
 
     /// Whether `value` writes this IE back: the IE that it writes alone,
     /// without octets before it, means what this one means. `value` is the
@@ -124,9 +127,13 @@ impl<T: Decoded> Ie for T {
         self.decoded(scope)
     }
 
-    fn encoded(&self, value: &Value, scope: Scope) -> Result<(Value, Option<Value>), String> {
-        let new = self.with_decoded(value, scope)?;
-        Ok((readable::to_value(&new)?, new.decoded(scope)))
+    fn encoded(&self, value: &Value, scope: Scope) -> Result<Value, String> {
+        readable::to_value(&self.with_decoded(value, scope)?)
+    }
+
+    #[cfg(test)]
+    fn encoded_value(&self, value: &Value, scope: Scope) -> Result<Option<Value>, String> {
+        Ok(self.with_decoded(value, scope)?.decoded(scope))
     }
 
     fn written_back(&self, value: &Value, scope: Scope) -> bool {
@@ -1818,7 +1825,7 @@ fn written<M: Viewed>(original: &M, view: Value, alone: bool, scope: Scope) -> R
                 .is_none_or(|octets| of(octets) == of(&octets_of(encoded, size)))
         };
         match ie.encoded(&value, visited.scope) {
-            Ok((encoded, _)) if same(&encoded) => encoded_ies.push((name, encoded)),
+            Ok(encoded) if same(&encoded) => encoded_ies.push((name, encoded)),
             Ok(_) => {
                 failure = Some(format!(
                     "{name}: the octets and the value that are written disagree"
@@ -3211,7 +3218,7 @@ pub(crate) mod tests {
             ] {
                 let mut edited = value.clone();
                 *pointer_mut(&mut edited, &pointer).unwrap() = part;
-                if let Ok((_, read)) = ie.encoded(&edited, scope) {
+                if let Ok(read) = ie.encoded_value(&edited, scope) {
                     assert!(read.is_some(), "{edited}");
                 }
             }
@@ -3246,7 +3253,7 @@ pub(crate) mod tests {
                 };
                 counts[1] += 1;
                 written_wrong(ie, &value, scope);
-                let (form, _) = (ie.encoded(&value, scope))
+                let form = (ie.encoded(&value, scope))
                     .unwrap_or_else(|error| panic!("{name} {field}: {error}"));
                 encoded.push((visited.printed, form));
             });
