@@ -20,7 +20,7 @@
 use core::fmt;
 
 /// Why a constructor or a setter of a typed value refuses what it was
-/// given: the member, by the name that the specification and a view give
+/// given: the member, by the name that the specification and a tree give
 /// it, what it was given, and the limit that this breaks.
 ///
 /// ```
@@ -36,7 +36,7 @@ use core::fmt;
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ValueError {
-    /// The member that is refused, by the name that a view gives it.
+    /// The member that is refused, by the name that a tree gives it.
     pub member: &'static str,
     /// The entry of a list that the member is in, counted from zero as a
     /// path counts it.

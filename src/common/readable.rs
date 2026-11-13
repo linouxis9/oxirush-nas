@@ -15,7 +15,7 @@
    limitations under the License.
 */
 
-//! The readable form of the typed values, for the view of a message.
+//! The readable form of the typed values, for the tree of a message.
 //!
 //! It is the form that [`Readable`] gives a value, with the names and the
 //! notations a reader expects: a name is in lower case with hyphens, a PLMN identity is
@@ -98,7 +98,7 @@ pub(crate) fn none_of(name: &str, names: &[&str], what: &str) -> String {
 /// more, it gives the nearest.
 const LISTED: usize = 12;
 
-/// A value as a view shows it, and as one that a view writes is read: the
+/// A value as a tree shows it, and as one that a tree writes is read: the
 /// readable form. A struct is an object of its members by their names as
 /// they print, an enum the name of its variant or an object of that name
 /// with what the variant holds, an option `null` or its value, and a list
@@ -1036,7 +1036,7 @@ mod tests {
 
     #[test]
     fn typed_values_read_and_write_in_their_usual_notation() {
-        // The members of a GUTI, as the view of a mobile identity has them
+        // The members of a GUTI, as the tree of a mobile identity has them
         #[derive(Debug, PartialEq)]
         struct Guti {
             plmn: Plmn,

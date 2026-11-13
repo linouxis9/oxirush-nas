@@ -293,7 +293,7 @@ macro_rules! nas_ie_flags {
             )* }
         }
     };
-    // The flags by name, for the value of the IE in a view.
+    // The flags by name, for the value of the IE in a tree.
     (@named $name:ident { $($flag:ident)* }) => {
         #[cfg(feature = "tree")]
         impl crate::common::view::Flags for $name {

@@ -624,7 +624,7 @@ macro_rules! nas_message {
 
         #[cfg(feature = "tree")]
         impl $name {
-            /// The names of the fields as a view prints them, mandatory
+            /// The names of the fields as a tree prints them, mandatory
             /// ones first.
             pub(crate) const PRINTED_FIELDS: &[&str] = &[
                 $(crate::common::names::name!(stringify!($mfield)),)*
@@ -632,7 +632,7 @@ macro_rules! nas_message {
             ];
 
             /// The message with none of its optional IEs, and each of its
-            /// mandatory IEs without octets, as a view that describes the
+            /// mandatory IEs without octets, as a tree that describes the
             /// message alone writes it.
             pub(crate) fn blank_message() -> Self {
                 Self::new($(<$mtype>::blank()),*)
@@ -1129,7 +1129,7 @@ macro_rules! nas_messages {
             ];
 
             /// The message of the variant that `kind` names, as the code or a
-            /// tree writes it, as a view that describes it alone starts from
+            /// tree writes it, as a tree that describes it alone starts from
             /// ([`blank_message`](Self::blank_message)).
             #[cfg(feature = "tree")]
             #[allow(unused_assignments)]

@@ -15,7 +15,7 @@
    limitations under the License.
 */
 
-//! The view of a 5GS message and the values of its IEs.
+//! The tree of a 5GS message and the values of its IEs.
 
 use crate::common::readable;
 use crate::common::view::{self, Ie, Viewed, Visit};
@@ -314,7 +314,7 @@ impl Message {
     }
 }
 
-/// The message `message` that a view or a tree wrote, if it is one that is
+/// The message `message` that a tree wrote, if it is one that is
 /// sent: what the header of a plain message cannot have is refused by the
 /// name of its member, and whatever else has no octets as encoding refuses
 /// it. A message that is not ciphered under a header that says it is has no
@@ -756,7 +756,7 @@ impl Ie for N1SmContainer<'_> {
 // The units of the protocol configuration options, by the direction of the
 // message.
 
-// A container of a plain NAS message: the view of the message.
+// A container of a plain NAS message: the tree of the message.
 container_ie!(
     MessageContainer: Message,
     |ie| (ie.decode_as_nas_message().ok())
@@ -1275,7 +1275,7 @@ enum MobileIdentityForm {
 #[cfg(feature = "tree")]
 crate::common::readable::readable!(enum MobileIdentityForm { NoIdentity, Suci(SuciForm), Guti(GutiForm), Imei(String), STmsi(STmsiForm), Imeisv(String), MacAddress { address, mauri }, Eui64([u8; 8]) });
 
-/// A 5G-GUTI by its parts, as a view writes it.
+/// A 5G-GUTI by its parts, as a tree writes it.
 #[derive(Clone, PartialEq)]
 struct GutiForm {
     plmn: Plmn,
@@ -1288,7 +1288,7 @@ struct GutiForm {
 #[cfg(feature = "tree")]
 crate::common::readable::readable!(struct GutiForm { plmn as plmn, amf_region_id, amf_set_id, amf_pointer, tmsi });
 
-/// A 5G-S-TMSI by its parts, as a view writes it.
+/// A 5G-S-TMSI by its parts, as a tree writes it.
 #[derive(Clone, PartialEq)]
 struct STmsiForm {
     amf_set_id: u16,

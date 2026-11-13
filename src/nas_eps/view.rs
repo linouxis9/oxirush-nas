@@ -15,7 +15,7 @@
    limitations under the License.
 */
 
-//! The view of an EPS message and the values of its IEs.
+//! The tree of an EPS message and the values of its IEs.
 
 use crate::common::readable::{from_value, same_name};
 use crate::common::view::{self, Viewed, Visit};
@@ -826,7 +826,7 @@ impl Message {
     }
 }
 
-/// The message `message` that a view or a tree wrote, if it is one that is
+/// The message `message` that a tree wrote, if it is one that is
 /// sent: what the header of a plain message cannot have is refused by the
 /// name of its member, and whatever else has no octets as encoding refuses
 /// it. A message that is not ciphered under a header that says it is, and an
@@ -918,7 +918,7 @@ fn ebis(bearers: &[u16]) -> core::result::Result<Vec<u8>, ValueError> {
 // message.
 configuration_options_ie!(ProtocolConfigurationOptions);
 
-// A container of a plain NAS message: the view of the message.
+// A container of a plain NAS message: the tree of the message.
 container_ie!(
     EsmMessageContainer: Message,
     |ie| ie.decode_as_esm_message().ok(),
@@ -1317,7 +1317,7 @@ crate::common::readable::readable!(
     }
 );
 
-/// A GUTI by its parts, as a view writes it.
+/// A GUTI by its parts, as a tree writes it.
 #[derive(Clone, PartialEq)]
 struct GutiForm {
     plmn: crate::common::Plmn,

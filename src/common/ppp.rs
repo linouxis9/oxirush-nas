@@ -15,7 +15,7 @@
    limitations under the License.
 */
 
-//! The packets of the configuration protocols, for the view of the protocol
+//! The packets of the configuration protocols, for the tree of the protocol
 //! configuration options (TS 24.008 §10.5.6.3): the contents of a unit of
 //! LCP, PAP, CHAP or IPCP are a packet of RFC 1661 §5 without its protocol
 //! field and its padding: a code, an identifier, the length of the packet
@@ -100,7 +100,7 @@ fn frame(code: u8, identifier: u8, data: &[u8]) -> Result<Vec<u8>, String> {
     Ok(octets)
 }
 
-/// The name of a code, as a view prints it.
+/// The name of a code, as a tree prints it.
 fn printed<T: readable::Readable>(code: &T) -> String {
     match readable::to_value(code) {
         Ok(oxirush_utils::tree::Value::String(name)) => name,
@@ -149,7 +149,7 @@ fn option(data: &mut Vec<u8>, kind: u8, contents: &[u8]) -> Result<(), String> {
 }
 
 /// The codes of the packets that negotiate options, in LCP and in IPCP
-/// (RFC 1661 §5.1 to §5.4), by the names that a view prints.
+/// (RFC 1661 §5.1 to §5.4), by the names that a tree prints.
 #[allow(clippy::enum_variant_names)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ConfigureCode {
@@ -351,7 +351,7 @@ impl Protocol for Ipcp {
     }
 }
 
-/// The codes of PAP (RFC 1334 §2.2), by the names that a view prints.
+/// The codes of PAP (RFC 1334 §2.2), by the names that a tree prints.
 #[allow(clippy::enum_variant_names)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum PapCode {

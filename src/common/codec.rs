@@ -55,7 +55,7 @@ pub enum Error {
     UnknownMessageType(u8),
 
     /// What is to be encoded has no octets: a value that its field cannot
-    /// hold, a header that is not that of its message, or a view or a tree
+    /// hold, a header that is not that of its message, or a tree
     /// that does not describe a message.
     EncodingError(String),
 

@@ -15,7 +15,7 @@
    limitations under the License.
 */
 
-//! The names of the specifications, as an error, a view and a path print
+//! The names of the specifications, as an error, a tree and a path print
 //! them.
 
 use crate::prelude::*;

@@ -15,9 +15,9 @@
    limitations under the License.
 */
 
-//! The view of a message: each of its IEs by the name the specification
-//! gives it, with its `value` as the typed accessors decode it and its
-//! `octets` in hexadecimal.
+//! The tree of a message: its header, and each of its IEs by the name that
+//! the specification gives it, with its value as the typed accessors decode
+//! it where that value writes the IE back, or its `octets` in hexadecimal.
 
 use crate::common::ppp::{Chap, Ipcp, Lcp, Packet, Pap};
 use crate::common::readable::{self, letters, same_name};
@@ -555,8 +555,8 @@ pub(crate) fn names(
     names
 }
 
-/// Where the IEs that a view visits are: who sent their message, where its
-/// type says so, and in how many containers the message is. A view gives it
+/// Where the IEs that a tree has are: who sent their message, where its
+/// type says so, and in how many containers the message is. A tree gives it
 /// to each IE that it reads or writes: the units of the protocol
 /// configuration options are read by the direction, and a container that is
 /// too far in is not read as its message.
@@ -888,7 +888,7 @@ impl ConfigurationUnit {
         }
     }
 
-    /// The name of the unit, as a view prints it.
+    /// The name of the unit, as a tree prints it.
     fn name(&self) -> String {
         match readable::to_value(self) {
             Ok(Value::String(name)) => name,
@@ -1011,7 +1011,7 @@ macro_rules! configuration_options_ie {
 /// The messages that containers may carry inside one another and that are
 /// still read as messages: a container further in has its octets alone. No
 /// message of TS 24.501 or TS 24.301 nests this deep, and the octets of a
-/// peer may: a view is built by a function that calls itself for the message
+/// peer may: a tree is built by a function that calls itself for the message
 /// of a container.
 const NESTED: usize = 8;
 
@@ -2104,24 +2104,24 @@ impl<E: readable::Readable, N: readable::Readable> readable::Readable for Code<E
 /// The value of a GPRS timer: its seconds, or that it is deactivated.
 pub(crate) type Timer = Code<Deactivated, u64>;
 
-/// A PLMN identity as a view writes it: `"208-93"`.
+/// A PLMN identity as a tree writes it: `"208-93"`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct PlmnText(pub(crate) Plmn);
 
 #[cfg(feature = "tree")]
 crate::common::readable::readable!(struct PlmnText(Plmn as plmn));
 
-/// The PLMN identities of a list, as a view writes them.
+/// The PLMN identities of a list, as a tree writes them.
 pub(crate) fn plmn_texts(plmns: Vec<Plmn>) -> Vec<PlmnText> {
     plmns.into_iter().map(PlmnText).collect()
 }
 
-/// The PLMN identities that a view writes.
+/// The PLMN identities that a tree writes.
 pub(crate) fn plmns(texts: &[PlmnText]) -> Vec<Plmn> {
     texts.iter().map(|text| text.0).collect()
 }
 
-/// A tracking area identity of either system as a view writes it:
+/// A tracking area identity of either system as a tree writes it:
 /// `{"plmn": "208-93", "tac": 1}`.
 #[derive(Clone, Copy, PartialEq)]
 pub(crate) struct TaiForm<T>(pub(crate) T);
@@ -2368,7 +2368,7 @@ pub(crate) fn set_flag<T: Flags>(
 
 /// [`Decoded`] for an IE type: its value is a `$form`, which `$decode`
 /// reads and `$encode` builds the IE of. Octets that `$decode` reads and
-/// `$encode` does not build have no value: what a view shows can be
+/// `$encode` does not build have no value: what a tree shows can be
 /// written.
 macro_rules! decoded_ie {
     ($ie:ty: $form:ty, $decode:expr, $encode:expr) => {
@@ -2683,7 +2683,7 @@ macro_rules! fields_ie {
     (@shown $ie:ident, $members:ident, flags) => {
         Some($members)
     };
-    // What a view shows can be written: octets that the members do not give
+    // What a tree shows can be written: octets that the members do not give
     // back, in an IE of the same length, have no value.
     (@shown $ie:ident, $members:ident, exact) => {{
         // An IE without octets reads as the zeros that it is built from.
@@ -2755,7 +2755,7 @@ macro_rules! built_ie {
                     Some((members.into(), from($($key),+).ok()))
                 };
                 // Octets that are read and that `$from` does not build have
-                // no value: what a view shows can be written.
+                // no value: what a tree shows can be written.
                 let (members, built) = read(self)?;
                 let built = built?;
                 // An IE built as this one reads as it.
@@ -2942,7 +2942,7 @@ macro_rules! container_ie {
 }
 
 /// The values of the IEs that TS 24.501 and TS 24.301 have alike, for the types of
-/// the protocol whose view calls it.
+/// the protocol whose module calls it.
 macro_rules! shared_ies {
     () => {
         code_ie!(
