@@ -483,16 +483,19 @@ fn octets_from(value: &Value, length: Option<usize>) -> Option<Vec<u8>> {
 /// gives it.
 fn whole<T>(
     value: &Value,
-    range: &str,
+    range: (&dyn core::fmt::Display, &dyn core::fmt::Display),
     unsigned: impl Fn(u64) -> Option<T>,
     signed: impl Fn(i64) -> Option<T>,
 ) -> Result<T, String> {
-    let outside =
-        |number: &dyn core::fmt::Display| format!("{number} is not a number from {range}");
+    // The range is written out only for an error.
+    let (least, most) = range;
+    let outside = |number: &dyn core::fmt::Display| {
+        format!("{number} is not a number from {least} to {most}")
+    };
     if let Some(number) = value.as_str().and_then(hexadecimal) {
         return unsigned(number).ok_or_else(|| outside(&number));
     }
-    let expected = || format!("a number from {range}");
+    let expected = || format!("a number from {least} to {most}");
     match value {
         Value::Number(number) => match (number.as_u64(), number.as_i64()) {
             (Some(number), _) => unsigned(number).ok_or_else(|| outside(&number)),
@@ -513,7 +516,7 @@ macro_rules! readable_number {
             fn read(value: &Value) -> Result<Self, String> {
                 whole(
                     value,
-                    &format!("{} to {}", $ty::MIN, $ty::MAX),
+                    (&$ty::MIN, &$ty::MAX),
                     |number| $ty::try_from(number).ok(),
                     |number| $ty::try_from(number).ok(),
                 )
@@ -540,7 +543,7 @@ impl Readable for u8 {
     fn read(value: &Value) -> Result<Self, String> {
         whole(
             value,
-            "0 to 255",
+            (&0, &255),
             |number| u8::try_from(number).ok(),
             |number| u8::try_from(number).ok(),
         )
@@ -559,7 +562,7 @@ impl Readable for usize {
     fn read(value: &Value) -> Result<Self, String> {
         whole(
             value,
-            &format!("0 to {}", usize::MAX),
+            (&0, &usize::MAX),
             |number| usize::try_from(number).ok(),
             |number| usize::try_from(number).ok(),
         )
