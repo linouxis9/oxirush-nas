@@ -52,16 +52,13 @@ fn a_pdu_address_has_the_address_of_its_type_then_the_smf_link_local_address() {
 }
 
 #[test]
-#[allow(deprecated)]
 fn a_reactivation_result_has_the_bit_of_each_session_that_failed() {
     for sessions in [vec![], vec![1, 5, 15]] {
         let result = PduSessionReactivationResult::from_failed_sessions(&sessions).unwrap();
         assert_eq!(result.failed_sessions(), sessions);
-        assert_eq!(result.active_sessions(), sessions);
         for session in 0..16 {
             let failed = sessions.contains(&session);
             assert_eq!(result.reactivation_failed(session), failed, "{session}");
-            assert_eq!(result.is_active(session), failed, "{session}");
         }
     }
 }

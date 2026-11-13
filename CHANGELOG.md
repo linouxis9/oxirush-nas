@@ -34,6 +34,14 @@ All notable changes to `oxirush-nas` are recorded here.
   without a name: `{"container": {"identifier": 49187, "contents": "0101"}}`
   where a tree had `{"pap": "0101"}`. A tree that names `lcp`, `pap`, `chap`
   or `ipcp` is refused.
+- The aliases of the 5GS IEs kept for callers of earlier versions:
+  `GsmCongestionReAttemptIndicator::from_abo(abo)`, which is
+  `from_flags(abo, false)`; `GsmNetworkFeatureSupport::from_ept_s1(ept_s1)`,
+  which is `from_flags(ept_s1, false)`; `QosFlowDescriptions::descriptions()`,
+  which is `try_descriptions().unwrap_or_default()`; and the deprecated
+  `is_active`, `active_sessions` and `from_sessions` of
+  `PduSessionReactivationResult`, which are `reactivation_failed`,
+  `failed_sessions` and `from_failed_sessions`.
 
 ### Fixed
 

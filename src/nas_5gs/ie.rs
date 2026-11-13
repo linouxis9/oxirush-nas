@@ -4501,11 +4501,6 @@ impl GsmCongestionReAttemptIndicator {
         }
         Self::new(vec![b])
     }
-
-    /// Backwards-compatible constructor for the ABO-only case.
-    pub fn from_abo(abo: bool) -> Self {
-        Self::from_flags(abo, false)
-    }
 }
 
 impl GsmNetworkFeatureSupport {
@@ -4534,11 +4529,6 @@ impl GsmNetworkFeatureSupport {
             b |= 0x02;
         }
         Self::new(vec![b])
-    }
-
-    /// Backwards-compatible constructor for the EPT-S1-only case.
-    pub fn from_ept_s1(ept_s1: bool) -> Self {
-        Self::from_flags(ept_s1, false)
     }
 }
 
@@ -4810,24 +4800,6 @@ impl PduSessionReactivationResult {
     /// to 15.
     pub fn from_failed_sessions(sessions: &[u8]) -> core::result::Result<Self, ValueError> {
         Ok(Self::new(psi_bitmap(sessions)?))
-    }
-
-    /// Deprecated semantic alias for reactivation_failed.
-    #[deprecated(note = "PSI(x)=1 means reactivation failed; use reactivation_failed")]
-    pub fn is_active(&self, session_id: u8) -> bool {
-        self.reactivation_failed(session_id)
-    }
-
-    /// Deprecated semantic alias for failed_sessions.
-    #[deprecated(note = "PSI(x)=1 means reactivation failed; use failed_sessions")]
-    pub fn active_sessions(&self) -> Vec<u8> {
-        self.failed_sessions()
-    }
-
-    /// Deprecated semantic alias for from_failed_sessions.
-    #[deprecated(note = "PSI(x)=1 means reactivation failed; use from_failed_sessions")]
-    pub fn from_sessions(sessions: &[u8]) -> core::result::Result<Self, ValueError> {
-        Self::from_failed_sessions(sessions)
     }
 }
 
@@ -7143,14 +7115,6 @@ impl QosFlowDescriptions {
             next = following;
         }
         out
-    }
-
-    /// Parse valid QoS flow descriptions.
-    ///
-    /// This compatibility accessor returns an empty list for malformed data;
-    /// use try_descriptions when the distinction matters.
-    pub fn descriptions(&self) -> Vec<QosFlowDescription> {
-        self.try_descriptions().unwrap_or_default()
     }
 
     /// Build from validated QoS flow descriptions.
@@ -20099,7 +20063,7 @@ mod tests {
         }];
 
         let ie = QosFlowDescriptions::from_descriptions(&descriptions);
-        assert_eq!(ie.unwrap().descriptions(), descriptions);
+        assert_eq!(ie.unwrap().try_descriptions(), Some(descriptions));
     }
 
     #[test]
@@ -20167,8 +20131,8 @@ mod tests {
             params: vec![QosFlowParameter::FiveQi(9)],
         };
         assert_eq!(
-            descriptions.descriptions(),
-            core::slice::from_ref(&description)
+            descriptions.try_descriptions(),
+            Some(vec![description.clone()])
         );
         assert_eq!(
             QosFlowDescriptions::from_descriptions(&[description])
@@ -20203,9 +20167,11 @@ mod tests {
                 .unwrap_or_else(|| panic!("{hex}: QoS flow descriptions dropped"));
             assert!(!descriptions.is_well_formed(), "{hex}");
             assert_eq!(
-                QosFlowDescriptions::from_descriptions(&descriptions.descriptions())
-                    .unwrap()
-                    .value,
+                QosFlowDescriptions::from_descriptions(
+                    &descriptions.try_descriptions().unwrap_or_default()
+                )
+                .unwrap()
+                .value,
                 hex::decode(canonical).unwrap(),
                 "{hex}"
             );
