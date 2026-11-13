@@ -1661,16 +1661,6 @@ pub enum Message {
     Opaque(Vec<u8>),
 }
 
-#[cfg(feature = "tree")]
-crate::common::readable::readable!(
-    enum Message {
-        Gmm(GmmHeader, GmmMessage),
-        Gsm(GsmHeader, GsmMessage),
-        SecurityProtected(SecurityHeader, Box<Message>),
-        Opaque(Vec<u8>),
-    }
-);
-
 pub(crate) fn validate_security_protected_inner_message(
     message: &Message,
     security_header_type: SecurityHeaderType,

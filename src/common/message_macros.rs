@@ -498,10 +498,6 @@ macro_rules! nas_message {
             optional_ie_order: crate::common::IeOrder,
         }
 
-        #[cfg(feature = "tree")]
-        crate::common::readable::readable!(struct $name {
-            $($mfield,)* $($ofield,)* unknown_ies = default, optional_ie_order = default
-        });
 
         impl PartialEq for $name {
             fn eq(&self, other: &Self) -> bool {
@@ -637,10 +633,17 @@ macro_rules! nas_message {
         impl $name {
             /// The names of the fields as a view prints them, mandatory
             /// ones first.
-            const PRINTED_FIELDS: &[&str] = &[
+            pub(crate) const PRINTED_FIELDS: &[&str] = &[
                 $(crate::common::names::name!(stringify!($mfield)),)*
                 $(crate::common::names::name!(stringify!($ofield)),)*
             ];
+
+            /// The message with none of its optional IEs, and each of its
+            /// mandatory IEs without octets, as a view that describes the
+            /// message alone writes it.
+            pub(crate) fn blank_message() -> Self {
+                Self::new($(<$mtype>::blank()),*)
+            }
         }
 
         impl crate::common::MessageBody for $name {
@@ -1146,12 +1149,57 @@ macro_rules! nas_messages {
             }
 
             /// The name of the variant, as the code writes it.
-            #[cfg(feature = "tree")]
+            #[cfg(all(test, feature = "tree"))]
             pub(crate) fn variant_name(&self) -> &'static str {
                 match self {
                     $(Self::$variant(_) => stringify!($variant),)+
                     $($(Self::$svariant(_) => stringify!($svariant),)+)*
                 }
+            }
+
+            /// The variants, as the code writes them.
+            #[cfg(feature = "tree")]
+            const VARIANTS: &[&str] = &[$(stringify!($variant),)+ $($(stringify!($svariant),)+)*];
+
+            /// The variants, as a tree prints them.
+            #[cfg(feature = "tree")]
+            const PRINTED: &[&str] = &[
+                $($crate::common::names::name!(stringify!($variant)),)+
+                $($($crate::common::names::name!(stringify!($svariant)),)+)*
+            ];
+
+            /// The message of the variant that `kind` names, as the code or a
+            /// tree writes it, as a view that describes it alone starts from
+            /// ([`blank_message`](Self::blank_message)).
+            #[cfg(feature = "tree")]
+            #[allow(unused_assignments)]
+            pub(crate) fn blank_named(kind: &str) -> Option<Self> {
+                let at = $crate::common::readable::index_of(Self::VARIANTS, Self::PRINTED, kind)?;
+                let mut place = 0;
+                $(
+                    if place == at {
+                        return Some(Self::$variant(Box::new(<$body>::blank_message())));
+                    }
+                    place += 1;
+                )+
+                $($(
+                    if place == at {
+                        return Some(Self::$svariant(Box::new(<$sbody>::blank_message())));
+                    }
+                    place += 1;
+                )+)*
+                None
+            }
+
+            /// The names of the IEs of the message of the variant that `kind`
+            /// names, as a tree prints them, mandatory ones first.
+            #[cfg(feature = "tree")]
+            pub(crate) fn fields_named(kind: &str) -> Option<&'static [&'static str]> {
+                const FIELDS: &[&[&str]] = &[
+                    $(<$body>::PRINTED_FIELDS,)+ $($(<$sbody>::PRINTED_FIELDS,)+)*
+                ];
+                let at = $crate::common::readable::index_of(Self::VARIANTS, Self::PRINTED, kind)?;
+                Some(FIELDS[at])
             }
 
             /// The message struct of the variant, to change it.
@@ -1180,10 +1228,6 @@ macro_rules! nas_messages {
             }
         }
 
-        #[cfg(feature = "tree")]
-        $crate::common::readable::readable!(enum $message {
-            $($variant(Box<$body>),)+ $($($svariant(Box<$sbody>),)+)*
-        });
         #[cfg(feature = "tree")]
         $crate::common::readable::readable!(enum $kind { $($variant,)+ $($shared,)* Unknown(u8) });
         #[cfg(feature = "tree")]

@@ -181,12 +181,28 @@ impl Viewed for Message {
         }
     }
 
+    #[cfg(test)]
     fn variant_name(&self) -> Option<&'static str> {
         match self {
             Self::Gmm(_, message) => Some(message.variant_name()),
             Self::Gsm(_, message) => Some(message.variant_name()),
             Self::SecurityProtected(_, inner) => inner.variant_name(),
             Self::Opaque(_) => None,
+        }
+    }
+
+    fn blank_of(family: &str, kind: &str) -> Option<Self> {
+        use crate::common::readable::blank;
+        match family {
+            "Gmm" => Some(Self::Gmm(
+                blank(&[family, kind])?,
+                GmmMessage::blank_named(kind)?,
+            )),
+            "Gsm" => Some(Self::Gsm(
+                blank(&[family, kind])?,
+                GsmMessage::blank_named(kind)?,
+            )),
+            _ => None,
         }
     }
 
@@ -681,7 +697,7 @@ impl GmmMessageType {
     /// message, with those that are optional. A type that the crate has no
     /// message of has none.
     pub fn names(self) -> Vec<String> {
-        view::names::<crate::nas_5gs::GmmHeader, GmmMessage>(&[&format!("{self:?}")])
+        view::names::<crate::nas_5gs::GmmHeader>(&[&format!("{self:?}")], GmmMessage::fields_named)
     }
 }
 
@@ -700,7 +716,7 @@ impl GsmMessageType {
     /// message, with those that are optional. A type that the crate has no
     /// message of has none.
     pub fn names(self) -> Vec<String> {
-        view::names::<crate::nas_5gs::GsmHeader, GsmMessage>(&[&format!("{self:?}")])
+        view::names::<crate::nas_5gs::GsmHeader>(&[&format!("{self:?}")], GsmMessage::fields_named)
     }
 }
 

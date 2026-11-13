@@ -156,12 +156,28 @@ impl Viewed for Message {
         }
     }
 
+    #[cfg(test)]
     fn variant_name(&self) -> Option<&'static str> {
         match self {
             Self::Emm(_, message) => Some(message.variant_name()),
             Self::Esm(_, message) => Some(message.variant_name()),
             Self::SecurityProtected(_, inner) => inner.variant_name(),
             Self::ServiceRequest(_) | Self::EmmTransport(_) | Self::Opaque(_) => None,
+        }
+    }
+
+    fn blank_of(family: &str, kind: &str) -> Option<Self> {
+        use crate::common::readable::blank;
+        match family {
+            "Emm" => Some(Self::Emm(
+                blank(&[family, kind])?,
+                EmmMessage::blank_named(kind)?,
+            )),
+            "Esm" => Some(Self::Esm(
+                blank(&[family, kind])?,
+                EsmMessage::blank_named(kind)?,
+            )),
+            _ => None,
         }
     }
 
@@ -945,11 +961,11 @@ impl EmmMessageType {
     pub fn names(self) -> Vec<String> {
         use crate::nas_eps::{EmmHeader, EmmMessage};
         match self {
-            Self::DetachRequest => view::names::<EmmHeader, EmmMessage>(&[
-                "DetachRequestUeOriginating",
-                "DetachRequestUeTerminated",
-            ]),
-            _ => view::names::<EmmHeader, EmmMessage>(&[&format!("{self:?}")]),
+            Self::DetachRequest => view::names::<EmmHeader>(
+                &["DetachRequestUeOriginating", "DetachRequestUeTerminated"],
+                EmmMessage::fields_named,
+            ),
+            _ => view::names::<EmmHeader>(&[&format!("{self:?}")], EmmMessage::fields_named),
         }
     }
 }
@@ -969,7 +985,7 @@ impl EsmMessageType {
     /// message, with those that are optional. A type that the crate has no
     /// message of has none.
     pub fn names(self) -> Vec<String> {
-        view::names::<crate::nas_eps::EsmHeader, EsmMessage>(&[&format!("{self:?}")])
+        view::names::<crate::nas_eps::EsmHeader>(&[&format!("{self:?}")], EsmMessage::fields_named)
     }
 }
 

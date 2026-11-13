@@ -765,10 +765,10 @@ fn can_have(kind: &str, name: &str) -> bool {
     use crate::{nas_5gs, nas_eps};
     // The protocols have types of the same name, with other IEs.
     let of_the_type = [
-        names::<nas_5gs::GmmHeader, nas_5gs::GmmMessage>(&[kind]),
-        names::<nas_5gs::GsmHeader, nas_5gs::GsmMessage>(&[kind]),
-        names::<nas_eps::EmmHeader, nas_eps::EmmMessage>(&[kind]),
-        names::<nas_eps::EsmHeader, nas_eps::EsmMessage>(&[kind]),
+        names::<nas_5gs::GmmHeader>(&[kind], nas_5gs::GmmMessage::fields_named),
+        names::<nas_5gs::GsmHeader>(&[kind], nas_5gs::GsmMessage::fields_named),
+        names::<nas_eps::EmmHeader>(&[kind], nas_eps::EmmMessage::fields_named),
+        names::<nas_eps::EsmHeader>(&[kind], nas_eps::EsmMessage::fields_named),
     ]
     .concat();
     of_the_type.is_empty() || tree::named(&of_the_type, name).is_some()

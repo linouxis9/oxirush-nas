@@ -408,7 +408,7 @@ impl<T: crate::common::IeRules + Readable> Slot for Option<T> {
 
 /// A message enum: its serde form and the IEs of the message struct in it,
 /// read through a security header.
-pub(crate) trait Viewed: Clone + PartialEq + Readable {
+pub(crate) trait Viewed: Clone + PartialEq {
     /// Visit the IEs that the message struct has, in `scope`.
     fn ies(&self, scope: Scope, visit: &mut Visit<'_>);
 
@@ -459,8 +459,16 @@ pub(crate) trait Viewed: Clone + PartialEq + Readable {
     /// serde form `ciphered`.
     fn set_protection(&mut self, header: &Value, ciphered: Option<&Value>) -> Result<(), String>;
 
+    /// The message of the variant `family` of the enum that holds the
+    /// message struct of the variant `kind`, as a view that describes it
+    /// alone starts from: its header as the readable serde form makes it
+    /// blank, and the message with nothing in it yet. `None` where the
+    /// family has no such message.
+    fn blank_of(family: &str, kind: &str) -> Option<Self>;
+
     /// The name of the variant of the message struct, as the code writes it:
     /// `None` for what has no message struct.
+    #[cfg(test)]
     fn variant_name(&self) -> Option<&'static str>;
 
     /// The variants of the enum that hold a plain message.
@@ -499,16 +507,17 @@ pub(crate) trait Viewed: Clone + PartialEq + Readable {
 }
 
 /// The names that the view of a message has: the fields of its header `H`,
-/// and the IEs of the message structs in the variants `kinds` of `M`. There
-/// are none when `M` has no such variant.
-pub(crate) fn names<H: Readable, M: Readable>(kinds: &[&str]) -> Vec<String> {
+/// and the IEs that `ies` gives of the message structs of the variants
+/// `kinds`. There are none when there is no such variant.
+pub(crate) fn names<H: Readable>(
+    kinds: &[&str],
+    ies: fn(&str) -> Option<&'static [&'static str]>,
+) -> Vec<String> {
     let mut names = Vec::new();
     for kind in kinds {
-        let (Some(header), Some(ies)) = (readable::fields::<H>(""), readable::fields::<M>(kind))
-        else {
+        let (Some(header), Some(ies)) = (readable::fields::<H>(""), ies(kind)) else {
             continue;
         };
-        let ies = (ies.iter()).filter(|ie| !["unknown-ies", "optional-ie-order"].contains(ie));
         for name in header.iter().chain(ies) {
             if !names.iter().any(|known| known == name) {
                 names.push((*name).to_owned());
@@ -978,24 +987,6 @@ macro_rules! configuration_options_ie {
 /// of a container.
 const NESTED: usize = 8;
 
-/// The header and the members of the message struct in the readable serde
-/// form of a message, `{family: [header, {kind: {..}}]}`, read through
-/// `security-protected`.
-#[cfg(test)]
-fn parts(message: &mut Value) -> Option<(&mut Value, &mut Map)> {
-    let (family, parts) = message.as_object_mut()?.iter_mut().next()?;
-    let [header, body] = parts.as_array_mut()?.as_mut_slice() else {
-        return None;
-    };
-    if family == "security-protected" {
-        return self::parts(body);
-    }
-    Some((
-        header,
-        body.as_object_mut()?.values_mut().next()?.as_object_mut()?,
-    ))
-}
-
 /// The octets of a message that is ciphered, as its readable serde form has
 /// them: in hexadecimal.
 pub(crate) fn octets_shown(octets: &[u8]) -> Value {
@@ -1186,11 +1177,7 @@ pub(crate) fn from_view<M: Viewed>(
         return Err(format!("{view} is not a view: an object of IEs by name"));
     };
     for family in families {
-        let Some(blank) = readable::blank::<M>(&[family, kind]) else {
-            continue;
-        };
-        // The message struct that `kind` names, and not the first of the enum.
-        if (blank.variant_name()).is_some_and(|name| same_name(&printed(name), &printed(kind))) {
+        if let Some(blank) = M::blank_of(family, kind) {
             return written(&blank.prepared(entries), view, true, scope);
         }
     }
@@ -3199,28 +3186,37 @@ pub(crate) mod tests {
             message,
             "{name}"
         );
-        let mut tree = readable::to_value(message).unwrap();
         let mut counts = [0; 3];
-        if let Some((header, members)) = parts(&mut tree) {
+        let mut encoded = Vec::new();
+        if let Some(Value::Object(header)) = message.header() {
             // No field of the header has the name of an IE.
-            let header = header.as_object().unwrap().len();
-            let ies = members.values().filter(|ie| !ie.is_array()).count();
-            assert_eq!(view.as_object().unwrap().len(), header + ies, "{name}");
+            let mut ies = 0;
+            message.absent(&mut |_, _| ies += 1);
             message.ies(Scope::NONE, &mut |visited| {
                 let (field, ie, scope) = (visited.name, visited.ie, visited.scope);
                 counts[0] += 1;
+                ies += 1;
                 let Some((ie, value)) = ie.and_then(|ie| Some((ie, ie.value(scope)?))) else {
                     return;
                 };
                 counts[1] += 1;
                 written_wrong(ie, &value, scope);
-                let (encoded, _) = (ie.encoded(&value, scope))
+                let (form, _) = (ie.encoded(&value, scope))
                     .unwrap_or_else(|error| panic!("{name} {field}: {error}"));
-                counts[2] += usize::from(members[&printed(field)] != encoded);
-                members.insert(printed(field), encoded);
+                encoded.push((visited.printed, form));
             });
+            assert_eq!(
+                view.as_object().unwrap().len(),
+                header.len() + ies,
+                "{name}"
+            );
         }
-        let encoded: M = readable::from_value(&tree).unwrap();
+        let mut written = message.clone();
+        for (field, form) in encoded {
+            let slot = written.slot(field).unwrap();
+            counts[2] += usize::from(slot.form().as_ref() != Some(&form));
+            slot.read(&form).unwrap();
+        }
         let values = |view: Value| -> Vec<Value> {
             let Value::Object(view) = view else { panic!() };
             view.into_iter()
@@ -3228,7 +3224,7 @@ pub(crate) mod tests {
                 .collect()
         };
         assert_eq!(
-            values(to_view(&encoded, Scope::NONE)),
+            values(to_view(&written, Scope::NONE)),
             values(view),
             "{name}"
         );
@@ -3238,9 +3234,7 @@ pub(crate) mod tests {
     /// The message that the view of `message` describes alone, which has
     /// the same view.
     fn describe_alone<M: Viewed>(message: &M, name: &str) -> M {
-        let tree = readable::to_value(message).unwrap();
-        let parts = tree.as_object().unwrap().values().next().unwrap();
-        let kind = parts[1].as_object().unwrap().keys().next().unwrap();
+        let kind = message.variant_name().unwrap();
         let alone: M = from_view(
             M::FAMILIES,
             kind,

@@ -2325,18 +2325,6 @@ pub enum Message {
     Opaque(Vec<u8>),
 }
 
-#[cfg(feature = "tree")]
-crate::common::readable::readable!(
-    enum Message {
-        Emm(EmmHeader, EmmMessage),
-        Esm(EsmHeader, EsmMessage),
-        SecurityProtected(SecurityHeader, Box<Message>),
-        ServiceRequest(ServiceRequest),
-        EmmTransport(EmmTransport),
-        Opaque(Vec<u8>),
-    }
-);
-
 /// Sender rules pairing a security header type with the message it
 /// protects (§5.4.3.2, §5.4.3.3, Table 9.3.1 NOTE 4). Decoding accepts other
 /// pairings; `validate()` and [`Message::protect`] apply these rules.
