@@ -977,6 +977,7 @@ const NESTED: usize = 8;
 /// The header and the members of the message struct in the readable serde
 /// form of a message, `{family: [header, {kind: {..}}]}`, read through
 /// `security-protected`.
+#[cfg(test)]
 fn parts(message: &mut Value) -> Option<(&mut Value, &mut Map)> {
     let (family, parts) = message.as_object_mut()?.iter_mut().next()?;
     let [header, body] = parts.as_array_mut()?.as_mut_slice() else {
@@ -1413,15 +1414,18 @@ fn shown_in(ie: &dyn Ie, name: &str, decided: Decided<'_>, scope: Scope) -> Opti
 /// and the message that the tree of a message writes means what the message
 /// means.
 pub(crate) fn meant<M: Viewed>(message: &M, scope: Scope) -> Result<M, String> {
-    let mut tree = readable::shown(message)?;
-    if let Some((_, members)) = parts(&mut tree) {
-        message.ies(scope, &mut |field| {
-            if let Some(meant) = field.ie.and_then(|ie| ie.meant(field.scope)) {
-                members.insert(field.printed.to_owned(), meant);
-            }
-        });
+    let mut forms = Vec::new();
+    message.ies(scope, &mut |field| {
+        if let Some(meant) = field.ie.and_then(|ie| ie.meant(field.scope)) {
+            forms.push((field.printed, meant));
+        }
+    });
+    let mut meant = message.clone();
+    for (name, form) in forms {
+        if let Some(slot) = meant.slot(name) {
+            slot.read(&form)?;
+        }
     }
-    let mut meant: M = readable::from_value(&tree)?;
     meant.set_unknown(&message.unknown());
     Ok(meant)
 }
