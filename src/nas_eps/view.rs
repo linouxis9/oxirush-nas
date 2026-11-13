@@ -156,6 +156,53 @@ impl Viewed for Message {
         }
     }
 
+    fn variant_name(&self) -> Option<&'static str> {
+        match self {
+            Self::Emm(_, message) => Some(message.variant_name()),
+            Self::Esm(_, message) => Some(message.variant_name()),
+            Self::SecurityProtected(_, inner) => inner.variant_name(),
+            Self::ServiceRequest(_) | Self::EmmTransport(_) | Self::Opaque(_) => None,
+        }
+    }
+
+    fn slot(&mut self, name: &str) -> Option<&mut dyn view::Slot> {
+        match self {
+            Self::Emm(_, message) => message.body_mut().slot(name),
+            Self::Esm(_, message) => message.body_mut().slot(name),
+            Self::SecurityProtected(_, inner) => inner.slot(name),
+            Self::ServiceRequest(_) | Self::EmmTransport(_) | Self::Opaque(_) => None,
+        }
+    }
+
+    fn set_header(
+        &mut self,
+        header: &oxirush_utils::tree::Value,
+    ) -> core::result::Result<(), String> {
+        use crate::common::readable::from_value;
+        match self {
+            Self::Emm(written, _) => *written = from_value(header)?,
+            Self::Esm(written, _) => *written = from_value(header)?,
+            Self::SecurityProtected(_, inner) => return inner.set_header(header),
+            Self::ServiceRequest(_) | Self::EmmTransport(_) | Self::Opaque(_) => {}
+        }
+        Ok(())
+    }
+
+    fn set_protection(
+        &mut self,
+        header: &oxirush_utils::tree::Value,
+        ciphered: Option<&oxirush_utils::tree::Value>,
+    ) -> core::result::Result<(), String> {
+        use crate::common::readable::from_value;
+        if let Self::SecurityProtected(written, inner) = self {
+            *written = from_value(header)?;
+            if let (Self::Opaque(octets), Some(ciphered)) = (&mut **inner, ciphered) {
+                *octets = from_value(ciphered)?;
+            }
+        }
+        Ok(())
+    }
+
     const FAMILIES: &'static [&'static str] = &["Emm", "Esm"];
 
     fn decided(

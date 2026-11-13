@@ -181,6 +181,51 @@ impl Viewed for Message {
         }
     }
 
+    fn variant_name(&self) -> Option<&'static str> {
+        match self {
+            Self::Gmm(_, message) => Some(message.variant_name()),
+            Self::Gsm(_, message) => Some(message.variant_name()),
+            Self::SecurityProtected(_, inner) => inner.variant_name(),
+            Self::Opaque(_) => None,
+        }
+    }
+
+    fn slot(&mut self, name: &str) -> Option<&mut dyn view::Slot> {
+        match self {
+            Self::Gmm(_, message) => message.body_mut().slot(name),
+            Self::Gsm(_, message) => message.body_mut().slot(name),
+            Self::SecurityProtected(_, inner) => inner.slot(name),
+            Self::Opaque(_) => None,
+        }
+    }
+
+    fn set_header(
+        &mut self,
+        header: &oxirush_utils::tree::Value,
+    ) -> core::result::Result<(), String> {
+        match self {
+            Self::Gmm(written, _) => *written = readable::from_value(header)?,
+            Self::Gsm(written, _) => *written = readable::from_value(header)?,
+            Self::SecurityProtected(_, inner) => return inner.set_header(header),
+            Self::Opaque(_) => {}
+        }
+        Ok(())
+    }
+
+    fn set_protection(
+        &mut self,
+        header: &oxirush_utils::tree::Value,
+        ciphered: Option<&oxirush_utils::tree::Value>,
+    ) -> core::result::Result<(), String> {
+        if let Self::SecurityProtected(written, inner) = self {
+            *written = readable::from_value(header)?;
+            if let (Self::Opaque(octets), Some(ciphered)) = (&mut **inner, ciphered) {
+                *octets = readable::from_value(ciphered)?;
+            }
+        }
+        Ok(())
+    }
+
     const FAMILIES: &'static [&'static str] = &["Gmm", "Gsm"];
 
     fn decided(

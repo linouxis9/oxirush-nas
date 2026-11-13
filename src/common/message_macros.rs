@@ -415,6 +415,9 @@ pub(crate) trait MessageBody: crate::common::Encode + crate::common::Validate {
     /// the message does not have and whose field prints as `name`.
     #[cfg(feature = "tree")]
     fn blank(&self, name: &str) -> Option<oxirush_utils::tree::Value>;
+    /// The field whose IE prints as `name`, to write it.
+    #[cfg(feature = "tree")]
+    fn slot(&mut self, name: &str) -> Option<&mut dyn crate::common::view::Slot>;
 }
 
 // ── Macros ─────────────────────────────────────────────────────────────────────
@@ -724,6 +727,25 @@ macro_rules! nas_message {
                     {
                         return to_value(&<$otype>::blank()).ok();
                     }
+                )*
+                None
+            }
+            #[cfg(feature = "tree")]
+            #[allow(unused_variables, unused_mut, unused_assignments)]
+            fn slot(&mut self, name: &str) -> Option<&mut dyn crate::common::view::Slot> {
+                let at = Self::PRINTED_FIELDS.iter().position(|printed| *printed == name)?;
+                let mut place = 0;
+                $(
+                    if place == at {
+                        return Some(&mut self.$mfield);
+                    }
+                    place += 1;
+                )*
+                $(
+                    if place == at {
+                        return Some(&mut self.$ofield);
+                    }
+                    place += 1;
                 )*
                 None
             }
@@ -1120,6 +1142,15 @@ macro_rules! nas_messages {
                 match self {
                     $(Self::$variant(message) => &**message,)+
                     $($(Self::$svariant(message) => &**message,)+)*
+                }
+            }
+
+            /// The name of the variant, as a tree prints it.
+            #[cfg(feature = "tree")]
+            pub(crate) fn variant_name(&self) -> &'static str {
+                match self {
+                    $(Self::$variant(_) => $crate::common::names::name!(stringify!($variant)),)+
+                    $($(Self::$svariant(_) => $crate::common::names::name!(stringify!($svariant)),)+)*
                 }
             }
 
