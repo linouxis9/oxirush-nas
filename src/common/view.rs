@@ -1553,6 +1553,9 @@ pub(crate) fn octets_at<M: Viewed>(message: &M, names: &[String], scope: Scope) 
 struct Entries {
     /// Each member by its name, in the order of the tree, until it is taken.
     members: Vec<(String, Option<Option<Value>>)>,
+    /// The first letter of the name of each member and how many letters it
+    /// has: names of the same letters have the same.
+    shapes: Vec<(Option<u8>, usize)>,
     /// The first letter of each name, as a bit of its code (0 for a name
     /// without letters), whether its member is still there or not: a name
     /// that starts with another is found without a search.
@@ -1564,6 +1567,12 @@ fn letters_of(name: &str) -> impl Iterator<Item = u8> + '_ {
     (name.bytes().filter(u8::is_ascii_alphanumeric)).map(|octet| octet.to_ascii_lowercase())
 }
 
+/// The first letter of `name` and how many letters it has.
+fn shape(name: &str) -> (Option<u8>, usize) {
+    let mut letters = letters_of(name);
+    (letters.next(), letters.count() + 1)
+}
+
 impl Entries {
     /// The members `members`; an error names the first member that a later
     /// one names again.
@@ -1571,37 +1580,53 @@ impl Entries {
         let members: Vec<_> = (members.into_iter())
             .map(|(name, member)| (name, Some(member)))
             .collect();
-        let firsts: Vec<_> = (members.iter())
-            .map(|(name, _)| letters_of(name).next())
-            .collect();
+        let shapes: Vec<_> = (members.iter()).map(|(name, _)| shape(name)).collect();
         // The first member that a later one names again, as the later one
         // that comes first has it.
         for (at, (name, _)) in members.iter().enumerate() {
             let twice = (0..at).rev().find(|&before| {
-                firsts[before] == firsts[at] && letters_of(&members[before].0).eq(letters_of(name))
+                shapes[before] == shapes[at] && letters_of(&members[before].0).eq(letters_of(name))
             });
             if let Some(before) = twice {
                 return Err(format!("`{}` is named twice", members[before].0));
             }
         }
-        let starts = (firsts.iter()).fold(0, |starts, first| starts | start(first.as_ref()));
-        Ok(Self { members, starts })
+        let starts = (shapes.iter()).fold(0, |starts, (first, _)| starts | start(first.as_ref()));
+        Ok(Self {
+            members,
+            shapes,
+            starts,
+        })
     }
 
     /// The place of the member that `name` names.
     fn find(&self, name: &str) -> Option<usize> {
-        if self.starts & start(letters_of(name).next().as_ref()) == 0 {
+        let shaped = shape(name);
+        if self.starts & start(shaped.0.as_ref()) == 0 {
             return None;
         }
         let left = |at: &usize| self.members[*at].1.is_some();
         let places = || (0..self.members.len()).filter(left);
-        (places().find(|&at| self.members[at].0 == name))
-            .or_else(|| places().find(|&at| letters_of(&self.members[at].0).eq(letters_of(name))))
+        (places().find(|&at| self.members[at].0 == name)).or_else(|| {
+            places().find(|&at| {
+                self.shapes[at] == shaped && letters_of(&self.members[at].0).eq(letters_of(name))
+            })
+        })
     }
 
-    /// The member that `name` names.
-    fn get(&self, name: &str) -> Option<&Option<Value>> {
-        self.find(name).and_then(|at| self.members[at].1.as_ref())
+    /// The one of the names `absent` that the member at `at` names, if it is
+    /// still there.
+    fn absent_named<'n>(&self, at: usize, absent: &[&'n str]) -> Option<&'n str> {
+        let name = &self.members[at].0;
+        self.members[at].1.as_ref()?;
+        let (first, count) = self.shapes[at];
+        let same = |known: &&&str| {
+            letters_of(known).next() == first
+                && letters_of(known).count() == count
+                && letters_of(known).eq(letters_of(name))
+        };
+        let found = absent.iter().find(|known| **known == name);
+        found.or_else(|| absent.iter().find(same)).copied()
     }
 
     /// The member that `name` names, taken out.
@@ -1692,31 +1717,9 @@ fn written_entries<M: Viewed>(
         };
         protection = Some((header, octets));
     }
-    // An optional IE that the message does not have stays out when the
-    // tree leaves it out. One that the tree writes is added without a
-    // value, and then written as any other.
-    let mut absent = Vec::new();
-    if let Some(body) = original.body() {
-        body.absent(&mut |name, _| absent.push(name));
-    }
-    let mut added = Vec::new();
-    for name in absent {
-        match entries.get(name) {
-            None => {}
-            Some(None) => {
-                entries.remove(name);
-            }
-            Some(Some(_)) => {
-                if let Some(slot) = message.slot(name) {
-                    slot.add();
-                    added.push(name);
-                }
-            }
-        }
-    }
     // A member that an edit takes out is left out, and one that an edit does
     // not have is kept as the message has it.
-    let mut take = |name: &str| match entries.remove(name) {
+    let take = |entries: &mut Entries, name: &str| match entries.remove(name) {
         Some(Some(entry)) => Taken::Written(entry),
         Some(None) => Taken::Out,
         None if edit => Taken::Kept,
@@ -1724,14 +1727,14 @@ fn written_entries<M: Viewed>(
     };
     // The IEs that the table of the message has no place for, when the tree
     // lists them.
-    let unknown = match take(UNKNOWN_IES) {
+    let unknown = match take(&mut entries, UNKNOWN_IES) {
         Taken::Written(written) => Some(unknown_ies(&written)?),
         _ => None,
     };
     let mut failure = None;
     let mut header = message.header();
     for (name, value) in header.iter_mut().flat_map(Value::as_object_mut).flatten() {
-        let written = match take(name) {
+        let written = match take(&mut entries, name) {
             Taken::Kept => continue,
             Taken::Written(written) => Some(written),
             Taken::Out => None,
@@ -1751,6 +1754,29 @@ fn written_entries<M: Viewed>(
             _ => failure = Some(format!("`{name}` is the header: it has a `value` alone")),
         }
     }
+    // An optional IE that the message does not have stays out when the
+    // tree leaves it out. One that a member left writes is added without a
+    // value, and then written as any other.
+    let mut absent = Vec::new();
+    if let Some(body) = original.body() {
+        body.absent(&mut |name, _| absent.push(name));
+    }
+    let mut added = Vec::new();
+    for at in 0..entries.members.len() {
+        let Some(name) = entries.absent_named(at, &absent) else {
+            continue;
+        };
+        match &entries.members[at].1 {
+            Some(None) => entries.members[at].1 = None,
+            Some(Some(_)) => {
+                if let Some(slot) = message.slot(name) {
+                    slot.add();
+                    added.push(name);
+                }
+            }
+            None => {}
+        }
+    }
     // What the tree writes of each IE: taken out, its octets, or the value
     // to write it from.
     let mut cleared = Vec::new();
@@ -1762,7 +1788,7 @@ fn written_entries<M: Viewed>(
         let (name, optional) = (visited.printed, visited.optional);
         ie_names.push(name);
         // An IE that the tree leaves out is taken out of the message.
-        let written = match take(name) {
+        let written = match take(&mut entries, name) {
             Taken::Kept => return,
             Taken::Written(written) => written,
             Taken::Out if optional => return cleared.push(name),
