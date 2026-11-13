@@ -72,12 +72,21 @@ impl Viewed for Message {
         }
     }
 
-    fn absent(&self, visit: &mut dyn FnMut(&'static str, usize)) {
+    fn body(&self) -> Option<&dyn crate::common::MessageBody> {
         match self {
-            Self::Emm(_, message) => message.body().absent(visit),
-            Self::Esm(_, message) => message.body().absent(visit),
-            Self::SecurityProtected(_, inner) => inner.absent(visit),
-            Self::ServiceRequest(_) | Self::EmmTransport(_) | Self::Opaque(_) => {}
+            Self::Emm(_, message) => Some(message.body()),
+            Self::Esm(_, message) => Some(message.body()),
+            Self::SecurityProtected(_, inner) => inner.body(),
+            Self::ServiceRequest(_) | Self::EmmTransport(_) | Self::Opaque(_) => None,
+        }
+    }
+
+    fn body_mut(&mut self) -> Option<&mut dyn crate::common::MessageBody> {
+        match self {
+            Self::Emm(_, message) => Some(message.body_mut()),
+            Self::Esm(_, message) => Some(message.body_mut()),
+            Self::SecurityProtected(_, inner) => inner.body_mut(),
+            Self::ServiceRequest(_) | Self::EmmTransport(_) | Self::Opaque(_) => None,
         }
     }
 
@@ -106,66 +115,6 @@ impl Viewed for Message {
         Some((crate::common::readable::to_value(header).ok()?, ciphered))
     }
 
-    fn keep_received(&mut self, original: &Self) {
-        let (body, received) = match (self, original) {
-            (Self::Emm(_, message), Self::Emm(_, original)) => {
-                (message.body_mut(), original.body().received())
-            }
-            (Self::Esm(_, message), Self::Esm(_, original)) => {
-                (message.body_mut(), original.body().received())
-            }
-            (Self::SecurityProtected(_, inner), Self::SecurityProtected(_, original)) => {
-                return inner.keep_received(original);
-            }
-            _ => return,
-        };
-        body.set_received(received.0, received.1);
-    }
-
-    fn unknown(&self) -> crate::common::UnknownIes {
-        match self {
-            Self::Emm(_, message) => message.body().received().0.clone(),
-            Self::Esm(_, message) => message.body().received().0.clone(),
-            Self::SecurityProtected(_, inner) => inner.unknown(),
-            Self::ServiceRequest(_) | Self::EmmTransport(_) | Self::Opaque(_) => {
-                crate::common::UnknownIes::new()
-            }
-        }
-    }
-
-    fn set_unknown(&mut self, unknown: &crate::common::UnknownIes) -> bool {
-        match self {
-            Self::Emm(_, message) => message
-                .body_mut()
-                .set_received(unknown, &crate::common::IeOrder::new()),
-            Self::Esm(_, message) => message
-                .body_mut()
-                .set_received(unknown, &crate::common::IeOrder::new()),
-            Self::SecurityProtected(_, inner) => return inner.set_unknown(unknown),
-            Self::ServiceRequest(_) | Self::EmmTransport(_) | Self::Opaque(_) => return false,
-        }
-        true
-    }
-
-    fn blank(&self, name: &str) -> Option<oxirush_utils::tree::Value> {
-        match self {
-            Self::Emm(_, message) => message.body().blank(name),
-            Self::Esm(_, message) => message.body().blank(name),
-            Self::SecurityProtected(_, inner) => inner.blank(name),
-            Self::ServiceRequest(_) | Self::EmmTransport(_) | Self::Opaque(_) => None,
-        }
-    }
-
-    #[cfg(test)]
-    fn variant_name(&self) -> Option<&'static str> {
-        match self {
-            Self::Emm(_, message) => Some(message.variant_name()),
-            Self::Esm(_, message) => Some(message.variant_name()),
-            Self::SecurityProtected(_, inner) => inner.variant_name(),
-            Self::ServiceRequest(_) | Self::EmmTransport(_) | Self::Opaque(_) => None,
-        }
-    }
-
     fn blank_of(family: &str, kind: &str) -> Option<Self> {
         use crate::common::readable::blank;
         match family {
@@ -187,15 +136,6 @@ impl Viewed for Message {
                 Some((header.message_authentication_code, &**inner))
             }
             _ => None,
-        }
-    }
-
-    fn slot(&mut self, name: &str) -> Option<&mut dyn view::Slot> {
-        match self {
-            Self::Emm(_, message) => message.body_mut().slot(name),
-            Self::Esm(_, message) => message.body_mut().slot(name),
-            Self::SecurityProtected(_, inner) => inner.slot(name),
-            Self::ServiceRequest(_) | Self::EmmTransport(_) | Self::Opaque(_) => None,
         }
     }
 
@@ -271,6 +211,35 @@ impl Viewed for Message {
         }
     }
 
+    fn fields(&self) -> Vec<(&'static str, view::Entry)> {
+        use view::Entry::{Field, Octets};
+        match self {
+            Self::ServiceRequest(request) => vec![
+                ("protocol-discriminator", Field),
+                ("security-header-type", Field),
+                (
+                    "ksi-and-sequence-number",
+                    Octets(vec![request.ksi_and_sequence_number]),
+                ),
+                (
+                    "message-authentication-code",
+                    Octets(request.message_authentication_code.to_be_bytes().to_vec()),
+                ),
+            ],
+            Self::EmmTransport(transport) => {
+                let mut fields = vec![("security-header", Field)];
+                if let Some(octets) = &transport.protected_payload {
+                    fields.push(("ciphered-message", Octets(octets.clone())));
+                }
+                if let Some(octets) = &transport.data_container {
+                    fields.push((EmmTransport::DATA_CONTAINER, Octets(octets.clone())));
+                }
+                fields
+            }
+            _ => Vec::new(),
+        }
+    }
+
     fn header_name(field: &str, number: u64) -> Option<oxirush_utils::tree::Value> {
         let number = u8::try_from(number).ok()?;
         match field {
@@ -294,65 +263,50 @@ impl Viewed for Message {
 }
 
 impl Message {
-    /// The view of the message: each field of the header and each IE that the message
-    /// can have, with its `value` and its `octets`, `null` for one that the message has
-    /// not. A tree is made of it.
-    pub(crate) fn to_view(&self) -> oxirush_utils::tree::Value {
-        match self {
-            Self::ServiceRequest(request) => request.view(),
-            Self::EmmTransport(transport) => transport.view(),
-            message => view::to_view(message, view::Scope::NONE),
-        }
-    }
-
-    /// The message that an edited view of this one describes: an IE whose `value`
-    /// changed is encoded from it, one whose `octets` changed has them, and the others
-    /// keep their octets.
-    pub(crate) fn with_view(&self, view: oxirush_utils::tree::Value) -> Result<Self> {
-        let edited = match self {
-            Self::ServiceRequest(request) => {
-                let request = request.written(view, false);
-                request.map(Self::ServiceRequest)
-            }
-            Self::EmmTransport(_) => EmmTransport::written(view).map(Self::EmmTransport),
-            message => view::with_view(message, view, view::Scope::NONE),
-        }
-        .map_err(Error::EncodingError)?;
-        // A message that the view leaves as it is comes back as it is.
-        if edited != *self {
-            edited.encode()?;
-        }
-        Ok(edited)
-    }
-
-    /// The message that a view describes alone, which its `message-type` names.
-    pub(crate) fn from_view(view: oxirush_utils::tree::Value) -> Result<Self> {
-        let Some(named) = view::message_type::<Self>(&view) else {
-            let has = |entry: &str| {
-                (view.as_object().into_iter().flatten()).any(|(name, _)| same_name(name, entry))
-            };
-            return match (has("ksi-and-sequence-number"), has("security-header")) {
-                (true, _) => ServiceRequest::from_view(view),
-                // An EMM TRANSPORT is a security header and a container.
-                (_, true) => (EmmTransport::written(view).map(Self::EmmTransport))
-                    .map_err(Error::EncodingError)
-                    .and_then(sendable),
-                _ => Err(Error::EncodingError(
+    /// The plain message that a tree writes alone, which its `message-type`
+    /// names, or a SERVICE REQUEST, which has none.
+    fn plain(tree: oxirush_utils::tree::Value) -> Result<Self> {
+        let (members, named) =
+            view::typed_members::<Self>(tree, view::Scope::NONE).map_err(Error::EncodingError)?;
+        let Some(named) = named else {
+            if !members
+                .keys()
+                .any(|name| same_name(name, "ksi-and-sequence-number"))
+            {
+                return Err(Error::EncodingError(
                     "the `message-type` of the view names the message".into(),
-                )),
-            };
+                ));
+            }
+            let members = members
+                .into_iter()
+                .map(|(name, written)| (name, Some(written)));
+            let request = ServiceRequest::new(0, 0).written(members, true);
+            return (request.map(Self::ServiceRequest))
+                .map_err(Error::EncodingError)
+                .and_then(sendable);
+        };
+        let alone = |family: &str, kind: &str| {
+            view::alone(&[family], kind, members.clone(), view::Scope::NONE)
         };
         match message_type_place(&named) {
             Some((0, place)) => match emm_types().nth(place) {
-                Some(kind) => kind.message_from_view(view),
-                None => Err(Error::EncodingError(format!("no message `{named}`"))),
+                // A tree of neither message is refused as each of the two.
+                Some(EmmMessageType::DetachRequest) => alone("Emm", "DetachRequestUeOriginating")
+                    .or_else(|from_ue| {
+                        let to_ue = alone("Emm", "DetachRequestUeTerminated");
+                        to_ue.map_err(|to_ue| format!("from the UE: {from_ue}; to the UE: {to_ue}"))
+                    }),
+                Some(kind) => alone("Emm", &format!("{kind:?}")),
+                None => Err(format!("no message `{named}`")),
             },
             Some((_, place)) => match esm_types().nth(place) {
-                Some(kind) => kind.message_from_view(view),
-                None => Err(Error::EncodingError(format!("no message `{named}`"))),
+                Some(kind) => alone("Esm", &format!("{kind:?}")),
+                None => Err(format!("no message `{named}`")),
             },
-            None => Err(Error::EncodingError(no_message(&named))),
+            None => Err(no_message(&named)),
         }
+        .map_err(Error::EncodingError)
+        .and_then(sendable)
     }
 }
 
@@ -375,63 +329,58 @@ fn message_type_place(kind: &str) -> Option<(usize, usize)> {
 }
 
 impl EmmTransport {
-    /// The entry of a view for a data container that is not ciphered.
+    /// The member of a tree for a data container that is not ciphered.
     const DATA_CONTAINER: &'static str = "data-container";
 
-    /// The view of an EMM TRANSPORT: its `security-header`, and its
+    /// The tree of an EMM TRANSPORT: its `security-header`, and its
     /// container, as the `octets` of a `ciphered-message` or, once it was
     /// deciphered, of a `data-container`.
-    fn view(&self) -> oxirush_utils::tree::Value {
-        let entry = |member: &str, value: oxirush_utils::tree::Value| {
-            oxirush_utils::tree::Value::from(oxirush_utils::tree::Map::from_iter([(
-                member.to_string(),
-                value,
-            )]))
-        };
-        let mut view = oxirush_utils::tree::Map::new();
+    fn tree(&self) -> oxirush_utils::tree::Value {
+        let octets =
+            |octets: &[u8]| oxirush_utils::tree!({ "octets": oxirush_utils::tree::hex(octets) });
         let header = crate::common::readable::to_value(&self.security_header);
-        view.insert(
-            "security-header".into(),
-            entry("value", header.unwrap_or_default()),
-        );
-        if let Some(octets) = &self.protected_payload {
-            let octets = oxirush_utils::tree::hex(octets).into();
-            view.insert("ciphered-message".into(), entry("octets", octets));
+        let header = view::without_absent(header.unwrap_or_default());
+        let mut tree = oxirush_utils::tree!({ "security-header": header });
+        if let Some(ciphered) = &self.protected_payload {
+            tree["ciphered-message"] = octets(ciphered);
         }
-        if let Some(octets) = &self.data_container {
-            let octets = oxirush_utils::tree::hex(octets).into();
-            view.insert(Self::DATA_CONTAINER.into(), entry("octets", octets));
+        if let Some(data) = &self.data_container {
+            tree[Self::DATA_CONTAINER] = octets(data);
         }
-        view.into()
+        tree
     }
 
-    /// The EMM TRANSPORT that the view `view` describes: every entry that
-    /// it has is written.
-    fn written(view: oxirush_utils::tree::Value) -> core::result::Result<Self, String> {
-        let oxirush_utils::tree::Value::Object(view) = view else {
-            return Err(format!("{view} is not a view: an object of IEs by name"));
-        };
-        let (mut header, mut ciphered, mut data) = (None, None, None);
-        for (name, written) in view {
-            // An entry that is null is one left out.
+    /// The EMM TRANSPORT of a tree: its header, the octets of a container
+    /// that is ciphered, and what else the tree has.
+    fn of_tree(
+        header: crate::nas_eps::SecurityHeader,
+        ciphered: Option<Vec<u8>>,
+        rest: &oxirush_utils::tree::Value,
+    ) -> core::result::Result<Self, String> {
+        if header.security_header_type
+            != crate::nas_eps::SecurityHeaderType::SecurityHeaderForTheEmmTransportMessage
+        {
+            return Err(
+                "security-header: a message under another header than `emm-transport` is \
+                 written as a tree, or edited with `with_view`"
+                    .into(),
+            );
+        }
+        let (mut ciphered, mut data) = (ciphered, None);
+        for (name, written) in rest.as_object().into_iter().flatten() {
+            // A member that is null is one left out.
             if written.is_null() {
                 continue;
             }
-            let entry = view::entry(written).map_err(|error| format!("{name}: {error}"))?;
-            let octets = |octets: &oxirush_utils::tree::Value| {
-                let octets = octets.as_str().and_then(oxirush_utils::tree::unhex);
-                octets.ok_or_else(|| format!("{name}: its octets are hexadecimal"))
-            };
-            match entry {
-                [Some(value), None] if same_name(&name, "security-header") => {
-                    header = Some(view::security_header(&value, &[])?);
-                }
-                [None, Some(written)] if same_name(&name, "ciphered-message") => {
-                    ciphered = Some(octets(&written)?);
-                }
-                [None, Some(written)] if same_name(&name, Self::DATA_CONTAINER) => {
-                    data = Some(octets(&written)?);
-                }
+            let octets = (written.as_object().filter(|written| written.len() == 1))
+                .and_then(|written| written.get("octets"))
+                .map(|octets| {
+                    let octets = octets.as_str().and_then(oxirush_utils::tree::unhex);
+                    octets.ok_or_else(|| format!("{name}: its octets are hexadecimal"))
+                });
+            match octets {
+                Some(octets) if same_name(name, "ciphered-message") => ciphered = Some(octets?),
+                Some(octets) if same_name(name, Self::DATA_CONTAINER) => data = Some(octets?),
                 _ => {
                     return Err(format!(
                         "`{name}` is no entry of an EMM TRANSPORT: it has a `security-header` \
@@ -441,17 +390,6 @@ impl EmmTransport {
                     ));
                 }
             }
-        }
-        let header: crate::nas_eps::SecurityHeader =
-            header.ok_or("`security-header` is not written")?;
-        if header.security_header_type
-            != crate::nas_eps::SecurityHeaderType::SecurityHeaderForTheEmmTransportMessage
-        {
-            return Err(
-                "security-header: a message under another header than `emm-transport` is \
-                 written as a tree, or edited with `with_view`"
-                    .into(),
-            );
         }
         if ciphered.is_some() && data.is_some() {
             return Err(format!(
@@ -465,33 +403,6 @@ impl EmmTransport {
             protected_payload: ciphered,
         })
     }
-
-    /// The EMM TRANSPORT of a tree: its header, the octets of a container
-    /// that is ciphered, and what else the tree has.
-    fn of_tree(
-        header: crate::nas_eps::SecurityHeader,
-        ciphered: Option<Vec<u8>>,
-        rest: &oxirush_utils::tree::Value,
-    ) -> core::result::Result<Self, String> {
-        let entry = |member: &str, value: oxirush_utils::tree::Value| {
-            oxirush_utils::tree::Value::from(oxirush_utils::tree::Map::from_iter([(
-                member.to_string(),
-                value,
-            )]))
-        };
-        let mut view = oxirush_utils::tree::Map::new();
-        let header = crate::common::readable::to_value(&header)?;
-        view.insert("security-header".into(), entry("value", header));
-        if let Some(octets) = ciphered {
-            let octets = oxirush_utils::tree::hex(&octets).into();
-            view.insert("ciphered-message".into(), entry("octets", octets));
-        }
-        // A member of a tree that is `{"octets": ..}` is the entry of a view.
-        for (name, written) in rest.as_object().into_iter().flatten() {
-            view.insert(name.clone(), written.clone());
-        }
-        Self::written(view.into())
-    }
 }
 
 /// The names of the fields of the short header of a SERVICE REQUEST.
@@ -503,47 +414,38 @@ const SERVICE_REQUEST: [&str; 4] = [
 ];
 
 impl ServiceRequest {
-    /// The message that a view describes alone, which its `message-type` names.
-    pub(crate) fn from_view(view: oxirush_utils::tree::Value) -> Result<Message> {
-        let request = Self::new(0, 0).written(view, true);
-        (request.map(Message::ServiceRequest))
-            .map_err(Error::EncodingError)
-            .and_then(sendable)
-    }
-
-    fn view(&self) -> oxirush_utils::tree::Value {
+    /// The tree of a SERVICE REQUEST: its fields but those that its type
+    /// decides.
+    fn tree(&self) -> oxirush_utils::tree::Value {
+        use oxirush_utils::tree;
         let octet = self.ksi_and_sequence_number;
-        let header_type = match self.security_header_type {
-            12 => oxirush_utils::tree!("security-header-for-the-service-request-message"),
-            other => other.into(),
-        };
-        oxirush_utils::tree!({
-            "protocol-discriminator": {"value": 7},
-            "security-header-type": {"value": header_type},
-            "ksi-and-sequence-number": {
-                "value": {"ksi": octet >> 5, "sequence-number": octet & 0x1f},
-                "octets": format!("{octet:02x}"),
-            },
-            "message-authentication-code": {
-                "octets": format!("{:04x}", self.message_authentication_code),
-            },
-        })
+        let mut members = Vec::new();
+        if self.security_header_type != 12 {
+            members.push(("security-header-type", tree!(self.security_header_type)));
+        }
+        members.push((
+            "ksi-and-sequence-number",
+            tree!({"ksi": octet >> 5, "sequence-number": octet & 0x1f}),
+        ));
+        let code = format!("{:04x}", self.message_authentication_code);
+        members.push(("message-authentication-code", tree!({ "octets": code })));
+        let members = members
+            .into_iter()
+            .map(|(name, value)| (name.to_string(), value));
+        tree::Value::from(tree::Map::from_iter(members))
     }
 
-    /// This request as `view` edits it, or with `alone` the one that has
-    /// nothing but what the view writes.
+    /// This request as the members `members` of a tree write it, or with
+    /// `alone` the one that has nothing but what they write. A member that
+    /// is `None` is left out.
     fn written(
         &self,
-        view: oxirush_utils::tree::Value,
+        members: impl IntoIterator<Item = (String, Option<oxirush_utils::tree::Value>)>,
         alone: bool,
     ) -> core::result::Result<Self, String> {
-        let oxirush_utils::tree::Value::Object(view) = view else {
-            return Err(format!("{view} is not a view: an object of IEs by name"));
-        };
-        let before = self.view();
         let mut request = self.clone();
         let mut left: Vec<_> = SERVICE_REQUEST.to_vec();
-        for (name, written) in view {
+        for (name, written) in members {
             let Some(at) = left.iter().position(|field| same_name(field, &name)) else {
                 return Err(crate::common::readable::none_of(
                     &name,
@@ -551,26 +453,31 @@ impl ServiceRequest {
                     "IE",
                 ));
             };
-            // An entry that is null is one left out.
-            if written.is_null() {
+            let Some(written) = written else {
                 continue;
-            }
-            let field = left.swap_remove(at);
-            let [value, octets] =
-                view::entry(written).map_err(|error| format!("{name}: {error}"))?;
-            // What the view has as the message does is not written again.
-            let changed = |member: &str, written: Option<oxirush_utils::tree::Value>| {
-                written.filter(|written| alone || before[field].get(member) != Some(written))
             };
-            let (value, octets) = (changed("value", value), changed("octets", octets));
+            let field = left.swap_remove(at);
             let refused = |reason: String| format!("{name}: {reason}");
+            let octets = (written.as_object().filter(|written| written.len() == 1))
+                .and_then(|written| written.get("octets"));
+            let (value, octets) = match octets {
+                Some(oxirush_utils::tree::Value::Null) => (None, None),
+                Some(octets) => (None, Some(octets)),
+                None if written.is_null() => (None, None),
+                None => (Some(&written), None),
+            };
+            if (value, octets) == (None, None) {
+                return Err(refused(
+                    "an IE is written with a `value` or `octets`".into(),
+                ));
+            }
             let bytes = |octets: &oxirush_utils::tree::Value| {
                 let bytes = octets.as_str().and_then(oxirush_utils::tree::unhex);
                 bytes.ok_or_else(|| refused(format!("{octets} is not octets in hexadecimal")))
             };
             match (field, value, octets) {
                 ("protocol-discriminator", Some(value), None) => {
-                    if from_value::<u8>(&value) != Ok(7) {
+                    if from_value::<u8>(value) != Ok(7) {
                         return Err(refused(format!(
                             "{value} is not 7, the discriminator of EMM"
                         )));
@@ -582,7 +489,7 @@ impl ServiceRequest {
                     });
                     request.security_header_type = match named {
                         true => 12,
-                        false => from_value(&value).map_err(refused)?,
+                        false => from_value(value).map_err(refused)?,
                     };
                     if !(12..=15).contains(&request.security_header_type) {
                         return Err(refused(format!(
@@ -590,48 +497,33 @@ impl ServiceRequest {
                         )));
                     }
                 }
-                ("ksi-and-sequence-number", value, octets) => {
-                    let of_octets = match octets.as_ref().map(bytes).transpose()?.as_deref() {
-                        Some([octet]) => Some(*octet),
-                        Some(_) => return Err(refused("its octets are one octet".into())),
-                        None => None,
+                ("ksi-and-sequence-number", Some(value), None) => {
+                    let mut parts = [0_u8; 2];
+                    for (part, written) in view::members(value).map_err(refused)? {
+                        let known = ["ksi", "sequence-number"];
+                        let at = known.iter().position(|known| same_name(known, part));
+                        let at = at.ok_or_else(|| refused(format!("no member `{part}`")))?;
+                        parts[at] = from_value(written).map_err(refused)?;
+                    }
+                    if parts[0] > 7 || parts[1] > 31 {
+                        return Err(refused(
+                            "a ksi is 0 to 7 and a sequence-number 0 to 31".into(),
+                        ));
+                    }
+                    request.ksi_and_sequence_number = parts[0] << 5 | parts[1];
+                }
+                ("ksi-and-sequence-number", None, Some(octets)) => {
+                    let [octet] = bytes(octets)?[..] else {
+                        return Err(refused("its octets are one octet".into()));
                     };
-                    let of_value = match &value {
-                        Some(value) => {
-                            let mut parts = [0_u8; 2];
-                            for (part, written) in view::members(value).map_err(refused)? {
-                                let known = ["ksi", "sequence-number"];
-                                let at = known.iter().position(|known| same_name(known, part));
-                                let at =
-                                    at.ok_or_else(|| refused(format!("no member `{part}`")))?;
-                                parts[at] = from_value(written).map_err(refused)?;
-                            }
-                            if parts[0] > 7 || parts[1] > 31 {
-                                return Err(refused(
-                                    "a ksi is 0 to 7 and a sequence-number 0 to 31".into(),
-                                ));
-                            }
-                            Some(parts[0] << 5 | parts[1])
-                        }
-                        None => None,
-                    };
-                    request.ksi_and_sequence_number = match (of_value, of_octets) {
-                        (Some(value), Some(octets)) if value != octets => {
-                            return Err(refused(
-                                "the octets and the value that are written disagree".into(),
-                            ));
-                        }
-                        (Some(octet), _) | (None, Some(octet)) => octet,
-                        (None, None) => request.ksi_and_sequence_number,
-                    };
+                    request.ksi_and_sequence_number = octet;
                 }
                 ("message-authentication-code", None, Some(octets)) => {
-                    let Ok(mac) = <[u8; 2]>::try_from(bytes(&octets)?) else {
+                    let Ok(mac) = <[u8; 2]>::try_from(bytes(octets)?) else {
                         return Err(refused("its octets are two octets".into()));
                     };
                     request.message_authentication_code = u16::from_be_bytes(mac);
                 }
-                (_, None, None) => {}
                 ("message-authentication-code", ..) => {
                     return Err(refused("it has its `octets` alone".into()));
                 }
@@ -717,13 +609,7 @@ impl Message {
     /// assert!(!minutes.means_the_same(&decode("0744165f012b")));
     /// ```
     pub fn means_the_same(&self, other: &Self) -> bool {
-        match (
-            view::meant(self, view::Scope::NONE),
-            view::meant(other, view::Scope::NONE),
-        ) {
-            (Ok(this), Ok(other)) => this == other,
-            _ => self == other,
-        }
+        view::meant(self, view::Scope::NONE) == view::meant(other, view::Scope::NONE)
     }
 
     /// This message as a tree: its `message-type` and its IEs by name, each
@@ -777,11 +663,9 @@ impl Message {
     /// ```
     pub fn to_tree(&self) -> oxirush_utils::tree::Value {
         match self {
-            // A message that has no table: the fields of its view.
-            Self::ServiceRequest(_) | Self::EmmTransport(_) => {
-                view::to_tree(&self.to_view(), None, &decided)
-            }
-            message => view::tree(message, None, &decided, view::Scope::NONE),
+            Self::ServiceRequest(request) => request.tree(),
+            Self::EmmTransport(transport) => transport.tree(),
+            message => view::tree(message, view::Scope::NONE),
         }
     }
 
@@ -809,9 +693,7 @@ impl Message {
     pub fn from_tree(tree: oxirush_utils::tree::Value) -> Result<Self> {
         let (protection, tree) = view::protection_of(tree).map_err(Error::EncodingError)?;
         let Some((header, ciphered)) = protection else {
-            let view = view::from_tree(&tree, None, &decided, view::Scope::NONE)
-                .map_err(Error::EncodingError)?;
-            return Self::from_view(view);
+            return Self::plain(tree);
         };
         let header: crate::nas_eps::SecurityHeader =
             view::security_header(&header, &[]).map_err(Error::EncodingError)?;
@@ -858,9 +740,7 @@ impl Message {
         &self,
         path: &str,
     ) -> core::result::Result<Vec<oxirush_utils::tree::Value>, oxirush_utils::tree::Error> {
-        crate::paths::of_message(&self.to_tree(), path, |ie| {
-            view::ie_octets(&self.to_view(), ie)
-        })
+        crate::paths::of_message(&self.to_tree(), path, |ie| view::ie_octets(self, ie))
     }
 
     /// The message that an edited tree of this one writes: this message, with
@@ -895,17 +775,31 @@ impl Message {
     /// ```
     pub fn with_tree(&self, tree: oxirush_utils::tree::Value) -> Result<Self> {
         let before = self.to_tree();
-        // A message that has no table: the fields of its view.
-        if let Self::ServiceRequest(_) | Self::EmmTransport(_) = self {
-            let edited =
-                view::edited_view(self.to_view(), before, tree, &decided, view::Scope::NONE)
-                    .map_err(Error::EncodingError)?;
-            return self.with_view(edited);
+        let edited = match self {
+            // A message that has no table: its fields.
+            Self::ServiceRequest(request) => {
+                let edits = view::edits::<Self>(before, tree, view::Scope::NONE);
+                edits.and_then(|edits| request.written(edits, false).map(Self::ServiceRequest))
+            }
+            Self::EmmTransport(_) => {
+                let mut rest = tree;
+                let header = (rest.as_object_mut())
+                    .and_then(|members| {
+                        let name = members
+                            .keys()
+                            .find(|name| same_name(name, "security-header"));
+                        members.shift_remove(&name?.clone())
+                    })
+                    .ok_or_else(|| {
+                        Error::EncodingError("`security-header` is not written".into())
+                    })?;
+                let header = view::security_header(&header, &[]).map_err(Error::EncodingError)?;
+                EmmTransport::of_tree(header, None, &rest).map(Self::EmmTransport)
+            }
+            message => view::edits::<Self>(before, tree, view::Scope::NONE)
+                .and_then(|edits| view::with_edits(message, edits, view::Scope::NONE)),
         }
-        let edits =
-            view::edits(before, tree, &decided, view::Scope::NONE).map_err(Error::EncodingError)?;
-        let edited =
-            view::with_edits(self, edits, view::Scope::NONE).map_err(Error::EncodingError)?;
+        .map_err(Error::EncodingError)?;
         // A message that the tree leaves as it is comes back as it is.
         if edited != *self {
             edited.encode()?;
@@ -945,24 +839,6 @@ fn sendable(message: Message) -> Result<Message> {
 }
 
 impl EmmMessageType {
-    /// The message that a view describes alone, which its `message-type` names.
-    pub(crate) fn message_from_view(self, view: oxirush_utils::tree::Value) -> Result<Message> {
-        let from = |kind: &str| view::from_view(&["Emm"], kind, view.clone(), view::Scope::NONE);
-        if let Err(error) = view::typed::<Message>(&format!("{self:?}"), &view) {
-            return Err(Error::EncodingError(error));
-        }
-        match self {
-            // A view of neither message is refused as each of the two.
-            Self::DetachRequest => from("DetachRequestUeOriginating").or_else(|from_ue| {
-                let to_ue = from("DetachRequestUeTerminated");
-                to_ue.map_err(|to_ue| format!("from the UE: {from_ue}; to the UE: {to_ue}"))
-            }),
-            _ => from(&format!("{self:?}")),
-        }
-        .map_err(Error::EncodingError)
-        .and_then(sendable)
-    }
-
     /// The names of the members that the tree of a message of this type can
     /// have: the fields of its header, then its IEs in the order of the
     /// message, with those that are optional. A type that the crate has no
@@ -980,15 +856,6 @@ impl EmmMessageType {
 }
 
 impl EsmMessageType {
-    /// The message that a view describes alone, which its `message-type` names.
-    pub(crate) fn message_from_view(self, view: oxirush_utils::tree::Value) -> Result<Message> {
-        let kind = format!("{self:?}");
-        view::typed::<Message>(&kind, &view)
-            .and_then(|()| view::from_view(&["Esm"], &kind, view, view::Scope::NONE))
-            .map_err(Error::EncodingError)
-            .and_then(sendable)
-    }
-
     /// The names of the members that the tree of a message of this type can
     /// have: the fields of its header, then its IEs in the order of the
     /// message, with those that are optional. A type that the crate has no

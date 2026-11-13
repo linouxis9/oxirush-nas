@@ -20,7 +20,7 @@
 //! `octets` in hexadecimal.
 
 use crate::common::ppp::{Chap, Ipcp, Lcp, Packet, Pap};
-use crate::common::readable::{self, letters, printed, same_name};
+use crate::common::readable::{self, letters, same_name};
 use crate::common::ts24008::{Pco, PcoDirection, PcoEntry};
 use crate::common::{Plmn, ValueError, within};
 use crate::nas_5gs::{
@@ -36,7 +36,8 @@ use readable::Readable;
 /// An IE type whose octets have a value: what its typed accessors return,
 /// in the readable form of [`readable`].
 pub(crate) trait Decoded: Readable + Clone + PartialEq + 'static {
-    /// The value of the octets in `scope`; `None` when they have none.
+    /// The value of the octets in `scope`; `None` when they have none. The
+    /// value of a container is the tree of its message.
     fn decoded(&self, scope: Scope) -> Option<Value>;
 
     /// This IE with the octets of `value`, in `scope`. The IE that comes
@@ -57,24 +58,6 @@ pub(crate) trait Decoded: Readable + Clone + PartialEq + 'static {
         self.clone()
     }
 
-    /// The tree of the message that the IE carries, in the IE `container`
-    /// of a message or alone: `None` for an IE that carries no message.
-    fn tree(
-        &self,
-        _container: Option<&str>,
-        _decided: Decided<'_>,
-        _scope: Scope,
-    ) -> Option<Value> {
-        None
-    }
-
-    /// What decides the header of the message that the IE carries when the
-    /// IE is alone: the system of the message. `None` for an IE that
-    /// carries no message.
-    fn carried() -> Option<Decided<'static>> {
-        None
-    }
-
     /// The value of the IE where it writes the IE back alone, as
     /// [`Ie::written_back`] says of it; `None` where the IE has its octets.
     fn shown_value(&self, scope: Scope) -> Option<Value> {
@@ -82,28 +65,36 @@ pub(crate) trait Decoded: Readable + Clone + PartialEq + 'static {
         let written = Self::unwritten().with_decoded(&value, scope).ok()?;
         (written.meant(scope) == self.meant(scope)).then_some(value)
     }
+
+    /// The octets of the IE that `names` names in the message that this IE
+    /// carries ([`ie_octets`]); `None` for an IE that carries no message.
+    fn octets_inside(&self, _names: &[String], _scope: Scope) -> Option<Found> {
+        None
+    }
+
+    /// What the tests compare with what Wireshark reads of the IE: its
+    /// value, and for a container the reading of its message.
+    #[cfg(test)]
+    fn reading(&self, scope: Scope) -> Option<Value> {
+        self.decoded(scope)
+    }
 }
 
-/// An IE of a message, as the view shows it, in the [`Scope`] of the
-/// message.
+/// An IE of a message, as a tree shows it, in the [`Scope`] of the message.
 pub(crate) trait Ie {
     /// The value of the IE; `None` when its octets have none.
     fn value(&self, scope: Scope) -> Option<Value>;
-
-    /// The readable serde form of the IE with the octets of `value`.
-    fn encoded(&self, value: &Value, scope: Scope) -> Result<Value, String>;
 
     /// The IE with the octets of `value`, of the type of the field of the
     /// message that holds this one ([`Slot::put`]).
     fn encoded_ie(&self, value: &Value, scope: Scope) -> Result<Box<dyn Any>, String>;
 
-    /// The value of the octets of the IE that [`Self::encoded`] gives.
+    /// The value of the octets of the IE that `value` writes.
     #[cfg(test)]
     fn encoded_value(&self, value: &Value, scope: Scope) -> Result<Option<Value>, String>;
 
     /// Whether `value` writes this IE back: the IE that it writes alone,
-    /// without octets before it, means what this one means. `value` is the
-    /// value of the IE, or the view that the tree of its message writes.
+    /// without octets before it, means what this one means.
     fn written_back(&self, value: &Value, scope: Scope) -> bool;
 
     /// The value of the IE where it writes the IE back; `None` where the IE
@@ -113,26 +104,22 @@ pub(crate) trait Ie {
         self.written_back(&value, scope).then_some(value)
     }
 
-    /// The readable serde form of the IE that stands for all those that
-    /// mean what this one means, when it is another than this one.
-    fn meant(&self, scope: Scope) -> Option<Value>;
+    /// The IE that stands for all those that mean what this one means,
+    /// when it is another than this one.
+    fn meant(&self, scope: Scope) -> Option<Box<dyn Any>>;
 
-    /// The tree of the message that the IE carries, in the IE `container`
-    /// of a message or alone: `None` for an IE that carries no message.
-    fn tree(&self, container: Option<&str>, decided: Decided<'_>, scope: Scope) -> Option<Value>;
+    /// The octets of the IE that `names` names in the message that this IE
+    /// carries; `None` for an IE that carries no message.
+    fn octets_inside(&self, names: &[String], scope: Scope) -> Option<Found>;
 
-    /// What decides the header of the message that the IE carries when the
-    /// IE is alone: `None` for an IE that carries no message.
-    fn carried(&self) -> Option<Decided<'static>>;
+    /// [`Decoded::reading`].
+    #[cfg(test)]
+    fn reading(&self, scope: Scope) -> Option<Value>;
 }
 
 impl<T: Decoded> Ie for T {
     fn value(&self, scope: Scope) -> Option<Value> {
         self.decoded(scope)
-    }
-
-    fn encoded(&self, value: &Value, scope: Scope) -> Result<Value, String> {
-        readable::to_value(&self.with_decoded(value, scope)?)
     }
 
     fn encoded_ie(&self, value: &Value, scope: Scope) -> Result<Box<dyn Any>, String> {
@@ -153,17 +140,18 @@ impl<T: Decoded> Ie for T {
         Decoded::shown_value(self, scope)
     }
 
-    fn meant(&self, scope: Scope) -> Option<Value> {
+    fn meant(&self, scope: Scope) -> Option<Box<dyn Any>> {
         let meant = Decoded::meant(self, scope);
-        (meant != *self).then(|| readable::to_value(&meant).ok())?
+        (meant != *self).then(|| Box::new(meant) as Box<dyn Any>)
     }
 
-    fn tree(&self, container: Option<&str>, decided: Decided<'_>, scope: Scope) -> Option<Value> {
-        Decoded::tree(self, container, decided, scope)
+    fn octets_inside(&self, names: &[String], scope: Scope) -> Option<Found> {
+        Decoded::octets_inside(self, names, scope)
     }
 
-    fn carried(&self) -> Option<Decided<'static>> {
-        T::carried()
+    #[cfg(test)]
+    fn reading(&self, scope: Scope) -> Option<Value> {
+        Decoded::reading(self, scope)
     }
 }
 
@@ -208,18 +196,7 @@ pub(crate) trait ViaWritten<T> {
 
 impl<T: Decoded> ViaWritten<T> for WrittenProbe<T> {
     fn writer(&self) -> Option<Writer<T>> {
-        Some(|value| {
-            let scope = Scope::NONE;
-            match T::carried() {
-                // The tree of the message that the IE carries, which its view is
-                // read from.
-                Some(decided) => {
-                    let view = from_tree(value, None, decided, scope)?;
-                    T::unwritten().with_decoded(&view, scope)
-                }
-                None => T::unwritten().with_decoded(value, scope),
-            }
-        })
+        Some(|value| T::unwritten().with_decoded(value, Scope::NONE))
     }
 }
 
@@ -235,55 +212,25 @@ impl<T> ViaNoWritten<T> for &WrittenProbe<T> {
 }
 
 /// The tree of an IE alone, `ie` where its type has a value, whose value
-/// field is `octets`: what the tree of a message shows of it ([`shown`]),
-/// the message that it carries by the decisions of its system, or else its
+/// field is `octets`: its value where that writes it back, or else its
 /// octets.
 pub(crate) fn ie_shown(ie: Option<&dyn Ie>, octets: &dyn Shown) -> Value {
-    let scope = Scope::NONE;
-    let decided: Decided<'_> = &|_, _| Ok(Vec::new());
-    let shown = ie.and_then(|ie| {
-        let decided = ie.carried().unwrap_or(decided);
-        shown(ie, &ie.value(scope)?, None, decided, scope)
-    });
-    shown.unwrap_or_else(|| oxirush_utils::tree!({ "octets": octets.hex() }))
-}
-
-/// What a tree shows of `ie`, whose value is `value`, in the IE `container`
-/// of a message or alone: the tree of the message that it carries, or its
-/// value, where that writes it back. `None` where it has its octets.
-fn shown(
-    ie: &dyn Ie,
-    value: &Value,
-    container: Option<&str>,
-    decided: Decided<'_>,
-    scope: Scope,
-) -> Option<Value> {
-    match ie.tree(container, decided, scope) {
-        // The message of a container, by its own tree: the container is the
-        // one that this tree writes.
-        Some(inner) => (from_tree(&inner, container, decided, scope))
-            .is_ok_and(|written| ie.written_back(&written, scope))
-            .then_some(inner),
-        None if is_message(value) => None,
-        None => ie
-            .written_back(value, scope)
-            .then(|| without_absent(value.clone())),
-    }
+    let shown = ie.and_then(|ie| ie.shown_value(Scope::NONE));
+    shown.map_or_else(
+        || oxirush_utils::tree!({ "octets": octets.hex() }),
+        without_absent,
+    )
 }
 
 /// The IE of the type `T` that the tree `value` of an IE writes: by its
-/// `octets`, of `size` for a value that is a number, or by its value with
-/// `writer` where the type has one.
-pub(crate) fn ie_written<T: Readable>(
-    value: &Value,
-    size: usize,
-    writer: Option<Writer<T>>,
-) -> Result<T, String> {
+/// `octets`, or by its value with `writer` where the type has one.
+pub(crate) fn ie_written<T: Valued>(value: &Value, writer: Option<Writer<T>>) -> Result<T, String> {
     let octets = value.as_object().filter(|value| value.len() == 1);
     if let Some(octets) = octets.and_then(|value| value.get("octets")) {
-        let mut ie = oxirush_utils::tree!({});
-        set_octets(&mut ie, octets, size)?;
-        return T::read(&ie);
+        let mut ie = T::blank();
+        let octets = octets_value(octets, ie.octets().size())?;
+        ie.octets().set(&octets);
+        return Ok(ie);
     }
     match writer {
         Some(write) => write(value),
@@ -293,9 +240,20 @@ pub(crate) fn ie_written<T: Readable>(
 
 /// `Tree` for an IE type, and through it `Serialize` and `Deserialize`:
 /// what the tree of a message shows of the IE, its value where that writes
-/// it back and its octets otherwise. `$blank` is the IE without a value.
+/// it back and its octets otherwise; and the octets of the IE as a message
+/// writes them. `$blank` is the IE without a value.
 macro_rules! ie_tree {
     ($name:ty, $blank:expr) => {
+        impl $crate::common::view::Valued for $name {
+            fn blank() -> Self {
+                $blank
+            }
+
+            fn octets(&mut self) -> &mut dyn $crate::common::view::Shown {
+                &mut self.value
+            }
+        }
+
         impl oxirush_utils::tree::Tree for $name {
             const NAME: &'static str = stringify!($name);
 
@@ -310,10 +268,9 @@ macro_rules! ie_tree {
                 reading: &mut oxirush_utils::tree::Reading,
             ) -> core::result::Result<Self, oxirush_utils::tree::Refused> {
                 #[allow(unused_imports)]
-                use $crate::common::view::{Shown, ViaNoWritten, ViaWritten, WrittenProbe};
-                let blank: Self = $blank;
+                use $crate::common::view::{ViaNoWritten, ViaWritten, WrittenProbe};
                 let writer = (&WrittenProbe::<Self>(core::marker::PhantomData)).writer();
-                $crate::common::view::ie_written(value, Shown::size(&blank.value), writer)
+                $crate::common::view::ie_written(value, writer)
                     .map_err(|why| reading.refuse(oxirush_utils::tree::ErrorKind::Value, why))
             }
         }
@@ -324,12 +281,13 @@ macro_rules! ie_tree {
 
 pub(crate) use ie_tree;
 
-/// An IE that a message has, as its view reads it.
+/// An IE that a message has, as its tree reads it.
 #[derive(Clone, Copy)]
 pub(crate) struct Field<'a> {
     /// The name of the field of the message struct.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) name: &'static str,
-    /// The name as a view prints it.
+    /// The name as a tree prints it.
     pub(crate) printed: &'static str,
     /// The value of the IE: its octets.
     pub(crate) octets: &'a dyn Shown,
@@ -337,9 +295,6 @@ pub(crate) struct Field<'a> {
     pub(crate) ie: Option<&'a dyn Ie>,
     /// Whether the IE is optional.
     pub(crate) optional: bool,
-    /// The place of the IE among those of the message, as the table of the
-    /// message has them.
-    pub(crate) place: usize,
     /// Where the IE is.
     pub(crate) scope: Scope,
 }
@@ -353,6 +308,10 @@ pub(crate) trait Shown {
 
     /// The octets in hexadecimal.
     fn hex(&self) -> String;
+
+    /// Give the value the octets `octets`, which [`octets_value`] read for
+    /// its size.
+    fn set(&mut self, octets: &[u8]);
 }
 
 impl Shown for u8 {
@@ -362,6 +321,10 @@ impl Shown for u8 {
 
     fn hex(&self) -> String {
         format!("{self:02x}")
+    }
+
+    fn set(&mut self, octets: &[u8]) {
+        *self = octets[0];
     }
 }
 
@@ -373,6 +336,10 @@ impl Shown for u16 {
     fn hex(&self) -> String {
         format!("{self:04x}")
     }
+
+    fn set(&mut self, octets: &[u8]) {
+        *self = u16::from_be_bytes([octets[0], octets[1]]);
+    }
 }
 
 impl Shown for Vec<u8> {
@@ -382,6 +349,10 @@ impl Shown for Vec<u8> {
 
     fn hex(&self) -> String {
         oxirush_utils::tree::hex(self)
+    }
+
+    fn set(&mut self, octets: &[u8]) {
+        *self = octets.to_vec();
     }
 }
 
@@ -393,107 +364,117 @@ impl Shown for crate::common::Octets {
     fn hex(&self) -> String {
         oxirush_utils::tree::hex(self)
     }
+
+    fn set(&mut self, octets: &[u8]) {
+        *self = octets.into();
+    }
+}
+
+/// The octets that `octets`, in hexadecimal, write in the value of an IE
+/// whose value is a number of `size` octets, or octets.
+pub(crate) fn octets_value(octets: &Value, size: usize) -> Result<Vec<u8>, String> {
+    let written = (octets.as_str())
+        .and_then(oxirush_utils::tree::unhex)
+        .ok_or_else(|| format!("{octets} is not octets in hexadecimal"))?;
+    match size {
+        1 | 2 if written.len() == size => Ok(written),
+        1 => Err(format!("{octets} is not one octet")),
+        2 => Err(format!("{octets} is not two octets")),
+        _ => Ok(written),
+    }
 }
 
 /// What visits the IEs that a message has.
 pub(crate) type Visit<'a> = dyn FnMut(Field<'_>) + 'a;
 
-/// A field of a message struct that a view writes: a mandatory IE, or an
+/// An IE type, as a message holds it: [`ie_tree`] implements it.
+pub(crate) trait Valued: Sized + 'static {
+    /// The IE without octets.
+    fn blank() -> Self;
+
+    /// The value field of the IE.
+    fn octets(&mut self) -> &mut dyn Shown;
+}
+
+/// A field of a message struct that a tree writes: a mandatory IE, or an
 /// optional one that the message may not have.
 pub(crate) trait Slot {
-    /// The readable form of the IE; `None` for an optional IE that the
-    /// message does not have.
-    fn form(&self) -> Option<Value>;
-
-    /// Give the field the IE of the readable form `form`.
-    fn read(&mut self, form: &Value) -> Result<(), String>;
+    /// Give the field the IE `ie`, of its type: `false` for one of another.
+    fn put(&mut self, ie: Box<dyn Any>) -> bool;
 
     /// Take an optional IE out of the message.
     fn clear(&mut self);
 
-    /// Give the field the IE `ie`, of its type: `false` for one of another.
-    fn put(&mut self, ie: Box<dyn Any>) -> bool;
+    /// Give the message an optional IE that it does not have, without
+    /// octets.
+    fn add(&mut self);
+
+    /// Give the IE the octets `octets`.
+    fn set_octets(&mut self, octets: &[u8]);
 }
 
-impl<T: crate::common::IeRules + Readable + 'static> Slot for T {
-    fn form(&self) -> Option<Value> {
-        readable::to_value(self).ok()
-    }
-
-    fn read(&mut self, form: &Value) -> Result<(), String> {
-        *self = readable::from_value(form)?;
-        Ok(())
+impl<T: Valued> Slot for T {
+    fn put(&mut self, ie: Box<dyn Any>) -> bool {
+        ie.downcast().map(|ie| *self = *ie).is_ok()
     }
 
     fn clear(&mut self) {}
 
-    fn put(&mut self, ie: Box<dyn Any>) -> bool {
-        ie.downcast().map(|ie| *self = *ie).is_ok()
+    fn add(&mut self) {}
+
+    fn set_octets(&mut self, octets: &[u8]) {
+        self.octets().set(octets);
     }
 }
 
-impl<T: crate::common::IeRules + Readable + 'static> Slot for Option<T> {
-    fn form(&self) -> Option<Value> {
-        self.as_ref().and_then(|ie| readable::to_value(ie).ok())
-    }
-
-    fn read(&mut self, form: &Value) -> Result<(), String> {
-        *self = Some(readable::from_value(form)?);
-        Ok(())
+impl<T: Valued> Slot for Option<T> {
+    fn put(&mut self, ie: Box<dyn Any>) -> bool {
+        ie.downcast().map(|ie| *self = Some(*ie)).is_ok()
     }
 
     fn clear(&mut self) {
         *self = None;
     }
 
-    fn put(&mut self, ie: Box<dyn Any>) -> bool {
-        ie.downcast().map(|ie| *self = Some(*ie)).is_ok()
+    fn add(&mut self) {
+        self.get_or_insert_with(T::blank);
+    }
+
+    fn set_octets(&mut self, octets: &[u8]) {
+        self.get_or_insert_with(T::blank).octets().set(octets);
     }
 }
 
-/// A message enum: its serde form and the IEs of the message struct in it,
+/// A message enum: its header and the IEs of the message struct in it,
 /// read through a security header.
 pub(crate) trait Viewed: Clone + PartialEq {
     /// Visit the IEs that the message struct has, in `scope`.
     fn ies(&self, scope: Scope, visit: &mut Visit<'_>);
 
-    /// The readable serde form, without a value, of the optional IE that
-    /// the message struct does not have and whose field prints as `name`.
-    fn blank(&self, name: &str) -> Option<Value>;
+    /// The message struct, read through a security header: `None` for what
+    /// has none.
+    fn body(&self) -> Option<&dyn crate::common::MessageBody>;
 
-    /// Give `visit` the name, as a view prints it, of each optional IE that
-    /// the message struct does not have, and its place among the IEs of the
-    /// message.
-    fn absent(&self, visit: &mut dyn FnMut(&'static str, usize));
+    /// [`Self::body`], to change it.
+    fn body_mut(&mut self) -> Option<&mut dyn crate::common::MessageBody>;
+
+    /// The field of the message struct whose IE prints as `name`, read
+    /// through a security header.
+    fn slot(&mut self, name: &str) -> Option<&mut dyn Slot> {
+        self.body_mut()?.slot(name)
+    }
 
     /// The readable serde form of the header of the plain message, read
     /// through a security header: `None` for what has no message struct.
     fn header(&self) -> Option<Value>;
 
-    /// The readable serde form of the header that protects the message,
-    /// with that of the octets of a message that is ciphered.
     /// The message authentication code of the header that protects the
     /// message, and the message that it protects.
     fn protected(&self) -> Option<(u32, &Self)>;
 
+    /// The readable serde form of the header that protects the message,
+    /// with that of the octets of a message that is ciphered.
     fn protection(&self) -> Option<(Value, Option<Value>)>;
-
-    /// Give the message struct what the one of `original` keeps of how it
-    /// was received: its unknown IEs and the order of its optional IEs.
-    fn keep_received(&mut self, original: &Self);
-
-    /// The IEs that the message struct has and that its table has no place
-    /// for, in the order that they came in: an IEI that the table does not
-    /// have, and what a receiver ignores of one that it has.
-    fn unknown(&self) -> crate::common::UnknownIes;
-
-    /// Give the message struct the IEs `unknown` for those, after the IEs
-    /// of its table: `false` for what has no message struct.
-    fn set_unknown(&mut self, unknown: &crate::common::UnknownIes) -> bool;
-
-    /// The field of the message struct whose IE prints as `name`, read
-    /// through a security header.
-    fn slot(&mut self, name: &str) -> Option<&mut dyn Slot>;
 
     /// Give the plain message, read through a security header, the header
     /// of the readable serde form `header`.
@@ -505,16 +486,11 @@ pub(crate) trait Viewed: Clone + PartialEq {
     fn set_protection(&mut self, header: &Value, ciphered: Option<&Value>) -> Result<(), String>;
 
     /// The message of the variant `family` of the enum that holds the
-    /// message struct of the variant `kind`, as a view that describes it
+    /// message struct of the variant `kind`, as a tree that describes it
     /// alone starts from: its header as the readable serde form makes it
     /// blank, and the message with nothing in it yet. `None` where the
     /// family has no such message.
     fn blank_of(family: &str, kind: &str) -> Option<Self>;
-
-    /// The name of the variant of the message struct, as the code writes it:
-    /// `None` for what has no message struct.
-    #[cfg(test)]
-    fn variant_name(&self) -> Option<&'static str>;
 
     /// The variants of the enum that hold a plain message.
     const FAMILIES: &'static [&'static str];
@@ -527,9 +503,9 @@ pub(crate) trait Viewed: Clone + PartialEq {
         kind: Option<&Value>,
     ) -> Result<Vec<(&'static str, Value)>, String>;
 
-    /// This message, which has nothing in it yet, ready for the view
-    /// `view`: with the IE that says how another one is read.
-    fn prepared(self, _view: &Map) -> Self {
+    /// This message, which has nothing in it yet, ready for the members
+    /// `members` of a tree: with the IE that says how another one is read.
+    fn prepared(self, _members: &Map) -> Self {
         self
     }
 
@@ -539,15 +515,21 @@ pub(crate) trait Viewed: Clone + PartialEq {
         None
     }
 
-    /// The fields of a header that a view may leave out. Such a field keeps
+    /// The fields of a header that a tree may leave out. Such a field keeps
     /// the value that the message has, which is zero in a message that a
-    /// view describes alone.
+    /// tree describes alone.
     const SPARE: &'static [&'static str] = &[];
 
     /// Why the header of this plain message is not one that the message is
     /// sent with: the member, what it is and what it can be.
     fn refused_header(&self) -> Option<String> {
         None
+    }
+
+    /// The members of the tree of a message that has no table, as
+    /// [`ie_octets`] reads them.
+    fn fields(&self) -> Vec<(&'static str, Entry)> {
+        Vec::new()
     }
 }
 
@@ -1041,47 +1023,19 @@ pub(crate) fn octets_shown(octets: &[u8]) -> Value {
     }
 }
 
-/// The octets of an IE in its readable serde form, in hexadecimal; `size`
-/// is that of a value that is a number.
-fn octets_of(ie: &Value, size: usize) -> Value {
-    match &ie["value"] {
-        Value::Number(number) if size <= 2 => {
-            format!("{:01$x}", number.as_u64().unwrap_or_default(), 2 * size).into()
-        }
-        Value::String(octets) => octets.as_str().into(),
-        _ => "".into(),
-    }
-}
-
-/// Write `octets` in hexadecimal as the value of an IE.
-fn set_octets(ie: &mut Value, octets: &Value, size: usize) -> Result<(), String> {
-    let written = (octets.as_str())
-        .and_then(oxirush_utils::tree::unhex)
-        .ok_or_else(|| format!("{octets} is not octets in hexadecimal"))?;
-    ie["value"] = match size {
-        1 | 2 if written.len() == size => (written.iter())
-            .fold(0_u64, |number, octet| number << 8 | u64::from(*octet))
-            .into(),
-        1 => return Err(format!("{octets} is not one octet")),
-        2 => return Err(format!("{octets} is not two octets")),
-        _ => octets.clone(),
-    };
-    Ok(())
-}
-
-/// The entry of a view for the header that protects a message.
+/// The member of a tree for the header that protects a message.
 const SECURITY_HEADER: &str = "security-header";
 
-/// The entry of a view for a message that is ciphered: its octets.
+/// The member of a tree for a message that is ciphered: its octets.
 const CIPHERED: &str = "ciphered-message";
 
-/// The entry of a view for the IEs that the table of the message has no
+/// The member of a tree for the IEs that the table of the message has no
 /// place for: the octets of each, its IEI first, in the order they came in.
 /// They are one text, with a space between two IEs: a message can be made
 /// of tens of thousands of them, and a list would have a value for each.
 const UNKNOWN_IES: &str = "unknown-ies";
 
-/// The text of the entry of a view for the IEs `unknown`.
+/// The text of the member of a tree for the IEs `unknown`.
 fn unknown_text(unknown: &crate::common::UnknownIes) -> String {
     const DIGITS: &[u8; 16] = b"0123456789abcdef";
     let mut text = String::new();
@@ -1097,16 +1051,17 @@ fn unknown_text(unknown: &crate::common::UnknownIes) -> String {
     text
 }
 
-/// The IEs that the entry `written` of a view has, each by its octets.
-fn unknown_ies(written: Value) -> Result<crate::common::UnknownIes, String> {
+/// The IEs that the member `written` of a tree has, each by its octets.
+fn unknown_ies(written: &Value) -> Result<crate::common::UnknownIes, String> {
     let refused = || {
         format!(
             "`{UNKNOWN_IES}` is the IEs by their octets in hexadecimal, each with its IEI \
              first, with a space between two of them"
         )
     };
-    let [Some(Value::String(text)), None] = entry(written)? else {
-        return Err(refused());
+    let text = match Form::of(written)? {
+        Form::Value(Value::String(text)) => text,
+        _ => return Err(refused()),
     };
     let mut ies = crate::common::UnknownIes::new();
     // The octets of one IE at a time, in one buffer for all of them.
@@ -1128,169 +1083,89 @@ fn unknown_ies(written: Value) -> Result<crate::common::UnknownIes, String> {
     Ok(ies)
 }
 
-pub(crate) fn to_view<M: Viewed>(message: &M, scope: Scope) -> Value {
-    // The view is made of the header and of each IE that the message has:
-    // the message is not put in its serde form, which has every octet of
-    // every IE as a number, and its unknown IEs.
-    let mut view = Map::new();
-    let entry = |member: &str, value: Value| Value::from(Map::from_iter([(member.into(), value)]));
-    // The header that protects a message is beside the entries of the
-    // message, which are those of a plain one; one that is ciphered has
-    // its octets alone.
-    if let Some((header, ciphered)) = message.protection() {
-        view.insert(SECURITY_HEADER.into(), entry("value", header));
-        if let Some(octets) = ciphered {
-            view.insert(CIPHERED.into(), entry("octets", octets));
+/// What a member of a tree writes of an IE or of a field.
+enum Form<'v> {
+    /// Its value.
+    Value(&'v Value),
+    /// Its octets, `{"octets": "…"}`.
+    Octets(&'v Value),
+}
+
+impl<'v> Form<'v> {
+    /// What the member `written` writes: `null` writes nothing.
+    fn of(written: &'v Value) -> Result<Self, String> {
+        let octets = written.as_object().filter(|written| written.len() == 1);
+        match octets.and_then(|written| written.get("octets")) {
+            Some(Value::Null) => Err("an IE is written with a `value` or `octets`".into()),
+            Some(octets) => Ok(Self::Octets(octets)),
+            None if written.is_null() => Err("an IE is written with a `value` or `octets`".into()),
+            None => Ok(Self::Value(written)),
         }
     }
-    let Some(Value::Object(header)) = message.header() else {
-        return view.into();
-    };
-    for (name, value) in header {
-        view.insert(name, entry("value", value));
-    }
-    // The IEs in the order of the table of the message, with `null` for an
-    // optional IE that the message does not have.
-    let mut ies = Vec::new();
-    message.ies(scope, &mut |field| {
-        let mut entry = Map::new();
-        if let Some(value) = field.ie.and_then(|ie| ie.value(field.scope)) {
-            entry.insert("value".into(), value);
-        }
-        entry.insert("octets".into(), field.octets.hex().into());
-        ies.push((field.place, field.printed, Value::from(entry)));
-    });
-    message.absent(&mut |name, place| ies.push((place, name, Value::Null)));
-    ies.sort_by_key(|(place, _, _)| *place);
-    for (_, name, entry) in ies {
-        view.insert(name.to_owned(), entry);
-    }
-    // The IEs that the table of the message has no place for.
-    let unknown = message.unknown();
-    if !unknown.is_empty() {
-        view.insert(
-            UNKNOWN_IES.into(),
-            entry("value", unknown_text(&unknown).into()),
-        );
-    }
-    view.into()
 }
 
-/// The `value` and the `octets` that the entry of an IE in a view has.
-pub(crate) fn entry(entry: Value) -> Result<[Option<Value>; 2], String> {
-    let Value::Object(entry) = entry else {
-        return Err(format!("{entry} is not an IE with a `value` or `octets`"));
-    };
-    let mut members = [None, None];
-    for (name, member) in entry {
-        let at = (["value", "octets"].iter())
-            .position(|known| same_name(known, &name))
-            .ok_or_else(|| format!("no member `{name}`, expected `value` or `octets`"))?;
-        members[at] = (!member.is_null()).then_some(member);
-    }
-    if members == [None, None] {
-        return Err("an IE is written with a `value` or `octets`".into());
-    }
-    Ok(members)
-}
-
-/// The message that the entries `edits` of a view of `original` write
-/// ([`edits`]): [`with_view`] of the view of `original` with them.
-pub(crate) fn with_edits<M: Viewed>(original: &M, edits: Map, scope: Scope) -> Result<M, String> {
-    written(original, edits.into(), Mode::Edit, scope)
-}
-
-/// What a view that is written into a message is.
+/// What a tree that is written into a message is.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Mode {
-    /// The view of a message that it describes alone.
+    /// The tree of a message that it describes alone.
     Alone,
-    /// The view of the message, edited.
-    Whole,
-    /// The entries of the view of the message that an edit changes
-    /// ([`edits`]): every other entry is the one of the message.
+    /// The members of the tree of the message that an edit changes
+    /// ([`edits`]): every other member is the one of the message.
     Edit,
 }
 
-/// What a view has of a member of the message written into.
+/// What a tree has of a member of the message written into.
 enum Taken {
-    /// Its entry.
+    /// What it writes.
     Written(Value),
-    /// No entry, or `null`: the member is left out.
+    /// Nothing, or a member that an edit takes out: the member is left out.
     Out,
-    /// No entry in an edit: the member is kept.
+    /// No member in an edit: the member is kept.
     Kept,
 }
 
-pub(crate) fn with_view<M: Viewed>(original: &M, view: Value, scope: Scope) -> Result<M, String> {
-    written(original, view, Mode::Whole, scope)
+/// Whether `kind` is a `message-type` as a tree writes one.
+fn is_type_written(kind: &Value) -> bool {
+    kind.is_string() || kind.as_u64().is_some()
 }
 
-/// The message of the kind `kind` that the view `view` describes alone:
-/// `kind` names a message struct in one of the variants `families` of `M`.
-pub(crate) fn from_view<M: Viewed>(
-    families: &[&str],
-    kind: &str,
-    view: Value,
+/// The `message-type` that the members `members` of a tree write, as a name
+/// or the number of one.
+fn written_type(members: &Map) -> Result<Option<&Value>, String> {
+    match (members.iter()).find(|(name, _)| same_name(name, "message-type")) {
+        Some((_, kind)) if is_type_written(kind) => Ok(Some(kind)),
+        Some(_) => Err("a `message-type` is a name or the number of one".into()),
+        None => Ok(None),
+    }
+}
+
+/// What the tree of a message refuses before any of its IEs is written: a
+/// `message-type` that names no message of `M`, in the IE `container` or
+/// alone, and the same in the messages of its containers, which are not
+/// more than [`NESTED`] deep.
+fn typed<M: Viewed>(
+    members: &Map,
+    container: Option<&str>,
     scope: Scope,
-) -> Result<M, String> {
-    let Value::Object(entries) = &view else {
-        return Err(format!("{view} is not a view: an object of IEs by name"));
-    };
-    for family in families {
-        if let Some(blank) = M::blank_of(family, kind) {
-            return written(&blank.prepared(entries), view, Mode::Alone, scope);
+) -> Result<Vec<(&'static str, Value)>, String> {
+    let given = M::decided(container, written_type(members)?)?;
+    for (name, written) in members {
+        if let Some(inner) = message_of(written) {
+            let inside = scope.inside().ok_or(Scope::REFUSED)?;
+            typed::<M>(inner, Some(name), inside)?;
         }
     }
-    Err(format!("no message `{kind}`"))
+    Ok(given)
 }
 
-/// The name of the `message-type` that the view `view` writes: a name as it
-/// is written, or the name that a message of `M` has for a number.
-pub(crate) fn message_type<M: Viewed>(view: &Value) -> Option<String> {
-    let written = (view.as_object().into_iter().flatten())
-        .find(|(name, _)| same_name(name, "message-type"))
-        .and_then(|(_, entry)| entry.get("value"))?;
-    match written.as_u64() {
-        Some(number) => Some(
-            M::header_name("message-type", number)?
-                .as_str()?
-                .to_string(),
-        ),
-        None => written.as_str().map(str::to_string),
-    }
+/// The members of `written` where it is the tree of a message in a
+/// container: it has a `message-type`.
+fn message_of(written: &Value) -> Option<&Map> {
+    let members = written.as_object()?;
+    (members.get("message-type"))
+        .is_some_and(is_type_written)
+        .then_some(members)
 }
-
-/// Whether the `message-type` that the view `view` writes is `kind`, the type
-/// of the message that it is to describe alone: the header says what the
-/// message is.
-pub(crate) fn typed<M: Viewed>(kind: &str, view: &Value) -> Result<(), String> {
-    match message_type::<M>(view).filter(|named| !same_name(named, &printed(kind))) {
-        Some(named) => Err(format!(
-            "`message-type` is {named}: the view is that of a message `{}`",
-            printed(kind)
-        )),
-        None => Ok(()),
-    }
-}
-
-/// The message that the view `view` of a container describes alone: its
-/// `message-type` names it.
-pub(crate) fn contained<M: Viewed>(view: &Value, scope: Scope) -> Result<M, String> {
-    let kind = message_type::<M>(view)
-        .ok_or("the `message-type` of the view names the message of a container")?;
-    let message: M = from_view(M::FAMILIES, &kind, view.clone(), scope)?;
-    match message.refused_header() {
-        Some(refused) => Err(refused),
-        None => Ok(message),
-    }
-}
-
-/// What the type of a message decides of its header: the fields that a tree
-/// leaves out, each with its value, for the message that its `message-type`
-/// names or numbers, or that has none, in the IE `container`, or alone.
-pub(crate) type Decided<'a> =
-    &'a dyn Fn(Option<&str>, Option<&Value>) -> Result<Vec<(&'static str, Value)>, String>;
 
 /// The name of the `message-type` `kind` that a tree writes, by its name or
 /// by the number that a message of `M` has a name for.
@@ -1303,58 +1178,67 @@ pub(crate) fn type_named<M: Viewed>(kind: &Value) -> Result<String, String> {
     }
 }
 
-/// Whether `kind` is a `message-type` as a tree writes one.
-fn is_type_written(kind: &Value) -> bool {
-    kind.is_string() || kind.as_u64().is_some()
-}
-
-/// Whether the value of an entry of a view is the view of a message.
-fn is_message(value: &Value) -> bool {
-    (value.get("message-type")).is_some_and(|kind| kind.get("value").is_some())
-}
-
-/// The view `view` as a tree: each entry by its value alone, or by its
-/// `octets` when it has no value, a message in a container as its own tree,
-/// and without what the type of the message decides and the IEs that the
-/// message does not have.
-pub(crate) fn to_tree(view: &Value, container: Option<&str>, decided: Decided<'_>) -> Value {
-    let Some(entries) = view.as_object() else {
-        return view.clone();
+/// The members of the tree `tree` of a plain message of `M` that it writes
+/// alone, with what the type of the message decides where the tree leaves
+/// it out, and the name of its `message-type`, if it has one.
+pub(crate) fn typed_members<M: Viewed>(
+    tree: Value,
+    scope: Scope,
+) -> Result<(Map, Option<String>), String> {
+    let Value::Object(mut members) = tree else {
+        return Err("a message is written as its `message-type` and its IEs by name".into());
     };
-    let kind = entries
-        .get("message-type")
-        .and_then(|kind| kind.get("value"));
-    let given = decided(container, kind).unwrap_or_default();
-    let mut tree = Map::new();
-    for (name, entry) in entries {
-        let of_the_type = given.iter().find(|(field, _)| field == name);
-        if of_the_type.is_some_and(|(_, value)| entry.get("value") == Some(value)) {
-            continue;
+    let given = typed::<M>(&members, None, scope)?;
+    let kind = written_type(&members)?.map(type_named::<M>).transpose()?;
+    for (field, value) in given {
+        if !members.keys().any(|name| same_name(name, field)) {
+            members.insert(field.into(), value);
         }
-        let mut shown = match (entry.get("value"), entry.get("octets")) {
-            (Some(value), _) if is_message(value) => to_tree(value, Some(name), decided),
-            (Some(value), _) => without_absent(value.clone()),
-            (None, Some(octets)) => oxirush_utils::tree!({ "octets": octets }),
-            // An optional IE that the message does not have.
-            (None, None) => continue,
-        };
-        // The fields of a security header that the system decides.
-        if let (SECURITY_HEADER, Value::Object(fields)) = (name.as_str(), &mut shown) {
-            let given = decided(Some(SECURITY_HEADER), None).unwrap_or_default();
-            fields.retain(|name, value| {
-                !given
-                    .iter()
-                    .any(|(field, given)| field == name && given == value)
-            });
-        }
-        tree.insert(name.clone(), shown);
     }
-    tree.into()
+    Ok((members, kind))
 }
 
-/// `value` without the members that it has not: a view has `null` for each,
-/// as for an IE that the message has not, and a tree leaves both out.
-fn without_absent(mut value: Value) -> Value {
+/// The message of the kind `kind` that the members `members` of a tree
+/// write alone: `kind` names a message struct in one of the variants
+/// `families` of `M`.
+pub(crate) fn alone<M: Viewed>(
+    families: &[&str],
+    kind: &str,
+    members: Map,
+    scope: Scope,
+) -> Result<M, String> {
+    for family in families {
+        if let Some(blank) = M::blank_of(family, kind) {
+            return written(&blank.prepared(&members), members, Mode::Alone, scope);
+        }
+    }
+    Err(format!("no message `{kind}`"))
+}
+
+/// The message that the tree `tree` of a container writes alone: its
+/// `message-type` names it.
+pub(crate) fn contained<M: Viewed>(tree: &Value, scope: Scope) -> Result<M, String> {
+    if message_of(tree).is_none() {
+        return Err("the `message-type` of the view names the message of a container".into());
+    }
+    let (members, kind) = typed_members::<M>(tree.clone(), scope)?;
+    let kind = kind.ok_or("the `message-type` of the view names the message of a container")?;
+    let message: M = alone(M::FAMILIES, &kind, members, scope)?;
+    match message.refused_header() {
+        Some(refused) => Err(refused),
+        None => Ok(message),
+    }
+}
+
+/// `message` as the tree `tree` edits it ([`edits`]).
+pub(crate) fn edited<M: Viewed>(message: &M, tree: &Value, scope: Scope) -> Result<M, String> {
+    let edits = edits::<M>(self::tree(message, scope), tree.clone(), scope)?;
+    with_edits(message, edits, scope)
+}
+
+/// `value` without the members that it has not: a value has `null` for
+/// each, and a tree leaves them out.
+pub(crate) fn without_absent(mut value: Value) -> Value {
     fn strip(value: &mut Value) {
         match value {
             Value::Object(members) => {
@@ -1369,83 +1253,54 @@ fn without_absent(mut value: Value) -> Value {
     value
 }
 
-/// The tree of `message`, in the IE `container` of a message or alone: its
-/// header without what the type of the message decides, then each IE that
-/// it has by its value where that writes it back ([`shown`]) and by its
-/// octets otherwise, then the IEs that its table has no place for. A tree
-/// is one that a message is written from, and the message that is written
-/// means what `message` means ([`meant`]). It is [`to_tree`] of the view of
-/// the message, made straight from the IEs.
-pub(crate) fn tree<M: Viewed>(
-    message: &M,
-    container: Option<&str>,
-    decided: Decided<'_>,
-    scope: Scope,
-) -> Value {
-    let mut tree = Map::new();
-    if let Some((header, ciphered)) = message.protection() {
-        let mut header = without_absent(header);
-        // The fields of a security header that the system decides.
-        if let Value::Object(fields) = &mut header {
-            let given = decided(Some(SECURITY_HEADER), None).unwrap_or_default();
-            fields.retain(|name, value| {
-                !given
-                    .iter()
-                    .any(|(field, given)| field == name && given == value)
-            });
-        }
-        tree.insert(SECURITY_HEADER.into(), header);
-        if let Some(octets) = ciphered {
-            tree.insert(
-                CIPHERED.into(),
-                Map::from_iter([("octets".into(), octets)]).into(),
-            );
-        }
-    }
-    let Some(Value::Object(header)) = message.header() else {
-        return tree.into();
+/// The fields of the header `header` of a message of `M` that its type
+/// does not decide, in the IE `container` or alone.
+fn undecided<M: Viewed>(header: Value, container: Option<&str>) -> Map {
+    let Value::Object(mut fields) = without_absent(header) else {
+        return Map::new();
     };
-    let given = decided(container, header.get("message-type")).unwrap_or_default();
-    for (name, value) in header {
-        if given
+    let given = M::decided(container, fields.get("message-type")).unwrap_or_default();
+    fields.retain(|name, value| {
+        !given
             .iter()
-            .any(|(field, given)| *field == name && *given == value)
-        {
-            continue;
-        }
-        tree.insert(name, without_absent(value));
-    }
-    message.ies(scope, &mut |field| {
-        let value = field
-            .ie
-            .and_then(|ie| shown_in(ie, field.printed, decided, field.scope));
-        let value = value.unwrap_or_else(|| {
-            Map::from_iter([("octets".into(), field.octets.hex().into())]).into()
-        });
-        tree.insert(field.printed.to_owned(), value);
+            .any(|(field, given)| field == name && given == value)
     });
-    let unknown = message.unknown();
-    if !unknown.is_empty() {
-        tree.insert(UNKNOWN_IES.into(), unknown_text(&unknown).into());
-    }
-    tree.into()
+    fields
 }
 
-/// What the tree of a message shows of its IE `ie` in the entry `name`, in
-/// `scope`: [`shown`] of the value of the IE, and `None` where it has its
-/// octets.
-fn shown_in(ie: &dyn Ie, name: &str, decided: Decided<'_>, scope: Scope) -> Option<Value> {
-    match ie.tree(Some(name), decided, scope) {
-        // The message of a container, by its own tree: the container is the
-        // one that this tree writes.
-        Some(inner) => (from_tree(&inner, Some(name), decided, scope))
-            .is_ok_and(|written| ie.written_back(&written, scope))
-            .then_some(inner),
-        None => {
-            let value = ie.shown_value(scope)?;
-            (!is_message(&value)).then(|| without_absent(value))
+/// The tree of `message`: its header without what the type of the message
+/// decides, then each IE that it has by its value where that writes it back
+/// ([`Ie::shown_value`]) and by its octets otherwise, then the IEs that its
+/// table has no place for. A tree is one that a message is written from,
+/// and the message that is written means what `message` means ([`meant`]).
+pub(crate) fn tree<M: Viewed>(message: &M, scope: Scope) -> Value {
+    let mut tree = Map::new();
+    if let Some((header, ciphered)) = message.protection() {
+        let header = undecided::<M>(header, Some(SECURITY_HEADER));
+        tree.insert(SECURITY_HEADER.into(), header.into());
+        if let Some(octets) = ciphered {
+            let octets = Map::from_iter([("octets".into(), octets)]);
+            tree.insert(CIPHERED.into(), octets.into());
         }
     }
+    let Some(header) = message.header() else {
+        return tree.into();
+    };
+    tree.extend(undecided::<M>(header, None));
+    message.ies(scope, &mut |field| {
+        let value = (field.ie)
+            .and_then(|ie| ie.shown_value(field.scope))
+            .map_or_else(
+                || Map::from_iter([("octets".into(), field.octets.hex().into())]).into(),
+                without_absent,
+            );
+        tree.insert(field.printed.to_owned(), value);
+    });
+    let unknown = message.body().map(|body| body.unknown_ies());
+    if let Some(unknown) = unknown.filter(|unknown| !unknown.is_empty()) {
+        tree.insert(UNKNOWN_IES.into(), unknown_text(unknown).into());
+    }
+    tree.into()
 }
 
 /// The message that stands for all those that mean what `message` means:
@@ -1455,7 +1310,7 @@ fn shown_in(ie: &dyn Ie, name: &str, decided: Decided<'_>, scope: Scope) -> Opti
 /// for. Two messages mean the same when this is the same message for both,
 /// and the message that the tree of a message writes means what the message
 /// means.
-pub(crate) fn meant<M: Viewed>(message: &M, scope: Scope) -> Result<M, String> {
+pub(crate) fn meant<M: Viewed>(message: &M, scope: Scope) -> M {
     let mut forms = Vec::new();
     message.ies(scope, &mut |field| {
         if let Some(meant) = field.ie.and_then(|ie| ie.meant(field.scope)) {
@@ -1463,13 +1318,16 @@ pub(crate) fn meant<M: Viewed>(message: &M, scope: Scope) -> Result<M, String> {
         }
     });
     let mut meant = message.clone();
-    for (name, form) in forms {
+    for (name, ie) in forms {
         if let Some(slot) = meant.slot(name) {
-            slot.read(&form)?;
+            slot.put(ie);
         }
     }
-    meant.set_unknown(&message.unknown());
-    Ok(meant)
+    if let Some(body) = meant.body_mut() {
+        let unknown = body.unknown_ies().clone();
+        body.set_unknown(unknown);
+    }
+    meant
 }
 
 /// The header that protects the message of the tree `tree` and the octets
@@ -1528,188 +1386,180 @@ pub(crate) fn security_header<H: Readable>(
     readable::from_value(&header).map_err(|error| format!("{SECURITY_HEADER}: {error}"))
 }
 
-/// The view that the tree `tree` writes: [`to_tree`] the other way, with
-/// what the type of the message decides where the tree leaves it out.
-pub(crate) fn from_tree(
-    tree: &Value,
-    container: Option<&str>,
-    decided: Decided<'_>,
-    scope: Scope,
-) -> Result<Value, String> {
-    let entries = tree
-        .as_object()
-        .ok_or("a message is written as its `message-type` and its IEs by name")?;
-    let kind = (entries.iter()).find(|(name, _)| readable::same_name(name, "message-type"));
-    let kind = match kind {
-        Some((_, kind)) if is_type_written(kind) => Some(kind),
-        Some(_) => return Err("a `message-type` is a name or the number of one".into()),
-        None => None,
-    };
-    let mut view = Map::new();
-    for (field, value) in decided(container, kind)? {
-        if !entries.keys().any(|name| readable::same_name(name, field)) {
-            view.insert(field.into(), oxirush_utils::tree!({ "value": value }));
-        }
-    }
-    for (name, written) in entries {
-        let octets = written.as_object().filter(|written| written.len() == 1);
-        let entry = match octets.and_then(|written| written.get("octets")) {
-            Some(octets) => oxirush_utils::tree!({ "octets": octets }),
-            // The message of a container, by its own tree.
-            None if written.get("message-type").is_some_and(is_type_written) => {
-                let inside = scope.inside().ok_or(Scope::REFUSED)?;
-                oxirush_utils::tree!({ "value": from_tree(written, Some(name), decided, inside)? })
-            }
-            None => oxirush_utils::tree!({ "value": written }),
-        };
-        view.insert(name.clone(), entry);
-    }
-    Ok(view.into())
-}
-
-/// The entries that the tree `tree` writes as an edit of a message whose tree
-/// is `before`: each member that the tree changes, written by the tree, and
-/// `null` for each member that the tree leaves out. A member that the tree
-/// leaves as it is has no entry.
-pub(crate) fn edits(
+/// The members that the tree `tree` writes as an edit of a message of `M`
+/// whose tree is `before`: each member that the tree changes, as the tree
+/// writes it, and `None` for each member that the tree leaves out. A member
+/// that the tree leaves as it is is not one of them.
+pub(crate) fn edits<M: Viewed>(
     before: Value,
     tree: Value,
-    decided: Decided<'_>,
     scope: Scope,
-) -> Result<Map, String> {
+) -> Result<Vec<(String, Option<Value>)>, String> {
     let (Value::Object(before), Value::Object(members)) = (before, tree) else {
         return Err("a message is written as its IEs by name".into());
     };
-    let named = |map: &Map, name: &str| (map.keys().find(|key| same_name(key, name))).cloned();
-    let mut edits = Map::new();
+    let named = |map: &Map, name: &str| map.keys().any(|key| same_name(key, name));
+    let mut edits = Vec::new();
     // What the tree leaves out is taken out.
     for name in before.keys() {
-        if named(&members, name).is_none() {
-            edits.insert(name.clone(), Value::Null);
+        if !named(&members, name) {
+            edits.push((name.clone(), None));
         }
     }
     // What the tree changes is written by it.
     for (name, mut written) in members {
-        let unchanged =
-            named(&before, &name).is_some_and(|known| before[known.as_str()] == written);
-        if unchanged {
+        let known = before.keys().find(|key| same_name(key, &name));
+        if known.is_some_and(|known| before[known.as_str()] == written) {
             continue;
         }
         // A security header has the fields that the system decides, which a
         // tree leaves out.
         if let (true, Value::Object(fields)) = (same_name(&name, SECURITY_HEADER), &mut written) {
-            for (field, value) in decided(Some(SECURITY_HEADER), None)? {
+            for (field, value) in M::decided(Some(SECURITY_HEADER), None)? {
                 if !fields.keys().any(|name| same_name(name, field)) {
                     fields.insert(field.into(), value);
                 }
             }
         }
-        let octets = written.as_object().filter(|written| written.len() == 1);
-        let entry = match octets.and_then(|written| written.get("octets")) {
-            Some(octets) => oxirush_utils::tree!({ "octets": octets }),
-            None if written.get("message-type").is_some_and(is_type_written) => {
-                let inside = scope.inside().ok_or(Scope::REFUSED)?;
-                oxirush_utils::tree!({ "value": from_tree(&written, Some(&name), decided, inside)? })
-            }
-            None => oxirush_utils::tree!({ "value": written }),
-        };
-        let name = named(&edits, &name).unwrap_or(name);
-        edits.insert(name, entry);
+        if let Some(inner) = message_of(&written) {
+            let inside = scope.inside().ok_or(Scope::REFUSED)?;
+            typed::<M>(inner, Some(&name), inside)?;
+        }
+        match edits
+            .iter_mut()
+            .find(|(edited, _)| same_name(edited, &name))
+        {
+            Some(edit) => edit.1 = Some(written),
+            None => edits.push((name, Some(written))),
+        }
     }
     Ok(edits)
 }
 
-/// The view `view` of a message whose tree is `before`, as the tree `tree`
-/// edits it ([`edits`]): every entry that the tree leaves as it is, the
-/// fields of the header that the tree leaves to its type among them, keeps
-/// its octets.
-pub(crate) fn edited_view(
-    view: Value,
-    before: Value,
-    tree: Value,
-    decided: Decided<'_>,
+/// The message that the members `edits` of the tree of `original` write
+/// ([`edits`]).
+pub(crate) fn with_edits<M: Viewed>(
+    original: &M,
+    edits: Vec<(String, Option<Value>)>,
     scope: Scope,
-) -> Result<Value, String> {
-    let Value::Object(mut entries) = view else {
-        return Err("a message is written as its IEs by name".into());
-    };
-    let named = |map: &Map, name: &str| (map.keys().find(|key| same_name(key, name))).cloned();
-    for (name, entry) in edits(before, tree, decided, scope)? {
-        match entry {
-            Value::Null => {
-                if let Some(entry) = entries.get_mut(&name) {
-                    *entry = Value::Null;
-                }
-            }
-            entry => {
-                let name = named(&entries, &name).unwrap_or(name);
-                entries.insert(name, entry);
-            }
-        }
-    }
-    Ok(entries.into())
+) -> Result<M, String> {
+    let entries = Entries::of(edits)?;
+    written_entries(original, entries, Mode::Edit, scope)
 }
 
-/// The octets of the IE that `path` names in the message whose view is `view`, as
-/// the message has them: `/nas`, then an IE, then for a container an IE of its
-/// message. `None` for an optional IE that the message does not have.
-pub(crate) fn ie_octets(view: &Value, path: &str) -> Result<Option<Vec<u8>>, tree::Error> {
+/// What the IE that `names` names in a message has, found by [`ie_octets`]:
+/// its octets, `None` for an optional IE that the message does not have, or
+/// why it has none.
+pub(crate) type Found = Result<Option<Vec<u8>>, (ErrorKind, String)>;
+
+/// A member of the tree of a message, as [`ie_octets`] reads it.
+pub(crate) enum Entry {
+    /// A field of a header, or a member without octets of its own.
+    Field,
+    /// Octets of the message that are no IE.
+    Octets(Vec<u8>),
+    /// The IE at this place among those that the message has.
+    Ie(usize),
+    /// An optional IE that the message does not have.
+    Absent,
+}
+
+/// The octets of the IE that `path` names in `message`, as the message has
+/// them: `/nas`, then an IE, then for a container an IE of its message.
+/// `None` for an optional IE that the message does not have.
+pub(crate) fn ie_octets<M: Viewed>(
+    message: &M,
+    path: &str,
+) -> Result<Option<Vec<u8>>, tree::Error> {
     let error = |kind, reason: String| tree::Error::new(kind, path, reason);
     let segments = tree::segments(path)?;
-    let names = match segments.split_first() {
-        Some((root, names)) if same_name(root, "nas") && !names.is_empty() => names,
-        _ => {
-            return Err(error(
-                ErrorKind::Path,
-                "the path of an IE is `/nas/<ie>`".into(),
-            ));
+    match segments.split_first() {
+        Some((root, names)) if same_name(root, "nas") && !names.is_empty() => {
+            octets_at(message, names, Scope::NONE).map_err(|(kind, reason)| error(kind, reason))
         }
-    };
-    let mut message = view;
-    for (at, name) in names.iter().enumerate() {
-        let entry = message
-            .as_object()
-            .and_then(|entries| tree::member(entries, name));
-        let Some((name, entry)) = entry else {
-            let reason = format!("`{name}` is no IE of the message");
-            return Err(error(ErrorKind::NoSuchMember, reason));
-        };
-        if entry.is_null() {
-            return Ok(None);
-        }
-        if at + 1 == names.len() {
-            let octets = entry
-                .get("octets")
-                .and_then(Value::as_str)
-                .and_then(tree::unhex);
-            let reason = format!("`{name}` is a field of a header, with no octets of its own");
-            return octets
-                .map(Some)
-                .ok_or_else(|| error(ErrorKind::Refused, reason));
-        }
-        let inside = entry.get("value").filter(|value| is_message(value));
-        let reason = format!("`{name}` has no message in it");
-        message = inside.ok_or_else(|| error(ErrorKind::Refused, reason))?;
+        _ => Err(error(
+            ErrorKind::Path,
+            "the path of an IE is `/nas/<ie>`".into(),
+        )),
     }
-    Ok(None)
 }
 
-/// The entries of a view by the letters of their names ([`letters`]), which
-/// are those of a name however it is written, in their order: an entry is
-/// found by a name without the letters of the name written out.
+/// [`ie_octets`] in `message`, of the IE that `names` names, in `scope`.
+pub(crate) fn octets_at<M: Viewed>(message: &M, names: &[String], scope: Scope) -> Found {
+    let mut entries = message.fields();
+    if let Some((_, ciphered)) = message.protection() {
+        entries.push((SECURITY_HEADER, Entry::Field));
+        if let Some(ciphered) = ciphered {
+            let octets = ciphered.as_str().and_then(oxirush_utils::tree::unhex);
+            entries.push((CIPHERED, octets.map_or(Entry::Field, Entry::Octets)));
+        }
+    }
+    let header = message.header();
+    let fields = header.iter().flat_map(Value::as_object).flatten();
+    entries.extend(fields.map(|(name, _)| (name.as_str(), Entry::Field)));
+    let mut place = 0;
+    message.ies(scope, &mut |field| {
+        entries.push((field.printed, Entry::Ie(place)));
+        place += 1;
+    });
+    if let Some(body) = message.body() {
+        body.absent(&mut |name, _| entries.push((name, Entry::Absent)));
+        if !body.unknown_ies().is_empty() {
+            entries.push((UNKNOWN_IES, Entry::Field));
+        }
+    }
+    let name = &names[0];
+    let all: Vec<&str> = entries.iter().map(|(name, _)| *name).collect();
+    let Some(at) = oxirush_utils::tree::named(&all, name) else {
+        return Err((
+            ErrorKind::NoSuchMember,
+            format!("`{name}` is no IE of the message"),
+        ));
+    };
+    let (name, entry) = &entries[at];
+    let inside = || (ErrorKind::Refused, format!("`{name}` has no message in it"));
+    match (entry, &names[1..]) {
+        (Entry::Absent, _) => Ok(None),
+        (Entry::Octets(octets), []) => Ok(Some(octets.clone())),
+        (Entry::Field, []) => Err((
+            ErrorKind::Refused,
+            format!("`{name}` is a field of a header, with no octets of its own"),
+        )),
+        (Entry::Ie(at), rest) => {
+            let mut found = None;
+            let mut place = 0;
+            message.ies(scope, &mut |field| {
+                if place == *at {
+                    found = match rest {
+                        [] => Some(Ok(oxirush_utils::tree::unhex(&field.octets.hex()))),
+                        rest => field.ie.and_then(|ie| ie.octets_inside(rest, field.scope)),
+                    };
+                }
+                place += 1;
+            });
+            found.unwrap_or_else(|| Err(inside()))
+        }
+        _ => Err(inside()),
+    }
+}
+
+/// The members of a tree by the letters of their names ([`letters`]), which
+/// are those of a name however it is written, in their order: a member is
+/// found by a name without the letters of the name written out. A member
+/// that is `None` is one that an edit takes out.
 struct Entries {
-    entries: Vec<(Vec<u8>, String, Value)>,
+    entries: Vec<(Vec<u8>, String, Option<Value>)>,
     /// The first letter of each name, as a bit of its code (0 for a name
-    /// without letters), whether its entry is still there or not: a name
+    /// without letters), whether its member is still there or not: a name
     /// that starts with another is found without a search.
     starts: u128,
 }
 
 impl Entries {
-    /// The entries of `view`; an error names the first entry that a later
+    /// The members `members`; an error names the first member that a later
     /// one names again.
-    fn of(view: Map) -> Result<Self, String> {
-        let mut entries: Vec<_> = (view.into_iter().enumerate())
+    fn of(members: impl IntoIterator<Item = (String, Option<Value>)>) -> Result<Self, String> {
+        let mut entries: Vec<_> = (members.into_iter().enumerate())
             .map(|(at, (name, entry))| (letters(&name).into_bytes(), at, name, entry))
             .collect();
         entries.sort_by(|one, other| (&one.0, one.1).cmp(&(&other.0, other.1)));
@@ -1728,7 +1578,7 @@ impl Entries {
         })
     }
 
-    /// The place of the entry that `name` names.
+    /// The place of the member that `name` names.
     fn find(&self, name: &str) -> Option<usize> {
         let letters = || {
             (name.bytes().filter(u8::is_ascii_alphanumeric)).map(|octet| octet.to_ascii_lowercase())
@@ -1741,17 +1591,17 @@ impl Entries {
             .ok()
     }
 
-    /// The entry that `name` names.
-    fn get(&self, name: &str) -> Option<&Value> {
+    /// The member that `name` names.
+    fn get(&self, name: &str) -> Option<&Option<Value>> {
         self.find(name).map(|at| &self.entries[at].2)
     }
 
-    /// The entry that `name` names, taken out.
-    fn remove(&mut self, name: &str) -> Option<Value> {
+    /// The member that `name` names, taken out.
+    fn remove(&mut self, name: &str) -> Option<Option<Value>> {
         self.find(name).map(|at| self.entries.remove(at).2)
     }
 
-    /// The name of the first entry left, in the order of the letters.
+    /// The name of the first member left, in the order of the letters.
     fn first(self) -> Option<String> {
         self.entries.into_iter().next().map(|(_, name, _)| name)
     }
@@ -1763,15 +1613,22 @@ fn start(letter: Option<&u8>) -> u128 {
     1 << letter.map_or(0, |letter| letter & 0x7f)
 }
 
-/// The message that `view` describes: `original` as the view edits it, or
-/// with `alone` a message that has nothing but what the view writes.
-fn written<M: Viewed>(original: &M, view: Value, mode: Mode, scope: Scope) -> Result<M, String> {
-    let Value::Object(view) = view else {
-        return Err(format!("{view} is not a view: an object of IEs by name"));
-    };
-    let mut entries = Entries::of(view)?;
+/// The message that `members` write: `original` as an edit changes it, or
+/// alone a message that has nothing but what the tree writes.
+fn written<M: Viewed>(original: &M, members: Map, mode: Mode, scope: Scope) -> Result<M, String> {
+    let entries = Entries::of(members.into_iter().map(|(name, entry)| (name, Some(entry))))?;
+    written_entries(original, entries, mode, scope)
+}
+
+/// [`written`] of the members `entries`.
+fn written_entries<M: Viewed>(
+    original: &M,
+    mut entries: Entries,
+    mode: Mode,
+    scope: Scope,
+) -> Result<M, String> {
     let (alone, edit) = (mode == Mode::Alone, mode == Mode::Edit);
-    // The message is edited in place: each field that the view writes is
+    // The message is edited in place: each field that the tree writes is
     // checked first, and then written, in the order of the fields of the
     // message, header first.
     let received = original;
@@ -1781,64 +1638,82 @@ fn written<M: Viewed>(original: &M, view: Value, mode: Mode, scope: Scope) -> Re
     let mut protection = None;
     if let Some((kept, ciphered)) = original.protection() {
         // What an edit does not write is the message's own.
-        let mut taken = |name: &str, member: &str, kept: Value| {
-            let kept = edit.then(|| Map::from_iter([(member.into(), kept)]).into());
-            entries.remove(name).or(kept)
-        };
-        let header = match taken(SECURITY_HEADER, "value", kept).map(entry) {
-            Some(Ok([Some(written), None])) => written,
-            Some(Err(error)) => return Err(format!("{SECURITY_HEADER}: {error}")),
-            _ => {
+        let header = match entries.remove(SECURITY_HEADER) {
+            None => kept,
+            Some(None) => {
                 return Err(format!(
-                    "`{SECURITY_HEADER}` is the header that protects the message: it has a \
-                     `value` alone"
+                    "{SECURITY_HEADER}: null is not an IE with a `value` or `octets`"
                 ));
             }
-        };
-        let octets = match ciphered {
-            Some(kept) => match taken(CIPHERED, "octets", kept).map(entry) {
-                Some(Ok([None, Some(written)])) if written.as_str().is_some_and(is_hex) => {
-                    Some(written)
-                }
-                _ => {
+            Some(Some(written)) => match Form::of(&written) {
+                Ok(Form::Value(_)) => written,
+                Ok(Form::Octets(_)) => {
                     return Err(format!(
-                        "`{CIPHERED}` is the message as it is ciphered: it has `octets` alone"
+                        "`{SECURITY_HEADER}` is the header that protects the message: it has a \
+                         `value` alone"
                     ));
                 }
+                Err(error) => return Err(format!("{SECURITY_HEADER}: {error}")),
             },
+        };
+        let octets = match ciphered {
+            Some(kept) => {
+                let written = match entries.remove(CIPHERED) {
+                    None => Some(kept),
+                    Some(written) => written
+                        .as_ref()
+                        .and_then(|written| match Form::of(written) {
+                            Ok(Form::Octets(octets)) => Some(octets.clone()),
+                            _ => None,
+                        }),
+                };
+                match written.filter(|written| written.as_str().is_some_and(is_hex)) {
+                    Some(written) => Some(written),
+                    None => {
+                        return Err(format!(
+                            "`{CIPHERED}` is the message as it is ciphered: it has `octets` alone"
+                        ));
+                    }
+                }
+            }
             None => None,
         };
         protection = Some((header, octets));
     }
-    // An optional IE that the message does not have stays out when its
-    // entry is null. One that has an entry is added without a value, and
-    // then written as any other.
+    // An optional IE that the message does not have stays out when the
+    // tree leaves it out. One that the tree writes is added without a
+    // value, and then written as any other.
     let mut absent = Vec::new();
-    original.absent(&mut |name, _| absent.push(name));
+    if let Some(body) = original.body() {
+        body.absent(&mut |name, _| absent.push(name));
+    }
     let mut added = Vec::new();
     for name in absent {
-        let Some(entry) = entries.get(name) else {
-            continue;
-        };
-        if entry.is_null() {
-            entries.remove(name);
-        } else if let Some(slot) = message.slot(name) {
-            slot.read(&original.blank(name).unwrap_or_default())?;
-            added.push(name);
+        match entries.get(name) {
+            None => {}
+            Some(None) => {
+                entries.remove(name);
+            }
+            Some(Some(_)) => {
+                if let Some(slot) = message.slot(name) {
+                    slot.add();
+                    added.push(name);
+                }
+            }
         }
     }
-    // An entry that is null is one left out, and one that an edit does not
-    // have is kept as the message has it.
+    // A member that an edit takes out is left out, and one that an edit does
+    // not have is kept as the message has it.
     let mut take = |name: &str| match entries.remove(name) {
-        Some(Value::Null) => Taken::Out,
-        Some(entry) => Taken::Written(entry),
+        Some(Some(entry)) => Taken::Written(entry),
+        Some(None) => Taken::Out,
         None if edit => Taken::Kept,
         None => Taken::Out,
     };
-    // The IEs that the table of the message has no place for, when the view
+    // The IEs that the table of the message has no place for, when the tree
     // lists them.
     let unknown = match take(UNKNOWN_IES) {
-        Taken::Written(written) => Some(unknown_ies(written)?),
+        Taken::Written(written) => Some(unknown_ies(&written)?),
         _ => None,
     };
     let mut failure = None;
@@ -1846,17 +1721,17 @@ fn written<M: Viewed>(original: &M, view: Value, mode: Mode, scope: Scope) -> Re
     for (name, value) in header.iter_mut().flat_map(Value::as_object_mut).flatten() {
         let written = match take(name) {
             Taken::Kept => continue,
-            Taken::Written(written) => Some(entry(written)),
+            Taken::Written(written) => Some(written),
             Taken::Out => None,
         };
-        match written {
+        match written.as_ref().map(Form::of) {
             // A field that reads as a name takes the number of one too.
-            Some(Ok([Some(written), None])) => {
+            Some(Ok(Form::Value(written))) => {
                 let named = match (&*value, written.as_u64()) {
                     (Value::String(_), Some(number)) => M::header_name(name, number),
                     _ => None,
                 };
-                *value = named.unwrap_or(written);
+                *value = named.unwrap_or_else(|| written.clone());
             }
             Some(Err(error)) => failure = Some(format!("{name}: {error}")),
             None if M::SPARE.contains(&name.as_str()) => {}
@@ -1864,9 +1739,8 @@ fn written<M: Viewed>(original: &M, view: Value, mode: Mode, scope: Scope) -> Re
             _ => failure = Some(format!("`{name}` is the header: it has a `value` alone")),
         }
     }
-    // What the view writes of each IE: taken out, or its octets, and the
-    // values to encode: the field, the value, the octets written too, and
-    // the size of a value that is a number.
+    // What the tree writes of each IE: taken out, its octets, or the value
+    // to write it from.
     let mut cleared = Vec::new();
     let mut octets_written = Vec::new();
     let mut values = Vec::new();
@@ -1875,42 +1749,41 @@ fn written<M: Viewed>(original: &M, view: Value, mode: Mode, scope: Scope) -> Re
     message.ies(scope, &mut |visited| {
         let (name, optional) = (visited.printed, visited.optional);
         ie_names.push(name);
-        let size = visited.octets.size();
-        // An IE that the view leaves out is taken out of the message.
+        // An IE that the tree leaves out is taken out of the message.
         let written = match take(name) {
             Taken::Kept => return,
-            Taken::Written(written) => Some(entry(written)),
-            Taken::Out => None,
-        };
-        let [value, octets] = match written {
-            Some(Ok(written)) => written,
-            Some(Err(error)) => return failure = Some(format!("{name}: {error}")),
-            None if optional => return cleared.push(name),
-            None if alone => return failure = Some(format!("`{name}` is not written")),
-            None => return failure = Some(format!("`{name}` is mandatory: it stays")),
+            Taken::Written(written) => written,
+            Taken::Out if optional => return cleared.push(name),
+            Taken::Out if alone => return failure = Some(format!("`{name}` is not written")),
+            Taken::Out => return failure = Some(format!("`{name}` is mandatory: it stays")),
         };
         // What is written of an IE that is added is written, whatever it
-        // is, and so is each IE of a message that the view describes
+        // is, and so is each IE of a message that the tree describes
         // alone: octets that happen to be those of an IE without a value
         // are still the ones to send.
         let fresh = alone || added.contains(&name);
-        let octets = octets.filter(|octets| fresh || *octets != Value::from(visited.octets.hex()));
-        if let Some(octets) = &octets {
-            let mut ie = Value::from(Map::new());
-            match set_octets(&mut ie, octets, size) {
-                Ok(()) => octets_written.push((name, core::mem::take(&mut ie["value"]))),
-                Err(error) => failure = Some(format!("{name}: {error}")),
+        match Form::of(&written) {
+            Err(error) => failure = Some(format!("{name}: {error}")),
+            Ok(Form::Octets(octets)) => {
+                if fresh || *octets != Value::from(visited.octets.hex()) {
+                    match octets_value(octets, visited.octets.size()) {
+                        Ok(octets) => octets_written.push((name, octets)),
+                        Err(error) => failure = Some(format!("{name}: {error}")),
+                    }
+                }
             }
-        }
-        let written = |value: &Value| {
-            fresh || Some(value) != visited.ie.and_then(|ie| ie.value(visited.scope)).as_ref()
-        };
-        if let Some(value) = value.filter(written) {
-            values.push((name, value, octets, size));
+            Ok(Form::Value(value)) => {
+                let value_of = || visited.ie.and_then(|ie| ie.value(visited.scope));
+                if fresh || Some(value) != value_of().as_ref() {
+                    values.push((name, written));
+                }
+            }
         }
     });
     if let Some(name) = entries.first() {
-        original.absent(&mut |absent, _| ie_names.push(absent));
+        if let Some(body) = original.body() {
+            body.absent(&mut |absent, _| ie_names.push(absent));
+        }
         return Err(readable::none_of(&name, &ie_names, "IE"));
     }
     if let Some(failure) = failure {
@@ -1929,81 +1802,46 @@ fn written<M: Viewed>(original: &M, view: Value, mode: Mode, scope: Scope) -> Re
     }
     for (name, octets) in octets_written {
         if let Some(slot) = message.slot(name) {
-            let mut ie = slot.form().unwrap_or_default();
-            ie["value"] = octets;
-            slot.read(&ie)?;
+            slot.set_octets(&octets);
         }
     }
     if values.is_empty() {
         return checked(message, received, unknown);
     }
-    // The IEs of a written value, encoded from it. Octets written too are
-    // kept: the value has to be the one they have.
-    let mut encoded_ies = Vec::new();
+    // The IEs of the values, encoded once the octets that are written are
+    // the message's: an IE that says how another is read is among them.
+    let mut encoded = Vec::new();
     message.ies(scope, &mut |visited| {
-        let (name, ie) = (visited.printed, visited.ie);
-        let Some(at) = values.iter().position(|(written, ..)| *written == name) else {
+        let name = visited.printed;
+        let Some(at) = values.iter().position(|(written, _)| *written == name) else {
             return;
         };
-        let (_, value, octets, size) = values.swap_remove(at);
-        let Some(ie) = ie else {
+        let (_, value) = values.swap_remove(at);
+        let Some(ie) = visited.ie else {
             failure = Some(format!("{name}: this IE has octets and no value to write"));
             return;
         };
-        // A value that the octets written have is not encoded again.
-        if octets.is_some() && ie.value(visited.scope).as_ref() == Some(&value) {
-            return;
-        }
-        // Octets written too are those of the value: an IE that shares
-        // its octet with another has more in its value than in them.
-        let same = |encoded: &Value| {
-            let of = |octets: &Value| octets.as_str().and_then(oxirush_utils::tree::unhex);
-            octets
-                .as_ref()
-                .is_none_or(|octets| of(octets) == of(&octets_of(encoded, size)))
-        };
-        // Without octets, the IE is put in its field as it is encoded.
-        if octets.is_none() {
-            match ie.encoded_ie(&value, visited.scope) {
-                Ok(encoded) => encoded_ies.push((name, Err(encoded))),
-                Err(error) => failure = Some(format!("{name}: {error}")),
-            }
-            return;
-        }
-        match ie.encoded(&value, visited.scope) {
-            Ok(encoded) if same(&encoded) => encoded_ies.push((name, Ok(encoded))),
-            Ok(_) => {
-                failure = Some(format!(
-                    "{name}: the octets and the value that are written disagree"
-                ));
-            }
+        match ie.encoded_ie(&value, visited.scope) {
+            Ok(ie) => encoded.push((name, ie)),
             Err(error) => failure = Some(format!("{name}: {error}")),
         }
     });
     if let Some(failure) = failure {
         return Err(failure);
     }
-    // Each IE by its readable form, where octets were written too, or else
-    // as it was encoded.
-    for (name, encoded) in encoded_ies {
+    for (name, ie) in encoded {
         if let Some(slot) = message.slot(name) {
-            match encoded {
-                Ok(form) => slot.read(&form)?,
-                Err(ie) => {
-                    slot.put(ie);
-                }
-            }
+            slot.put(ie);
         }
     }
     checked(message, received, unknown)
 }
 
-/// `message`, which a view wrote from `received`, with what `received`
-/// keeps of how it was received, unless it keeps the message
-/// authentication code of a message that it no longer protects: the code is
-/// that of the octets it was computed over. The IEs `unknown` that the view
-/// lists for those that the table has no place for are those of the
-/// message, after the IEs of its table, when they are others than
+/// `message`, which a tree wrote from `received`, unless it keeps the
+/// message authentication code of a message that it no longer protects: the
+/// code is that of the octets it was computed over. The IEs `unknown` that
+/// the tree lists for those that the table has no place for are those of
+/// the message, after the IEs of its table, when they are others than
 /// `received` has.
 fn checked<M: Viewed>(
     mut message: M,
@@ -2022,14 +1860,20 @@ fn checked<M: Viewed>(
              plain message"
         ));
     }
-    message.keep_received(received);
-    if let Some(unknown) = unknown.filter(|unknown| *unknown != received.unknown())
-        && !message.set_unknown(&unknown)
-        && !unknown.is_empty()
-    {
-        return Err(format!(
-            "`{UNKNOWN_IES}` are IEs of a message that has IEs of its own"
-        ));
+    let Some(unknown) = unknown else {
+        return Ok(message);
+    };
+    let kept = received.body().map(|body| body.unknown_ies());
+    if kept.is_none_or(|kept| *kept != unknown) {
+        match message.body_mut() {
+            Some(body) => body.set_unknown(unknown),
+            None if !unknown.is_empty() => {
+                return Err(format!(
+                    "`{UNKNOWN_IES}` are IEs of a message that has IEs of its own"
+                ));
+            }
+            None => {}
+        }
     }
     Ok(message)
 }
@@ -2915,7 +2759,7 @@ macro_rules! listed_ie {
 }
 
 /// [`Decoded`] for an IE type that carries a plain NAS message, which
-/// `$decode` reads and `$encode` carries: its value is the view of the
+/// `$decode` reads and `$encode` carries: its value is the tree of the
 /// message.
 macro_rules! container_ie {
     ($ie:ty: $message:ty, $decode:expr, $encode:expr) => {
@@ -2923,13 +2767,14 @@ macro_rules! container_ie {
             fn unwritten() -> Self {
                 <$ie>::blank()
             }
+
             fn decoded(
                 &self,
                 scope: $crate::common::view::Scope,
             ) -> Option<oxirush_utils::tree::Value> {
                 let decode: fn(&Self) -> Option<$message> = $decode;
                 let inside = scope.inside()?;
-                Some($crate::common::view::to_view(&decode(self)?, inside))
+                Some($crate::common::view::tree(&decode(self)?, inside))
             }
 
             fn with_decoded(
@@ -2941,10 +2786,8 @@ macro_rules! container_ie {
                 let encode: fn(&$message) -> $crate::common::Result<Self> = $encode;
                 let inside = scope.inside().ok_or($crate::common::view::Scope::REFUSED)?;
                 let message = match decode(self) {
-                    Some(message) => {
-                        $crate::common::view::with_view(&message, value.clone(), inside)?
-                    }
-                    // A container without octets carries what the view names.
+                    Some(message) => $crate::common::view::edited(&message, value, inside)?,
+                    // A container without octets carries what the tree names.
                     None if self.value.is_empty() => {
                         $crate::common::view::contained(value, inside)?
                     }
@@ -2961,28 +2804,35 @@ macro_rules! container_ie {
                 let Some(inside) = scope.inside() else {
                     return self.clone();
                 };
-                (decode(self)
-                    .and_then(|message| $crate::common::view::meant(&message, inside).ok()))
-                .and_then(|message| encode(&message).ok())
-                .unwrap_or_else(|| self.clone())
+                (decode(self).map(|message| $crate::common::view::meant(&message, inside)))
+                    .and_then(|message| encode(&message).ok())
+                    .unwrap_or_else(|| self.clone())
             }
 
-            fn tree(
+            fn octets_inside(
                 &self,
-                container: Option<&str>,
-                decided: $crate::common::view::Decided<'_>,
+                names: &[String],
                 scope: $crate::common::view::Scope,
-            ) -> Option<oxirush_utils::tree::Value> {
+            ) -> Option<$crate::common::view::Found> {
                 let decode: fn(&Self) -> Option<$message> = $decode;
                 let inside = scope.inside()?;
-                let message = decode(self)?;
-                Some($crate::common::view::tree(
-                    &message, container, decided, inside,
+                Some($crate::common::view::octets_at(
+                    &decode(self)?,
+                    names,
+                    inside,
                 ))
             }
 
-            fn carried() -> Option<$crate::common::view::Decided<'static>> {
-                Some(&<$message as $crate::common::view::Viewed>::decided)
+            #[cfg(test)]
+            fn reading(
+                &self,
+                scope: $crate::common::view::Scope,
+            ) -> Option<oxirush_utils::tree::Value> {
+                let decode: fn(&Self) -> Option<$message> = $decode;
+                Some($crate::wireshark_tests::read(
+                    &decode(self)?,
+                    scope.inside()?,
+                ))
             }
         }
     };
@@ -3387,81 +3237,49 @@ pub(crate) mod tests {
         }
     }
 
+    /// The values of the IEs of `message`.
+    fn values<M: Viewed>(message: &M) -> Vec<Option<Value>> {
+        let mut values = Vec::new();
+        message.ies(Scope::NONE, &mut |field| {
+            values.push(field.ie.and_then(|ie| ie.value(field.scope)));
+        });
+        values
+    }
+
     /// Encode every value of `message` back: how many IEs it has, how many
     /// have a value, and how many give other octets than they were decoded
-    /// from. The message of the encoded values has the same view.
+    /// from. Each IE that is encoded has the value it was encoded from.
     fn encode_back<M: Viewed + PartialEq + core::fmt::Debug>(
         message: &M,
         name: &str,
     ) -> [usize; 3] {
-        let view = to_view(message, Scope::NONE);
+        let whole = tree(message, Scope::NONE);
         assert_eq!(
-            &with_view(message, view.clone(), Scope::NONE).unwrap(),
+            &edited(message, &whole, Scope::NONE).unwrap(),
             message,
             "{name}"
         );
         let mut counts = [0; 3];
         let mut encoded = Vec::new();
-        if let Some(Value::Object(header)) = message.header() {
-            // No field of the header has the name of an IE.
-            let mut ies = 0;
-            message.absent(&mut |_, _| ies += 1);
-            message.ies(Scope::NONE, &mut |visited| {
-                let (field, ie, scope) = (visited.name, visited.ie, visited.scope);
-                counts[0] += 1;
-                ies += 1;
-                let Some((ie, value)) = ie.and_then(|ie| Some((ie, ie.value(scope)?))) else {
-                    return;
-                };
-                counts[1] += 1;
-                written_wrong(ie, &value, scope);
-                let form = (ie.encoded(&value, scope))
-                    .unwrap_or_else(|error| panic!("{name} {field}: {error}"));
-                encoded.push((visited.printed, form));
-            });
-            assert_eq!(
-                view.as_object().unwrap().len(),
-                header.len() + ies,
-                "{name}"
-            );
+        message.ies(Scope::NONE, &mut |visited| {
+            let (field, ie, scope) = (visited.name, visited.ie, visited.scope);
+            counts[0] += 1;
+            let Some((ie, value)) = ie.and_then(|ie| Some((ie, ie.value(scope)?))) else {
+                return;
+            };
+            counts[1] += 1;
+            written_wrong(ie, &value, scope);
+            let ie = (ie.encoded_ie(&value, scope))
+                .unwrap_or_else(|error| panic!("{name} {field}: {error}"));
+            encoded.push((visited.printed, ie));
+        });
+        for (field, ie) in encoded {
+            let mut written = message.clone();
+            assert!(written.slot(field).unwrap().put(ie), "{name} {field}");
+            counts[2] += usize::from(written != *message);
+            assert_eq!(values(&written), values(message), "{name} {field}");
         }
-        let mut written = message.clone();
-        for (field, form) in encoded {
-            let slot = written.slot(field).unwrap();
-            counts[2] += usize::from(slot.form().as_ref() != Some(&form));
-            slot.read(&form).unwrap();
-        }
-        let values = |view: Value| -> Vec<Value> {
-            let Value::Object(view) = view else { panic!() };
-            view.into_iter()
-                .map(|(_, mut ie)| core::mem::take(&mut ie["value"]))
-                .collect()
-        };
-        assert_eq!(
-            values(to_view(&written, Scope::NONE)),
-            values(view),
-            "{name}"
-        );
         counts
-    }
-
-    /// The message that the view of `message` describes alone, which has
-    /// the same view.
-    fn describe_alone<M: Viewed>(message: &M, name: &str) -> M {
-        let kind = message.variant_name().unwrap();
-        let alone: M = from_view(
-            M::FAMILIES,
-            kind,
-            to_view(message, Scope::NONE),
-            Scope::NONE,
-        )
-        .unwrap_or_else(|error| panic!("{name}: {error}"));
-        assert_eq!(
-            to_view(&alone, Scope::NONE),
-            to_view(message, Scope::NONE),
-            "{name}"
-        );
-        alone
     }
 
     fn fixtures(file: &str) -> impl Iterator<Item = (&str, Vec<u8>)> {
@@ -3507,57 +3325,23 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn the_views_of_the_fixtures_describe_them_alone() {
-        let mut other = Vec::new();
-        for (name, wire) in fixtures(include_str!("../../tests/fixtures/nas-5gs.tsv")) {
-            let message = nas_5gs::Message::decode(&wire).unwrap();
-            if describe_alone(&message, name).encode().unwrap() != wire {
-                other.push(name);
-            }
-        }
-        assert_eq!(other, [""; 0], "5GS: other octets");
-        for (name, wire) in fixtures(include_str!("../../tests/fixtures/nas-eps.tsv")) {
-            let direction = if name.starts_with("DetachRequestUeTerminated") {
-                Direction::Downlink
-            } else {
-                Direction::Uplink
-            };
-            let message = nas_eps::Message::decode_with(
-                &wire,
-                crate::DecodeOptions::STRICT.with_direction(direction),
-            )
-            .unwrap();
-            if describe_alone(&message, name).encode().unwrap() != wire {
-                other.push(name);
-            }
-        }
-        assert_eq!(other, [""; 0], "EPS: other octets");
-    }
-
-    #[test]
-    fn a_view_alone_has_the_header_and_every_mandatory_ie() {
-        use crate::nas_5gs::GmmMessageType;
+    fn a_tree_alone_has_the_header_and_every_mandatory_ie() {
+        use crate::nas_5gs::Message;
         use oxirush_utils::tree;
-        let header = tree!({
-            "extended-protocol-discriminator": {"value": 126},
-            "security-header-type": {"value": "plain-5gs-nas-message-not-security-protected"},
-            "message-type": {"value": "5gmm-status"},
-        });
-        let from = |view: Value| GmmMessageType::FiveGmmStatus.message_from_view(view);
-        let error = from(header.clone()).unwrap_err().to_string();
-        assert!(error.contains("`5gmm-cause` is not written"), "{error}");
-        let mut view = header.clone();
-        view["5gmm-cause"] = tree!({"octets": "16"});
+        let from = |tree: Value| Message::from_tree(tree);
+        let error = from(tree!({"message-type": "5gmm-status"})).unwrap_err();
+        assert!(
+            error.to_string().contains("`5gmm-cause` is not written"),
+            "{error}"
+        );
+        let tree = tree!({"message-type": "5gmm-status", "5gmm-cause": {"octets": "16"}});
         assert_eq!(
-            from(view.clone()).unwrap().encode().unwrap(),
+            from(tree.clone()).unwrap().encode().unwrap(),
             [0x7e, 0, 0x64, 0x16]
         );
-        view.as_object_mut().unwrap().shift_remove("message-type");
-        let error = from(view.clone()).unwrap_err().to_string();
-        assert!(error.contains("`message-type` is not written"), "{error}");
-        view["message-type"] = tree!({"value": "5gmm-status"});
-        view["t3512-value"] = tree!({"value": 60});
-        let error = from(view).unwrap_err().to_string();
+        let mut more = tree;
+        more["t3512-value"] = tree!(60);
+        let error = from(more).unwrap_err().to_string();
         assert!(
             error.contains("no IE `t3512-value`, expected one of 5gmm-cause"),
             "{error}"
@@ -3565,21 +3349,17 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn an_ie_of_flags_that_a_view_adds_has_the_octet_of_each_flag_written() {
-        use crate::nas_5gs::GmmMessageType;
+    fn an_ie_of_flags_that_a_tree_adds_has_the_octet_of_each_flag_written() {
         use oxirush_utils::tree;
-        let request = GmmMessageType::RegistrationRequest
-            .message_from_view(tree!({
-                "extended-protocol-discriminator": {"value": 126},
-                "security-header-type": {"value": "plain-5gs-nas-message-not-security-protected"},
-                "message-type": {"value": "registration-request"},
-                "5gs-registration-type": {"octets": "09"},
-                "ngksi": {"octets": "07"},
-                "5gs-mobile-identity": {"octets": "0199f907000000000000001002"},
-                "5gmm-capability": {"value": {"s1-mode": false, "lpp": false}},
-                "ue-status": {"value": {"s1-mode-reg": false, "n1-mode-reg": false}},
-            }))
-            .unwrap();
+        let request = crate::nas_5gs::Message::from_tree(tree!({
+            "message-type": "registration-request",
+            "5gs-registration-type": {"octets": "09"},
+            "ngksi": {"octets": "07"},
+            "5gs-mobile-identity": {"octets": "0199f907000000000000001002"},
+            "5gmm-capability": {"s1-mode": false, "lpp": false},
+            "ue-status": {"s1-mode-reg": false, "n1-mode-reg": false},
+        }))
+        .unwrap();
         assert_eq!(
             hex::encode(request.encode().unwrap()),
             "7e004179000d0199f9070000000000000010021001002b0100"
@@ -3587,25 +3367,21 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn a_container_of_a_view_alone_carries_the_message_that_its_view_names() {
-        use crate::nas_5gs::{GmmMessage, GmmMessageType};
+    fn a_container_of_a_tree_alone_carries_the_message_that_its_tree_names() {
+        use crate::nas_5gs::GmmMessage;
         use oxirush_utils::tree;
-        let transport = GmmMessageType::UlNasTransport
-            .message_from_view(tree!({
-                "extended-protocol-discriminator": {"value": 126},
-                "security-header-type": {"value": "plain-5gs-nas-message-not-security-protected"},
-                "message-type": {"value": "ul-nas-transport"},
-                "payload-container-type": {"value": "n1-sm-information"},
-                "payload-container": {"value": {
-                    "extended-protocol-discriminator": {"value": 46},
-                    "pdu-session-identity": {"value": 5},
-                    "procedure-transaction-identity": {"value": 1},
-                    "message-type": {"value": "pdu-session-release-request"},
-                    "5gsm-cause": {"value": "regular-deactivation"},
-                }},
-                "pdu-session-id": {"value": 5},
-            }))
-            .unwrap();
+        let transport = crate::nas_5gs::Message::from_tree(tree!({
+            "message-type": "ul-nas-transport",
+            "payload-container-type": "n1-sm-information",
+            "payload-container": {
+                "pdu-session-identity": 5,
+                "procedure-transaction-identity": 1,
+                "message-type": "pdu-session-release-request",
+                "5gsm-cause": "regular-deactivation",
+            },
+            "pdu-session-id": 5,
+        }))
+        .unwrap();
         let wire = transport.encode().unwrap();
         assert_eq!(
             oxirush_utils::tree::hex(&wire),
@@ -3619,7 +3395,7 @@ pub(crate) mod tests {
             .decode_as_n1_sm_message()
             .unwrap();
         assert_eq!(
-            inner.to_view()["5gsm-cause"]["value"],
+            inner.to_tree()["5gsm-cause"],
             oxirush_utils::tree!("regular-deactivation")
         );
     }

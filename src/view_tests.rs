@@ -1,4 +1,5 @@
-//! The view of a message, under its tree: each IE by its name, with its value and octets.
+//! The tree of a message: each IE by its name, with its value or its octets,
+//! and the messages that trees write.
 
 use crate::prelude::*;
 use crate::tree;
@@ -37,19 +38,59 @@ fn eps(hex: &str) -> e::Message {
     e::Message::decode(&hex::decode(hex).unwrap()).unwrap()
 }
 
-/// The octets of the 5GS message of an edited view.
+/// The octets of the 5GS message of an edited tree.
 fn fgs_edited(message: &f::Message, edit: impl FnOnce(&mut Value)) -> Result<String, String> {
-    let mut view = message.to_view();
-    edit(&mut view);
-    let edited = message.with_view(view).map_err(|error| error.to_string())?;
+    let mut tree = message.to_tree();
+    edit(&mut tree);
+    let edited = message.with_tree(tree).map_err(|error| error.to_string())?;
     Ok(hex::encode(edited.encode().unwrap()))
 }
 
 fn eps_edited(message: &e::Message, edit: impl FnOnce(&mut Value)) -> Result<String, String> {
-    let mut view = message.to_view();
-    edit(&mut view);
-    let edited = message.with_view(view).map_err(|error| error.to_string())?;
+    let mut tree = message.to_tree();
+    edit(&mut tree);
+    let edited = message.with_tree(tree).map_err(|error| error.to_string())?;
     Ok(hex::encode(edited.encode().unwrap()))
+}
+
+/// A message of either system, as the tests read it.
+trait Read {
+    fn tree(&self) -> Value;
+    fn octets(&self, name: &str) -> Option<Vec<Value>>;
+}
+
+impl Read for f::Message {
+    fn tree(&self) -> Value {
+        self.to_tree()
+    }
+
+    fn octets(&self, name: &str) -> Option<Vec<Value>> {
+        self.select(&format!("/nas/{name}/octets")).ok()
+    }
+}
+
+impl Read for e::Message {
+    fn tree(&self) -> Value {
+        self.to_tree()
+    }
+
+    fn octets(&self, name: &str) -> Option<Vec<Value>> {
+        self.select(&format!("/nas/{name}/octets")).ok()
+    }
+}
+
+/// What the tree of `message` has of the IE `name`: `{"value": …}` where
+/// the tree has the value of the IE, with the octets that the message has of
+/// it, or the `{"octets": …}` of the tree.
+fn ie(message: &impl Read, name: &str) -> Value {
+    let member = message.tree()[name].clone();
+    if member.is_null() || member.get("octets").is_some() {
+        return member;
+    }
+    match message.octets(name).as_deref() {
+        Some([octets]) => tree!({"value": member, "octets": octets}),
+        _ => tree!({ "value": member }),
+    }
 }
 
 fn fixtures(file: &str) -> impl Iterator<Item = (&str, Vec<u8>)> {
@@ -72,18 +113,15 @@ fn eps_fixture(name: &str, wire: &[u8]) -> e::Message {
 fn a_coded_value_reads_and_writes_by_its_name() {
     // 5GMM STATUS, cause #22.
     let status = fgs("7e006416");
-    let view = status.to_view();
     assert_eq!(
-        view,
-        tree!({
-            "extended-protocol-discriminator": {"value": 126},
-            "security-header-type": {"value": "plain-5gs-nas-message-not-security-protected"},
-            "spare-half-octet": {"value": 0},
-            "message-type": {"value": "5gmm-status"},
-            "5gmm-cause": {"value": "congestion", "octets": "16"},
-        })
+        status.to_tree(),
+        tree!({"message-type": "5gmm-status", "5gmm-cause": "congestion"})
     );
-    let named = |name: Value| fgs_edited(&status, |view| view["5gmm-cause"]["value"] = name);
+    assert_eq!(
+        ie(&status, "5gmm-cause"),
+        tree!({"value": "congestion", "octets": "16"})
+    );
+    let named = |name: Value| fgs_edited(&status, |tree| tree["5gmm-cause"] = name);
     assert_eq!(named(tree!("illegal-ue")).unwrap(), "7e006403");
     // A name is read in any case, with hyphens, underscores or spaces.
     for name in ["Illegal UE", "ILLEGAL_UE", "IllegalUe"] {
@@ -94,7 +132,7 @@ fn a_coded_value_reads_and_writes_by_its_name() {
     assert_eq!(named(tree!(200)).unwrap(), "7e0064c8");
     assert_eq!(named(tree!("0xc8")).unwrap(), "7e0064c8");
     assert_eq!(
-        fgs("7e0064c8").to_view()["5gmm-cause"],
+        ie(&fgs("7e0064c8"), "5gmm-cause"),
         tree!({"value": 200, "octets": "c8"})
     );
     // A name that does not exist is an error that lists those that do.
@@ -115,57 +153,46 @@ fn a_coded_value_reads_and_writes_by_its_name() {
 #[test]
 fn the_octets_of_an_ie_are_written_as_they_are() {
     let status = fgs("7e006416");
-    let edit = |ie: Value| fgs_edited(&status, |view| view["5gmm-cause"] = ie);
+    let edit = |ie: Value| fgs_edited(&status, |tree| tree["5gmm-cause"] = ie);
     assert_eq!(edit(tree!({"octets": "03"})).unwrap(), "7e006403");
-    // A value left as it was follows the octets.
-    assert_eq!(
-        edit(tree!({"octets": "03", "value": "congestion"})).unwrap(),
-        "7e006403"
-    );
-    // Both written: they have to say the same.
-    assert_eq!(
-        edit(tree!({"octets": "03", "value": "illegal-ue"})).unwrap(),
-        "7e006403"
-    );
-    let error = edit(tree!({"octets": "03", "value": "plmn-not-allowed"})).unwrap_err();
-    assert!(
-        error.contains("5gmm-cause: the octets and the value"),
-        "{error}"
-    );
     for ie in [
         tree!({"octets": "0304"}),
         tree!({"octets": "3"}),
         tree!({"octets": [3]}),
+        tree!({"octets": null}),
     ] {
         assert!(edit(ie.clone()).is_err(), "{ie}");
     }
-    assert!(
-        edit(tree!({"octets": "03", "length": 1}))
-            .unwrap_err()
-            .contains("`length`")
-    );
 
     // REGISTRATION ACCEPT with a 5G-GUTI: any octets, and the length follows.
     let accept = fgs("7e0042010177000bf202f83901004211223344");
-    let mut view = accept.to_view();
-    view["5g-guti"]["octets"] = tree!("f2ffffff");
-    let odd = accept.with_view(view).unwrap();
+    let mut tree = accept.to_tree();
+    tree["5g-guti"] = tree!({"octets": "f2ffffff"});
+    let odd = accept.with_tree(tree).unwrap();
     assert_eq!(
         hex::encode(odd.encode().unwrap()),
         "7e00420101770004f2ffffff"
     );
     // Octets that are no identity have no value, and can be given one.
-    assert_eq!(odd.to_view()["5g-guti"], tree!({"octets": "f2ffffff"}));
-    let imei = |digits: &str| {
-        fgs_edited(&odd, |view| {
-            view["5g-guti"]["value"] = tree!({"imei": digits})
-        })
-    };
+    assert_eq!(odd.to_tree()["5g-guti"], tree!({"octets": "f2ffffff"}));
+    let imei = |digits: &str| fgs_edited(&odd, |tree| tree["5g-guti"] = tree!({"imei": digits}));
     assert_eq!(
         imei("356938035643809").unwrap(),
         "7e004201017700083b65390853468390"
     );
     assert!(imei("1").is_err());
+
+    // PDU SESSION ESTABLISHMENT REQUEST, whose integrity protection maximum data
+    // rate is two octets
+    let establishment = fgs("2e0501c1ffff");
+    let rate = |octets: &str| {
+        fgs_edited(&establishment, |tree| {
+            tree["integrity-protection-maximum-data-rate"] = tree!({"octets": octets});
+        })
+    };
+    assert_eq!(rate("0101"), Ok("2e0501c10101".into()));
+    let error = rate("010203").unwrap_err();
+    assert!(error.contains("is not two octets"), "{error}");
 }
 
 #[test]
@@ -173,7 +200,7 @@ fn the_fields_of_an_octet_read_and_write_by_name() {
     // REGISTRATION REQUEST: initial registration, follow-on request, no key.
     let request = fgs("7e004179000d0102f8390000000000000010022e08a020000000000000");
     assert_eq!(
-        request.to_view()["5gs-registration-type"],
+        ie(&request, "5gs-registration-type"),
         tree!({"octets": "09", "value": {
             "registration-type": "initial-registration",
             "follow-on-request": true,
@@ -181,24 +208,23 @@ fn the_fields_of_an_octet_read_and_write_by_name() {
     );
     // The ngKSI is the other half of the octet, an IE of its own.
     assert_eq!(
-        request.to_view()["ngksi"],
+        ie(&request, "ngksi"),
         tree!({"octets": "07", "value": "no-key"})
     );
-    let edited = fgs_edited(&request, |view| {
-        let value = &mut view["5gs-registration-type"]["value"];
+    let edited = fgs_edited(&request, |tree| {
+        let value = &mut tree["5gs-registration-type"];
         value["registration-type"] = tree!("mobility-registration-updating");
         value["follow-on-request"] = tree!(false);
     });
     assert_eq!(&edited.unwrap()[..8], "7e004172");
     // The members that are written are set, the others stay.
-    let edited = fgs_edited(&request, |view| {
-        view["5gs-registration-type"]["value"] =
-            tree!({"Registration Type": "emergency registration"});
+    let edited = fgs_edited(&request, |tree| {
+        tree["5gs-registration-type"] = tree!({"Registration Type": "emergency registration"});
     });
     assert_eq!(&edited.unwrap()[..8], "7e00417c");
     // The number of a type that has a name is that type.
-    let edited = fgs_edited(&request, |view| {
-        view["5gs-registration-type"]["value"]["registration-type"] = tree!(2);
+    let edited = fgs_edited(&request, |tree| {
+        tree["5gs-registration-type"]["registration-type"] = tree!(2);
     });
     assert_eq!(&edited.unwrap()[6..8], "7a");
     for (member, value) in [
@@ -208,8 +234,8 @@ fn the_fields_of_an_octet_read_and_write_by_name() {
         ("follow-on", tree!(true)),
         ("ngksi", tree!(8)),
     ] {
-        let edited = fgs_edited(&request, |view| {
-            view["5gs-registration-type"]["value"][member] = value;
+        let edited = fgs_edited(&request, |tree| {
+            tree["5gs-registration-type"][member] = value;
         });
         assert!(edited.is_err(), "{member}");
     }
@@ -219,48 +245,43 @@ fn the_fields_of_an_octet_read_and_write_by_name() {
 fn the_service_type_of_a_service_request_is_beside_the_ngksi() {
     // SERVICE REQUEST: signalling, native ngKSI 1.
     let request = fgs("7e004c010007f4004211223344");
-    let view = request.to_view();
     assert_eq!(
-        view["ngksi"],
+        ie(&request, "ngksi"),
         tree!({"octets": "01", "value": {"native": 1}})
     );
     assert_eq!(
-        view["service-type"],
+        ie(&request, "service-type"),
         tree!({"octets": "00", "value": "signalling"})
     );
     assert_eq!(
-        view["5g-s-tmsi"]["value"],
+        request.to_tree()["5g-s-tmsi"],
         tree!({"s-tmsi": {"amf-set-id": 1, "amf-pointer": 2, "tmsi": 0x1122_3344}})
     );
-    let edited = fgs_edited(&request, |view| {
-        view["service-type"]["value"] = tree!("data");
-        view["ngksi"]["value"] = tree!("no-key");
+    let edited = fgs_edited(&request, |tree| {
+        tree["service-type"] = tree!("data");
+        tree["ngksi"] = tree!("no-key");
     });
     assert_eq!(edited.unwrap(), "7e004c170007f4004211223344");
     // Service type 7 has no name: it is its number, or the octets.
     assert_eq!(
-        fgs("7e004c710007f4004211223344").to_view()["service-type"]["value"],
+        fgs("7e004c710007f4004211223344").to_tree()["service-type"],
         tree!(7)
     );
-    let numbered = |number: u8| {
-        fgs_edited(&request, |view| {
-            view["service-type"]["value"] = tree!(number)
-        })
-    };
+    let numbered = |number: u8| fgs_edited(&request, |tree| tree["service-type"] = tree!(number));
     assert_eq!(numbered(7).unwrap(), "7e004c710007f4004211223344");
     // The number of a type that has a name is that type.
     assert_eq!(numbered(1).unwrap(), "7e004c110007f4004211223344");
     let error = numbered(16).unwrap_err();
     assert!(error.contains("service"), "{error}");
     assert_eq!(
-        fgs_edited(&request, |view| view["service-type"]["octets"] =
-            tree!("07"))
+        fgs_edited(&request, |tree| tree["service-type"] =
+            tree!({"octets": "07"}))
         .unwrap(),
         "7e004c710007f4004211223344"
     );
     // The ngKSI is the same IE in the other messages.
     assert_eq!(
-        fgs("7e005d220102f070").to_view()["ngksi"]["value"],
+        fgs("7e005d220102f070").to_tree()["ngksi"],
         tree!({"native": 1})
     );
 }
@@ -270,13 +291,13 @@ fn a_structured_ie_reads_and_writes_in_its_usual_notation() {
     // REGISTRATION ACCEPT with a 5G-GUTI, a TAI list, an allowed NSSAI and
     // T3512.
     let accept = fgs("7e0042010177000bf202f8390100421122334454070002f839000001150201015e0121");
-    let view = accept.to_view();
+    let tree = accept.to_tree();
     assert_eq!(
-        view["5gs-registration-result"]["value"]["result"],
+        tree["5gs-registration-result"]["result"],
         tree!("3gpp-access")
     );
     assert_eq!(
-        view["5g-guti"],
+        ie(&accept, "5g-guti"),
         tree!({"octets": "f202f83901004211223344", "value": {"guti": {
             "plmn": "208-93",
             "amf-region-id": 1,
@@ -286,25 +307,26 @@ fn a_structured_ie_reads_and_writes_in_its_usual_notation() {
         }}})
     );
     assert_eq!(
-        view["tai-list"]["value"],
+        tree["tai-list"],
         tree!([{"one-plmn-non-consecutive": {"plmn": "208-93", "tacs": [1]}}])
     );
     assert_eq!(
-        view["allowed-nssai"],
-        tree!({"octets": "0101", "value": [
-            {"sst": 1, "sd": null, "mapped-sst": null, "mapped-sd": null},
-        ]})
+        ie(&accept, "allowed-nssai"),
+        tree!({"octets": "0101", "value": [{"sst": 1}]})
     );
     // One hour, in seconds.
-    assert_eq!(view["t3512-value"], tree!({"octets": "21", "value": 3600}));
+    assert_eq!(
+        ie(&accept, "t3512-value"),
+        tree!({"octets": "21", "value": 3600})
+    );
 
-    let edited = fgs_edited(&accept, |view| {
-        view["5g-guti"]["value"]["guti"]["plmn"] = tree!("001-01");
-        view["5g-guti"]["value"]["guti"]["tmsi"] = tree!("0xdeadbeef");
-        view["tai-list"]["value"] = tree!([{"one-plmn-consecutive":
+    let edited = fgs_edited(&accept, |tree| {
+        tree["5g-guti"]["guti"]["plmn"] = tree!("001-01");
+        tree["5g-guti"]["guti"]["tmsi"] = tree!("0xdeadbeef");
+        tree["tai-list"] = tree!([{"one-plmn-consecutive":
             {"plmn": "310-410", "first-tac": 42, "count": 3}}]);
-        view["allowed-nssai"]["value"] = tree!([{"sst": 1, "sd": "010203"}, {"SST": 2}]);
-        view["t3512-value"]["value"] = tree!("deactivated");
+        tree["allowed-nssai"] = tree!([{"sst": 1, "sd": "010203"}, {"SST": 2}]);
+        tree["t3512-value"] = tree!("deactivated");
     });
     assert_eq!(
         edited.unwrap(),
@@ -315,73 +337,70 @@ fn a_structured_ie_reads_and_writes_in_its_usual_notation() {
     // A member that a value does not have is not ignored, nor a value that
     // its IE cannot carry, nor a notation that is not the one of the value.
     for (pointer, value) in [
-        ("/5g-guti/value/guti/tmsy", tree!(1)),
-        ("/5g-guti/value/guti/amf-set-id", tree!(5000)),
-        ("/5g-guti/value/guti/plmn", tree!("20893")),
+        ("/5g-guti/guti/tmsy", tree!(1)),
+        ("/5g-guti/guti/amf-set-id", tree!(5000)),
+        ("/5g-guti/guti/plmn", tree!("20893")),
         (
-            "/5g-guti/value/guti/plmn",
+            "/5g-guti/guti/plmn",
             tree!({"mcc": [2, 0, 8], "mnc": [9, 3, 15]}),
         ),
-        ("/allowed-nssai/value/0/sd", tree!("0102")),
-        ("/allowed-nssai/value", tree!([])),
-        ("/t3512-value/value", tree!(7)),
-        ("/t3512-value/value", tree!("stopped")),
-        ("/tai-list/value/0/one-plmn-non-consecutive/tacs", tree!([])),
+        ("/allowed-nssai/0/sd", tree!("0102")),
+        ("/allowed-nssai", tree!([])),
+        ("/t3512-value", tree!(7)),
+        ("/t3512-value", tree!("stopped")),
+        ("/tai-list/0/one-plmn-non-consecutive/tacs", tree!([])),
     ] {
-        let mut view = accept.to_view();
-        match pointer_mut(&mut view, pointer) {
+        let mut tree = accept.to_tree();
+        match pointer_mut(&mut tree, pointer) {
             Some(member) => *member = value,
             None => {
                 let (parent, member) = pointer.rsplit_once('/').unwrap();
-                pointer_mut(&mut view, parent).unwrap()[member] = value;
+                pointer_mut(&mut tree, parent).unwrap()[member] = value;
             }
         }
-        assert!(accept.with_view(view).is_err(), "{pointer}");
+        assert!(accept.with_tree(tree).is_err(), "{pointer}");
     }
 }
 
 #[test]
-fn a_container_of_a_message_reads_and_writes_as_its_view() {
+fn a_container_of_a_message_reads_and_writes_as_its_tree() {
     // UL NAS TRANSPORT with a PDU SESSION ESTABLISHMENT REQUEST for the DNN
     // "internet".
     let transport = fgs(
         "7e00670100152e0101c1ffff91a12801007b000780000a00000d00120181220101250908696e7465726e6574",
     );
-    let view = transport.to_view();
+    let tree = transport.to_tree();
+    assert_eq!(tree["payload-container-type"], tree!("n1-sm-information"));
     assert_eq!(
-        view["payload-container-type"]["value"],
-        tree!("n1-sm-information")
-    );
-    assert_eq!(
-        view["dnn"],
+        ie(&transport, "dnn"),
         tree!({"octets": "08696e7465726e6574", "value": "internet"})
     );
-    let request = &view["payload-container"]["value"];
+    let request = &tree["payload-container"];
     assert_eq!(
-        request["message-type"]["value"],
+        request["message-type"],
         tree!("pdu-session-establishment-request")
     );
-    assert_eq!(request["pdu-session-identity"]["value"], tree!(1));
-    assert_eq!(request["pdu-session-type"]["value"], tree!("ipv4"));
-    assert_eq!(request["ssc-mode"]["value"], tree!("ssc1"));
+    assert_eq!(request["pdu-session-identity"], tree!(1));
+    assert_eq!(request["pdu-session-type"], tree!("ipv4"));
+    assert_eq!(request["ssc-mode"], tree!("ssc1"));
     assert_eq!(
-        request["integrity-protection-maximum-data-rate"]["value"],
+        request["integrity-protection-maximum-data-rate"],
         tree!({"ul": "full-rate", "dl": "full-rate"})
     );
-    let edited = fgs_edited(&transport, |view| {
-        let request = &mut view["payload-container"]["value"];
-        request["pdu-session-identity"]["value"] = tree!(5);
-        request["pdu-session-type"]["value"] = tree!("IPv4v6");
-        request["ssc-mode"] = Value::Null;
-        view["dnn"]["value"] = tree!("ims.example");
+    let edited = fgs_edited(&transport, |tree| {
+        let request = &mut tree["payload-container"];
+        request["pdu-session-identity"] = tree!(5);
+        request["pdu-session-type"] = tree!("IPv4v6");
+        request.as_object_mut().unwrap().shift_remove("ssc-mode");
+        tree["dnn"] = tree!("ims.example");
     });
     assert_eq!(
         edited.unwrap(),
         "7e00670100142e0501c1ffff932801007b000780000a00000d0012018122010125\
          0c03696d73076578616d706c65"
     );
-    let error = fgs_edited(&transport, |view| {
-        view["payload-container"]["value"]["pdu-session-type"]["value"] = tree!("ipv5");
+    let error = fgs_edited(&transport, |tree| {
+        tree["payload-container"]["pdu-session-type"] = tree!("ipv5");
     });
     assert!(
         error
@@ -391,23 +410,20 @@ fn a_container_of_a_message_reads_and_writes_as_its_view() {
     // A payload of another type, and a ciphered message, have octets alone.
     let lpp = fgs("7e00670300020102");
     assert_eq!(
-        lpp.to_view()["payload-container"],
+        lpp.to_tree()["payload-container"],
         tree!({"octets": "0102"})
     );
     let complete = fgs("7e005e7100087e02000000000102");
     assert_eq!(
-        complete.to_view()["nas-message-container"],
+        complete.to_tree()["nas-message-container"],
         tree!({"octets": "7e02000000000102"})
     );
     // SECURITY MODE COMPLETE with the REGISTRATION REQUEST it replays.
     let complete = fgs("7e005e7100137e004101000d0102f8390000000021436587f9");
-    let replayed = &complete.to_view()["nas-message-container"]["value"];
+    let replayed = &complete.to_tree()["nas-message-container"];
+    assert_eq!(replayed["message-type"], tree!("registration-request"));
     assert_eq!(
-        replayed["message-type"]["value"],
-        tree!("registration-request")
-    );
-    assert_eq!(
-        replayed["5gs-mobile-identity"]["value"]["suci"]["imsi"]["msin"],
+        replayed["5gs-mobile-identity"]["suci"]["imsi"]["msin"],
         tree!("123456789")
     );
 }
@@ -416,8 +432,8 @@ fn a_container_of_a_message_reads_and_writes_as_its_view() {
 fn an_ie_is_taken_out_and_none_is_made_up() {
     let accept = fgs("7e0042010177000bf202f8390100421122334415020101");
     let remove = |name: &str| {
-        fgs_edited(&accept, |view| {
-            view.as_object_mut().unwrap().shift_remove(name).unwrap();
+        fgs_edited(&accept, |tree| {
+            tree.as_object_mut().unwrap().shift_remove(name).unwrap();
         })
     };
     assert_eq!(
@@ -437,153 +453,131 @@ fn an_ie_is_taken_out_and_none_is_made_up() {
     let error = remove("message-type").unwrap_err();
     assert!(error.contains("`message-type` is the header"), "{error}");
     // A name is the one of an IE that the message has.
-    let add = |name: &str, ie: Value| fgs_edited(&accept, |view| view[name] = ie);
+    let add = |name: &str, ie: Value| fgs_edited(&accept, |tree| tree[name] = ie);
     let error = add("allowed-nsai", tree!({"octets": "0101"})).unwrap_err();
     assert!(
         error.contains("no IE `allowed-nsai`; the nearest of its 64 is allowed-nssai"),
         "{error}"
     );
-    let error = add("Allowed NSSAI", tree!({"octets": "0101"})).unwrap_err();
+    let mut twice = accept.to_tree();
+    twice["Allowed NSSAI"] = tree!({"octets": "0101"});
+    let error = f::Message::from_tree(twice).unwrap_err().to_string();
     assert!(error.contains("named twice"), "{error}");
     // An IE is named in any case, and by the name of its field in the codec.
-    for name in ["Allowed NSSAI", "allowed_nssai", "ALLOWED-NSSAI"] {
-        let mut view = accept.to_view();
-        let ie = view
-            .as_object_mut()
-            .unwrap()
-            .shift_remove("allowed-nssai")
+    for name in ["Allowed NSSAI", "allowed_nssai", "ALLOWED-NSSAI", "5G_GUTI"] {
+        let mut tree = accept.to_tree();
+        let known = (tree.as_object().unwrap().keys())
+            .find(|known| crate::common::readable::same_name(known, name))
+            .cloned()
             .unwrap();
-        view[name] = ie;
-        assert_eq!(accept.with_view(view).unwrap(), accept, "{name}");
+        let ie = tree.as_object_mut().unwrap().shift_remove(&known).unwrap();
+        tree[name] = ie;
+        assert_eq!(accept.with_tree(tree.clone()).unwrap(), accept, "{name}");
+        assert_eq!(f::Message::from_tree(tree).unwrap(), accept, "{name}");
     }
-    let mut view = accept.to_view();
-    let guti = view
-        .as_object_mut()
-        .unwrap()
-        .shift_remove("5g-guti")
-        .unwrap();
-    view["5G_GUTI"] = guti;
-    assert_eq!(accept.with_view(view).unwrap(), accept);
     // The fields of the header are written by their value.
     let request = fgs("2e0101c1ffff91");
-    let edited = fgs_edited(&request, |view| {
-        view["pdu-session-identity"]["value"] = tree!(15);
-        view["procedure-transaction-identity"]["value"] = tree!("0x2a");
+    let edited = fgs_edited(&request, |tree| {
+        tree["pdu-session-identity"] = tree!(15);
+        tree["procedure-transaction-identity"] = tree!("0x2a");
     });
     assert_eq!(edited.unwrap(), "2e0f2ac1ffff91");
     assert!(
-        fgs_edited(&request, |view| view["message-type"]["octets"] =
-            tree!("c1"))
+        fgs_edited(&request, |tree| tree["message-type"] =
+            tree!({"octets": "c1"}))
         .is_err()
     );
 }
 
 #[test]
-fn a_view_is_read_through_a_security_header_which_it_shows() {
+fn a_tree_is_read_through_a_security_header_which_it_shows() {
     // Integrity protected 5GMM STATUS.
     let protected = fgs("7e01aabbccdd057e006416");
-    let view = protected.to_view();
-    assert_eq!(view["message-type"]["value"], tree!("5gmm-status"));
-    assert_eq!(view["5gmm-cause"]["value"], tree!("congestion"));
-    // The header of the plain message is plain, and the one that protects
-    // it is beside it.
+    let tree = protected.to_tree();
+    assert_eq!(tree["message-type"], tree!("5gmm-status"));
+    assert_eq!(tree["5gmm-cause"], tree!("congestion"));
+    // The header that protects the message is beside it, without what the
+    // system decides.
     assert_eq!(
-        view["security-header-type"]["value"],
-        tree!("plain-5gs-nas-message-not-security-protected")
-    );
-    assert_eq!(
-        view["security-header"],
-        tree!({"value": {
-            "extended-protocol-discriminator": 126,
+        tree["security-header"],
+        tree!({
             "security-header-type": "integrity-protected",
-            "spare-half-octet": 0,
             "message-authentication-code": 0xaabb_ccdd_u32,
             "sequence-number": 5,
-        }})
+        })
     );
-    assert_eq!(protected.with_view(view.clone()).unwrap(), protected);
+    assert_eq!(protected.with_tree(tree).unwrap(), protected);
     // The code is that of the message as it was: an edit of the message
     // writes another, and the header is edited as any other value.
-    let cause = |view: &mut Value| view["5gmm-cause"]["value"] = tree!("illegal-ue");
+    let cause = |tree: &mut Value| tree["5gmm-cause"] = tree!("illegal-ue");
     let error = fgs_edited(&protected, cause).unwrap_err();
     assert!(error.contains("message authentication code"), "{error}");
-    let edited = fgs_edited(&protected, |view| {
-        cause(view);
-        view["security-header"]["value"]["message-authentication-code"] = tree!("0x01020304");
+    let edited = fgs_edited(&protected, |tree| {
+        cause(tree);
+        tree["security-header"]["message-authentication-code"] = tree!("0x01020304");
     });
     assert_eq!(edited.unwrap(), "7e0101020304057e006403");
-    let edited = fgs_edited(&protected, |view| {
-        view["security-header"]["value"]["sequence-number"] = tree!(6);
+    let edited = fgs_edited(&protected, |tree| {
+        tree["security-header"]["sequence-number"] = tree!(6);
     });
     assert_eq!(edited.unwrap(), "7e01aabbccdd067e006416");
-    let error = fgs_edited(&protected, |view| {
-        view.as_object_mut()
+    let error = fgs_edited(&protected, |tree| {
+        tree.as_object_mut()
             .unwrap()
             .shift_remove("security-header");
     });
-    assert!(
-        error
-            .unwrap_err()
-            .contains("`security-header` is the header")
-    );
+    assert!(error.unwrap_err().contains("security-header: "));
     // A ciphered message has its octets, and no IE to show.
     let ciphered = fgs("7e0200000000001234");
-    let view = ciphered.to_view();
-    assert_eq!(view["ciphered-message"], tree!({"octets": "1234"}));
+    let tree = ciphered.to_tree();
+    assert_eq!(tree["ciphered-message"], tree!({"octets": "1234"}));
     assert_eq!(
-        view["security-header"]["value"]["security-header-type"],
+        tree["security-header"]["security-header-type"],
         tree!("integrity-protected-and-ciphered")
     );
-    assert_eq!(view.as_object().unwrap().len(), 2);
-    assert_eq!(ciphered.with_view(view).unwrap(), ciphered);
-    let octets = |view: &mut Value| view["ciphered-message"]["octets"] = tree!("5678");
+    assert_eq!(tree.as_object().unwrap().len(), 2);
+    assert_eq!(ciphered.with_tree(tree).unwrap(), ciphered);
+    let octets = |tree: &mut Value| tree["ciphered-message"] = tree!({"octets": "5678"});
     let error = fgs_edited(&ciphered, octets).unwrap_err();
     assert!(error.contains("message authentication code"), "{error}");
-    let edited = fgs_edited(&ciphered, |view| {
-        octets(view);
-        view["security-header"]["value"]["message-authentication-code"] = tree!(1);
+    let edited = fgs_edited(&ciphered, |tree| {
+        octets(tree);
+        tree["security-header"]["message-authentication-code"] = tree!(1);
     });
     assert_eq!(edited.unwrap(), "7e0200000001005678");
-    // A view that says nothing is not one of this message.
-    assert!(ciphered.with_view(tree!({})).is_err());
-    let added = fgs_edited(&ciphered, |view| {
-        view["5gmm-cause"] = tree!({"octets": "03"})
+    // A tree that says nothing is not one of this message.
+    assert!(ciphered.with_tree(tree!({})).is_err());
+    let added = fgs_edited(&ciphered, |tree| {
+        tree["5gmm-cause"] = tree!({"octets": "03"})
     });
     assert!(added.unwrap_err().contains("no IE `"));
-    assert!(ciphered.with_view(tree!([])).is_err());
+    assert!(ciphered.with_tree(tree!([])).is_err());
     // The same for EPS.
     let protected = eps("17aabbccdd05074403");
-    let view = protected.to_view();
-    assert_eq!(view["emm-cause"]["value"], tree!("illegal-ue"));
+    let tree = protected.to_tree();
+    assert_eq!(tree["emm-cause"], tree!("illegal-ue"));
     assert_eq!(
-        view["security-header"]["value"]["security-header-type"],
+        tree["security-header"]["security-header-type"],
         tree!("integrity-protected")
     );
-    assert_eq!(protected.with_view(view).unwrap(), protected);
-    let error = eps_edited(&protected, |view| {
-        view["emm-cause"]["value"] = tree!("congestion")
-    });
+    assert_eq!(protected.with_tree(tree).unwrap(), protected);
+    let error = eps_edited(&protected, |tree| tree["emm-cause"] = tree!("congestion"));
     assert!(error.unwrap_err().contains("message authentication code"));
-    // An EPS SERVICE REQUEST has a short header and no IEs: a view that says
-    // nothing leaves it as it is.
+    // An EPS SERVICE REQUEST has a short header and no IEs: a tree that
+    // leaves out what it has keeps it.
     let request = eps("c7200000");
-    assert_eq!(request.with_view(tree!({})).unwrap(), request);
-    assert_eq!(request.with_view(request.to_view()).unwrap(), request);
+    assert_eq!(request.with_tree(tree!({})).unwrap(), request);
+    assert_eq!(request.with_tree(request.to_tree()).unwrap(), request);
 }
 
 #[test]
-fn an_ie_that_a_view_writes_has_the_octets_of_what_is_written() {
-    let header = |kind: &str| {
-        tree!({
-            "extended-protocol-discriminator": {"value": 126},
-            "security-header-type": {"value": "plain-5gs-nas-message-not-security-protected"},
-            "message-type": {"value": kind},
-        })
-    };
+fn an_ie_that_a_tree_writes_has_the_octets_of_what_is_written() {
     let accept = |result: Value| {
-        let mut view = header("registration-accept");
-        view["5gs-registration-result"] = tree!({"value": result});
-        let accept = f::GmmMessageType::RegistrationAccept.message_from_view(view);
+        let tree = tree!({
+            "message-type": "registration-accept",
+            "5gs-registration-result": result,
+        });
+        let accept = f::Message::from_tree(tree);
         accept.map(|accept| hex::encode(accept.encode().unwrap()))
     };
     // Members that are zero are written as any other.
@@ -604,12 +598,14 @@ fn an_ie_that_a_view_writes_has_the_octets_of_what_is_written() {
     let error = accept(tree!({"result": 8})).unwrap_err().to_string();
     assert!(error.contains("result cannot be 8"), "{error}");
     let request = |name: &str, value: Value| {
-        let mut view = header("registration-request");
-        view["5gs-registration-type"] = tree!({"octets": "09"});
-        view["ngksi"] = tree!({"octets": "07"});
-        view["5gs-mobile-identity"] = tree!({"octets": "0199f907000000000000001002"});
-        view[name] = tree!({"value": value});
-        let request = f::GmmMessageType::RegistrationRequest.message_from_view(view);
+        let mut tree = tree!({
+            "message-type": "registration-request",
+            "5gs-registration-type": {"octets": "09"},
+            "ngksi": {"octets": "07"},
+            "5gs-mobile-identity": {"octets": "0199f907000000000000001002"},
+        });
+        tree[name] = value;
+        let request = f::Message::from_tree(tree);
         hex::encode(request.unwrap().encode().unwrap())
     };
     let drx = |window: u8| tree!({"paging-time-window": window, "edrx-value": 0});
@@ -618,73 +614,23 @@ fn an_ie_that_a_view_writes_has_the_octets_of_what_is_written() {
     let written = request("requested-extended-drx-parameters", drx(1));
     assert!(written.ends_with("6e0110"), "{written}");
     // The algorithms of a command, of which the integrity one is reserved.
-    let command = f::GmmMessageType::SecurityModeCommand.message_from_view({
-        let mut view = header("security-mode-command");
-        view["selected-nas-security-algorithms"] =
-            tree!({"value": {"ciphering": "nea2", "integrity": 8}});
-        view["ngksi"] = tree!({"octets": "01"});
-        view["replayed-ue-security-capabilities"] = tree!({"octets": "f0f0"});
-        view
-    });
+    let command = f::Message::from_tree(tree!({
+        "message-type": "security-mode-command",
+        "selected-nas-security-algorithms": {"ciphering": "nea2", "integrity": 8},
+        "ngksi": {"octets": "01"},
+        "replayed-ue-security-capabilities": {"octets": "f0f0"},
+    }));
     assert_eq!(
         hex::encode(command.unwrap().encode().unwrap()),
         "7e005d280102f0f0"
     );
     // The header takes the number of a type that it has a name for.
-    let mut view = header("5gmm-status");
-    view["security-header-type"] = tree!({"value": 0});
-    view["5gmm-cause"] = tree!({"value": "congestion"});
-    let status = f::GmmMessageType::FiveGmmStatus.message_from_view(view.clone());
+    let status = f::Message::from_tree(tree!({
+        "message-type": "5gmm-status",
+        "security-header-type": 0,
+        "5gmm-cause": "congestion",
+    }));
     assert_eq!(status.unwrap().encode().unwrap(), [0x7e, 0, 0x64, 0x16]);
-    // The type that the header names is the one of the message.
-    let error = f::GmmMessageType::RegistrationReject
-        .message_from_view(view)
-        .unwrap_err()
-        .to_string();
-    assert!(error.contains("`message-type` is 5gmm-status"), "{error}");
-}
-
-/// Octets written beside a value are those of the value, for an IE of one octet as for
-/// one of hexadecimal octets; an IE of two octets has two.
-#[test]
-fn octets_written_beside_a_value_are_those_of_the_value() {
-    // 5GMM STATUS, cause #22
-    let status = fgs("7e006416");
-    let written = |ie: Value| fgs_edited(&status, |view| view["5gmm-cause"] = ie);
-    assert_eq!(
-        written(tree!({"value": "illegal-ue", "octets": "03"})),
-        Ok("7e006403".into())
-    );
-    // The value by its number, which the octets read as a name
-    assert_eq!(
-        written(tree!({"value": 3, "octets": "03"})),
-        Ok("7e006403".into())
-    );
-    let error = written(tree!({"value": "illegal-ue", "octets": "05"})).unwrap_err();
-    assert!(
-        error.contains("the octets and the value that are written disagree"),
-        "{error}"
-    );
-    // REGISTRATION ACCEPT with an allowed NSSAI, whose value is octets
-    let accept = fgs("7e0042010177000bf202f8390100421122334415020101");
-    let edited = fgs_edited(&accept, |view| {
-        view["allowed-nssai"] = tree!({"value": [{"sst": 2}], "octets": "0102"});
-    });
-    assert_eq!(
-        edited,
-        Ok("7e0042010177000bf202f8390100421122334415020102".into())
-    );
-    // PDU SESSION ESTABLISHMENT REQUEST, whose integrity protection maximum data
-    // rate is two octets
-    let establishment = fgs("2e0501c1ffff");
-    let rate = |octets: &str| {
-        fgs_edited(&establishment, |view| {
-            view["integrity-protection-maximum-data-rate"] = tree!({"octets": octets});
-        })
-    };
-    assert_eq!(rate("0101"), Ok("2e0501c10101".into()));
-    let error = rate("010203").unwrap_err();
-    assert!(error.contains("is not two octets"), "{error}");
 }
 
 /// The tree of an IE is its value where that writes the IE back, and its octets where
@@ -697,10 +643,7 @@ fn the_tree_of_an_ie_is_its_value_where_that_writes_it_back() {
     assert_ne!(timer(&[0x21]), tree!({"octets": "21"}));
     // The fields of a 5GSM header are numbers
     let release = fgs("2e0f01d4");
-    assert_eq!(
-        release.to_view()["pdu-session-identity"]["value"],
-        tree!(15)
-    );
+    assert_eq!(release.to_tree()["pdu-session-identity"], tree!(15));
 }
 
 /// The tree of a message has the message of a container as its own tree.
@@ -714,37 +657,32 @@ fn the_tree_of_a_container_is_the_tree_of_its_message() {
     assert_eq!(e::Message::from_tree(tree.clone()).unwrap(), attach);
 }
 
-/// What a view writes of a header, of the header that protects a message and of its
+/// What a tree writes of a header, of the header that protects a message and of its
 /// ciphered octets is refused with what is wrong with it.
 #[test]
-fn a_header_that_a_view_writes_wrong_is_refused_with_why() {
+fn a_header_that_a_tree_writes_wrong_is_refused_with_why() {
     let protected = fgs("7e01aabbccdd057e006416");
-    let error = fgs_edited(&protected, |view| view["security-header"] = tree!(5)).unwrap_err();
-    assert!(error.contains("security-header: 5 is not an IE"), "{error}");
-    let error = fgs_edited(&protected, |view| view["message-type"] = tree!(5)).unwrap_err();
-    assert!(error.contains("message-type: 5 is not an IE"), "{error}");
+    let error = fgs_edited(&protected, |tree| tree["security-header"] = tree!(5)).unwrap_err();
+    assert!(error.contains("expected struct SecurityHeader"), "{error}");
+    let error = fgs_edited(&protected, |tree| tree["message-type"] = tree!(5)).unwrap_err();
+    assert!(error.contains("5 is not a name"), "{error}");
     let ciphered = fgs("7e0200000000001234");
-    let error = fgs_edited(&ciphered, |view| {
-        view["ciphered-message"]["octets"] = tree!("zz");
+    let error = fgs_edited(&ciphered, |tree| {
+        tree["ciphered-message"] = tree!({"octets": "zz"});
     })
     .unwrap_err();
     assert!(error.contains("it has `octets` alone"), "{error}");
 }
 
-/// The unknown IEs that a view writes are those of the message that it writes.
+/// The unknown IEs that a tree writes are those of the message that it writes.
 #[test]
-fn the_unknown_ies_that_a_view_writes_are_kept() {
+fn the_unknown_ies_that_a_tree_writes_are_kept() {
     let status = fgs("7e006416");
-    let edited = fgs_edited(&status, |view| {
-        view["unknown-ies"] = tree!({"value": "700101"});
-    });
+    let edited = fgs_edited(&status, |tree| tree["unknown-ies"] = tree!("700101"));
     assert_eq!(edited, Ok("7e006416700101".into()));
     // A ciphered message has no IEs to show, and keeps none
     let ciphered = fgs("7e0200000000001234");
-    let error = fgs_edited(&ciphered, |view| {
-        view["unknown-ies"] = tree!({"value": "700101"})
-    })
-    .unwrap_err();
+    let error = fgs_edited(&ciphered, |tree| tree["unknown-ies"] = tree!("700101")).unwrap_err();
     assert!(
         error.contains("`unknown-ies` are IEs of a message"),
         "{error}"
@@ -752,22 +690,19 @@ fn the_unknown_ies_that_a_view_writes_are_kept() {
 }
 
 #[test]
-fn what_a_view_shows_is_what_it_takes() {
+fn what_a_tree_shows_is_what_it_takes() {
     // A CONFIGURATION UPDATE COMMAND with an IE of flags that has no octets:
-    // its flags read false, and the IE is written as it came.
+    // the IE is written as it came.
     let command = fgs("7e00546300");
-    let view = command.to_view();
-    let control = &view["access-technology-utilization-control"];
-    assert_eq!(control["octets"], tree!(""));
-    assert!(
-        control["value"]
-            .as_object()
-            .unwrap()
-            .values()
-            .all(|flag| *flag == tree!(false))
+    assert_eq!(
+        ie(&command, "access-technology-utilization-control")["octets"],
+        tree!("")
     );
-    let alone = f::GmmMessageType::ConfigurationUpdateCommand.message_from_view(view);
-    assert_eq!(hex::encode(alone.unwrap().encode().unwrap()), "7e00546300");
+    // Its tree writes the IE of the fewest octets of its clause, which means
+    // what no octets mean.
+    let alone = f::Message::from_tree(command.to_tree()).unwrap();
+    assert_eq!(hex::encode(alone.encode().unwrap()), "7e005463020000");
+    assert!(alone.means_the_same(&command));
     // A reserved PDU session type is a number, not the name of the type that
     // a receiver takes it for, and the octet is written as it came.
     let accept = "2e0101c211000901000631310101ff0106060064060032";
@@ -780,30 +715,30 @@ fn what_a_view_shows_is_what_it_takes() {
     ] {
         let wire = accept.replacen("c211", &format!("c2{octet}"), 1);
         let message = fgs(&wire);
-        let view = message.to_view();
-        assert_eq!(view["selected-pdu-session-type"]["value"], kind, "{octet}");
-        assert_eq!(view["selected-ssc-mode"]["value"], mode, "{octet}");
-        let alone = f::GsmMessageType::PduSessionEstablishmentAccept.message_from_view(view);
-        assert_eq!(hex::encode(alone.unwrap().encode().unwrap()), wire);
+        let tree = message.to_tree();
+        assert_eq!(tree["selected-pdu-session-type"], kind, "{octet}");
+        assert_eq!(tree["selected-ssc-mode"], mode, "{octet}");
+        let alone = f::Message::from_tree(tree).unwrap();
+        assert!(alone.means_the_same(&message), "{octet}");
     }
     // A value that the crate reads and cannot write back is not shown: the
     // identity 0 of a linked bearer is reserved.
     let request = eps("6201c5000109062131ff0b3011");
     assert_eq!(
-        request.to_view()["linked-eps-bearer-identity"],
+        ie(&request, "linked-eps-bearer-identity"),
         tree!({"octets": "00"})
     );
     let request = eps("6201c5050109062131ff0b3011");
     assert_eq!(
-        request.to_view()["linked-eps-bearer-identity"],
+        ie(&request, "linked-eps-bearer-identity"),
         tree!({"octets": "05", "value": 5})
     );
 }
 
 #[test]
-fn every_message_of_a_view_alone_is_the_fixture_it_was_viewed_from() {
+fn every_message_of_a_tree_alone_is_the_fixture_it_was_read_from() {
     // Each one- or two-octet change of a fixture that still decodes: the
-    // view describes the message alone, with the same view.
+    // tree describes the message alone, with the same tree.
     let mut state = 0x9e37_79b9_7f4a_7c15_u64;
     let mut next = move || {
         state ^= state << 13;
@@ -817,17 +752,15 @@ fn every_message_of_a_view_alone_is_the_fixture_it_was_viewed_from() {
             let mut bytes = wire.clone();
             let at = next() as usize % bytes.len();
             bytes[at] = next() as u8;
-            let Ok(message) = f::Message::decode(&bytes) else {
+            let Ok(message @ (f::Message::Gmm(..) | f::Message::Gsm(..))) =
+                f::Message::decode(&bytes)
+            else {
                 continue;
             };
-            let view = message.to_view();
-            let alone = match &message {
-                f::Message::Gmm(_, body) => body.message_type().message_from_view(view.clone()),
-                f::Message::Gsm(_, body) => body.message_type().message_from_view(view.clone()),
-                _ => continue,
-            };
-            let alone = alone.unwrap_or_else(|error| panic!("{}: {error}", hex::encode(&bytes)));
-            assert_eq!(alone.to_view(), view, "{}", hex::encode(&bytes));
+            let tree = message.to_tree();
+            let alone = f::Message::from_tree(tree.clone())
+                .unwrap_or_else(|error| panic!("{}: {error}", hex::encode(&bytes)));
+            assert_eq!(alone.to_tree(), tree, "{}", hex::encode(&bytes));
             seen += 1;
         }
     }
@@ -841,20 +774,16 @@ fn every_message_of_a_view_alone_is_the_fixture_it_was_viewed_from() {
             } else {
                 crate::Direction::Uplink
             };
-            let Ok(message) = e::Message::decode_with(
+            let Ok(message @ (e::Message::Emm(..) | e::Message::Esm(..))) = e::Message::decode_with(
                 &bytes,
                 crate::DecodeOptions::STRICT.with_direction(direction),
             ) else {
                 continue;
             };
-            let view = message.to_view();
-            let alone = match &message {
-                e::Message::Emm(_, body) => body.message_type().message_from_view(view.clone()),
-                e::Message::Esm(_, body) => body.message_type().message_from_view(view.clone()),
-                _ => continue,
-            };
-            let alone = alone.unwrap_or_else(|error| panic!("{}: {error}", hex::encode(&bytes)));
-            assert_eq!(alone.to_view(), view, "{}", hex::encode(&bytes));
+            let tree = message.to_tree();
+            let alone = e::Message::from_tree(tree.clone())
+                .unwrap_or_else(|error| panic!("{}: {error}", hex::encode(&bytes)));
+            assert_eq!(alone.to_tree(), tree, "{}", hex::encode(&bytes));
             seen += 1;
         }
     }
@@ -866,71 +795,59 @@ fn a_list_is_written_by_its_value_and_octets_have_none() {
     // REGISTRATION ACCEPT with a service area list: TAC 1 of PLMN 208-93.
     // The crate builds the list, so its value is written.
     let accept = fgs("7e0042010127070002f839000001");
-    let view = accept.to_view();
     assert_eq!(
-        view["service-area-list"]["value"],
+        accept.to_tree()["service-area-list"],
         tree!([{"one-plmn-non-consecutive": {
             "allowed": "allowed", "plmn": "208-93", "tacs": [1],
         }}])
     );
-    let edited = fgs_edited(&accept, |view| {
-        view["service-area-list"]["value"][0]["one-plmn-non-consecutive"]["tacs"] = tree!([2]);
+    let edited = fgs_edited(&accept, |tree| {
+        tree["service-area-list"][0]["one-plmn-non-consecutive"]["tacs"] = tree!([2]);
     });
     assert_eq!(edited.unwrap(), "7e0042010127070002f839000002");
-    let edited = fgs_edited(&accept, |view| {
-        view["service-area-list"]["octets"] = tree!("0002f839000003");
+    let edited = fgs_edited(&accept, |tree| {
+        tree["service-area-list"] = tree!({"octets": "0002f839000003"});
     });
     assert_eq!(edited.unwrap(), "7e0042010127070002f839000003");
     // What a list cannot be is refused: a TAC has three octets.
-    let error = fgs_edited(&accept, |view| {
-        view["service-area-list"]["value"][0]["one-plmn-non-consecutive"]["tacs"] =
-            tree!([1_u64 << 24]);
+    let error = fgs_edited(&accept, |tree| {
+        tree["service-area-list"][0]["one-plmn-non-consecutive"]["tacs"] = tree!([1_u64 << 24]);
     });
     assert!(error.is_err(), "{error:?}");
 
     // REGISTRATION ACCEPT with a PDU session reactivation result error
     // cause: a PDU session identity and its cause, for each session.
     let accept = fgs("7e004201017200020516");
-    let view = accept.to_view();
-    let cause = &view["pdu-session-reactivation-result-error-cause"];
-    assert_eq!(cause["value"], tree!([[5, "congestion"]]));
-    let edited = fgs_edited(&accept, |view| {
-        view["pdu-session-reactivation-result-error-cause"]["value"] =
-            tree!([[6, "congestion"], [7, "illegal-ue"]]);
+    let cause = "pdu-session-reactivation-result-error-cause";
+    assert_eq!(accept.to_tree()[cause], tree!([[5, "congestion"]]));
+    let edited = fgs_edited(&accept, |tree| {
+        tree[cause] = tree!([[6, "congestion"], [7, "illegal-ue"]]);
     });
     assert_eq!(edited.unwrap(), "7e0042010172000406160703");
     // A session has one cause
-    let error = fgs_edited(&accept, |view| {
-        view["pdu-session-reactivation-result-error-cause"]["value"] =
-            tree!([[5, "congestion"], [5, "illegal-ue"]]);
+    let error = fgs_edited(&accept, |tree| {
+        tree[cause] = tree!([[5, "congestion"], [5, "illegal-ue"]]);
     });
     assert!(error.is_err(), "{error:?}");
-    // Its tree has its value, and writes it
-    let tree = accept.to_tree();
-    assert_eq!(
-        tree["pdu-session-reactivation-result-error-cause"],
-        tree!([[5, "congestion"]])
-    );
-    let written = f::Message::from_tree(tree).unwrap();
+    // Its tree writes it
+    let written = f::Message::from_tree(accept.to_tree()).unwrap();
     assert_eq!(
         hex::encode(written.encode().unwrap()),
         "7e004201017200020516"
     );
     // Octets are written as they are
-    let edited = fgs_edited(&accept, |view| {
-        view["pdu-session-reactivation-result-error-cause"]["octets"] = tree!("0616");
-    });
+    let edited = fgs_edited(&accept, |tree| tree[cause] = tree!({"octets": "0616"}));
     assert_eq!(edited.unwrap(), "7e004201017200020616");
     // AUTHENTICATION REQUEST: the RAND and the AUTN are octets, as is the ABBA.
     let request =
         fgs("7e0056010200002111111111111111111111111111111111201022222222222222222222222222222222");
-    let view = request.to_view();
-    assert_eq!(view["abba"], tree!({"octets": "0000"}));
+    let tree = request.to_tree();
+    assert_eq!(tree["abba"], tree!({"octets": "0000"}));
     assert_eq!(
-        view["authentication-parameter-rand"],
+        tree["authentication-parameter-rand"],
         tree!({"octets": "11111111111111111111111111111111"})
     );
-    let error = fgs_edited(&request, |view| view["abba"]["value"] = tree!("0000"));
+    let error = fgs_edited(&request, |tree| tree["abba"] = tree!("0000"));
     assert!(
         error
             .unwrap_err()
@@ -942,40 +859,28 @@ fn a_list_is_written_by_its_value_and_octets_have_none() {
 fn eps_values_read_and_write_by_name() {
     // ATTACH REQUEST with an IMSI and a PDN CONNECTIVITY REQUEST.
     let request = eps("07410108298039000000001002e0e000040201d031");
-    let view = request.to_view();
-    assert_eq!(view["message-type"]["value"], tree!("attach-request"));
+    let tree = request.to_tree();
+    assert_eq!(tree["message-type"], tree!("attach-request"));
     assert_eq!(
-        view["eps-attach-type"],
+        ie(&request, "eps-attach-type"),
         tree!({"value": "eps-attach", "octets": "01"})
     );
+    assert_eq!(tree["nas-key-set-identifier"], tree!({"native": 0}));
     assert_eq!(
-        view["nas-key-set-identifier"]["value"],
-        tree!({"native": 0})
-    );
-    assert_eq!(
-        view["eps-mobile-identity"]["value"],
+        tree["eps-mobile-identity"],
         tree!({"imsi": "208930000000001"})
     );
-    assert_eq!(
-        view["ue-network-capability"]["value"]["eea"],
-        tree!([0, 1, 2])
-    );
-    assert_eq!(
-        view["ue-network-capability"]["value"]["eps-upip"],
-        tree!(false)
-    );
-    let inner = &view["esm-message-container"]["value"];
-    assert_eq!(
-        inner["message-type"]["value"],
-        tree!("pdn-connectivity-request")
-    );
-    assert_eq!(inner["request-type"]["value"], tree!("initial"));
-    let edited = eps_edited(&request, |view| {
-        view["eps-attach-type"]["value"] = tree!("combined-eps-imsi-attach");
-        view["eps-mobile-identity"]["value"]["imsi"] = tree!("208930000000002");
-        view["nas-key-set-identifier"]["value"] = tree!("no-key");
-        view["ue-network-capability"]["value"]["eps-upip"] = tree!(true);
-        view["esm-message-container"]["value"]["pdn-type"]["value"] = tree!("ipv6");
+    assert_eq!(tree["ue-network-capability"]["eea"], tree!([0, 1, 2]));
+    assert_eq!(tree["ue-network-capability"]["eps-upip"], tree!(false));
+    let inner = &tree["esm-message-container"];
+    assert_eq!(inner["message-type"], tree!("pdn-connectivity-request"));
+    assert_eq!(inner["request-type"], tree!("initial"));
+    let edited = eps_edited(&request, |tree| {
+        tree["eps-attach-type"] = tree!("combined-eps-imsi-attach");
+        tree["eps-mobile-identity"]["imsi"] = tree!("208930000000002");
+        tree["nas-key-set-identifier"] = tree!("no-key");
+        tree["ue-network-capability"]["eps-upip"] = tree!(true);
+        tree["esm-message-container"]["pdn-type"] = tree!("ipv6");
     });
     assert_eq!(
         edited.unwrap(),
@@ -984,10 +889,10 @@ fn eps_values_read_and_write_by_name() {
     // ATTACH REJECT, EMM cause #3.
     let reject = eps("074403");
     assert_eq!(
-        reject.to_view()["emm-cause"],
+        ie(&reject, "emm-cause"),
         tree!({"value": "illegal-ue", "octets": "03"})
     );
-    let named = |name: Value| eps_edited(&reject, |view| view["emm-cause"]["value"] = name);
+    let named = |name: Value| eps_edited(&reject, |tree| tree["emm-cause"] = name);
     assert_eq!(named(tree!("congestion")).unwrap(), "074416");
     assert_eq!(named(tree!(200)).unwrap(), "0744c8");
     assert!(named(tree!({"unknown": 200})).is_err());
@@ -998,29 +903,32 @@ fn eps_values_read_and_write_by_name() {
         "07420121060002f839000100155201c101090908696e7465726e657405010a000001\
          500bf602f839000102112233442305f411223344530317016b0101",
     );
-    let view = accept.to_view();
-    assert_eq!(view["t3412-value"], tree!({"octets": "21", "value": 60}));
+    let tree = accept.to_tree();
     assert_eq!(
-        view["tai-list"]["value"],
+        ie(&accept, "t3412-value"),
+        tree!({"octets": "21", "value": 60})
+    );
+    assert_eq!(
+        tree["tai-list"],
         tree!([{"one-plmn-non-consecutive": {"plmn": "208-93", "tacs": [1]}}])
     );
     assert_eq!(
-        view["guti"]["value"],
+        tree["guti"],
         tree!({"guti": {"plmn": "208-93", "mme-group-id": 1, "mme-code": 2,
             "m-tmsi": 0x1122_3344}})
     );
-    assert_eq!(view["ms-identity"]["value"], tree!({"tmsi": 0x1122_3344}));
-    let bearer = &view["esm-message-container"]["value"];
-    assert_eq!(bearer["eps-bearer-identity"]["value"], tree!(5));
-    assert_eq!(bearer["access-point-name"]["value"], tree!("internet"));
-    assert_eq!(bearer["pdn-address"]["value"], tree!({"ipv4": "10.0.0.1"}));
-    let edited = eps_edited(&accept, |view| {
-        view["tai-list"]["value"] = tree!([{"different-plmns": [{"plmn": "208-93", "tac": 1},
+    assert_eq!(tree["ms-identity"], tree!({"tmsi": 0x1122_3344}));
+    let bearer = &tree["esm-message-container"];
+    assert_eq!(bearer["eps-bearer-identity"], tree!(5));
+    assert_eq!(bearer["access-point-name"], tree!("internet"));
+    assert_eq!(bearer["pdn-address"], tree!({"ipv4": "10.0.0.1"}));
+    let edited = eps_edited(&accept, |tree| {
+        tree["tai-list"] = tree!([{"different-plmns": [{"plmn": "208-93", "tac": 1},
             {"plmn": "001-01", "tac": "0x10"}]}]);
-        view["guti"]["value"]["guti"]["m-tmsi"] = tree!(1);
-        let bearer = &mut view["esm-message-container"]["value"];
-        bearer["access-point-name"]["value"] = tree!("ims");
-        bearer["pdn-address"]["value"]["ipv4"] = tree!("192.168.0.7");
+        tree["guti"]["guti"]["m-tmsi"] = tree!(1);
+        let bearer = &mut tree["esm-message-container"];
+        bearer["access-point-name"] = tree!("ims");
+        bearer["pdn-address"]["ipv4"] = tree!("192.168.0.7");
     });
     assert_eq!(
         edited.unwrap(),
@@ -1030,17 +938,18 @@ fn eps_values_read_and_write_by_name() {
 }
 
 #[test]
-fn an_optional_ie_that_the_message_does_not_have_is_null_and_is_added() {
+fn an_optional_ie_that_the_message_does_not_have_is_added() {
     let accept = fgs("7e0042010177000bf202f8390100421122334415020101");
-    let view = accept.to_view();
-    assert_eq!(view["configured-nssai"], Value::Null);
-    assert_eq!(view["t3512-value"], Value::Null);
-    assert_eq!(view.get("5gmm-cause"), None);
-    // The view of a message names what a message of its type can have.
+    let tree = accept.to_tree();
+    assert_eq!(tree.get("configured-nssai"), None);
+    // The names of a message type are those that its tree can have.
     let names = f::GmmMessageType::RegistrationAccept.names();
-    let entries: Vec<_> = view.as_object().unwrap().keys().collect();
-    assert_eq!(names.len(), entries.len());
-    assert!(entries.iter().all(|entry| names.contains(entry)));
+    assert!(
+        tree.as_object()
+            .unwrap()
+            .keys()
+            .all(|entry| names.contains(entry))
+    );
     assert_eq!(
         names[..5],
         [
@@ -1051,41 +960,25 @@ fn an_optional_ie_that_the_message_does_not_have_is_null_and_is_added() {
             "5gs-registration-result"
         ]
     );
-    // From its octets, from its value, and from both.
-    let add = |name: &str, ie: Value| fgs_edited(&accept, |view| view[name] = ie);
+    // From its octets, and from its value.
+    let add = |name: &str, ie: Value| fgs_edited(&accept, |tree| tree[name] = ie);
     let with = |ies: &str| format!("7e0042010177000bf202f8390100421122334415020101{ies}");
     assert_eq!(
         add("configured-nssai", tree!({"octets": "0101"})).unwrap(),
         with("31020101")
     );
     assert_eq!(
-        add(
-            "configured-nssai",
-            tree!({"value": [{"sst": 1, "sd": "010203"}]})
-        )
-        .unwrap(),
+        add("configured-nssai", tree!([{"sst": 1, "sd": "010203"}])).unwrap(),
         with("31050401010203")
     );
-    // Under another spelling of its name, in the place of the entry.
-    let other = fgs_edited(&accept, |view| {
-        view.as_object_mut()
-            .unwrap()
-            .shift_remove("configured-nssai");
-        view["Configured NSSAI"] = tree!({"Octets": "0101"});
-    });
-    assert_eq!(other.unwrap(), with("31020101"));
-    let error = add("Configured NSSAI", tree!({"octets": "0101"})).unwrap_err();
-    assert!(error.contains("named twice"), "{error}");
+    // Under another spelling of its name.
     assert_eq!(
-        add("t3512-value", tree!({"value": 3600})).unwrap(),
-        with("5e0106")
+        add("Configured NSSAI", tree!({"octets": "0101"})).unwrap(),
+        with("31020101")
     );
+    assert_eq!(add("t3512-value", tree!(3600)).unwrap(), with("5e0106"));
     assert_eq!(
-        add("t3512-value", tree!({"value": 3600, "octets": "21"})).unwrap(),
-        with("5e0121")
-    );
-    assert_eq!(
-        add("mico-indication", tree!({"value": {"raai": true}})).unwrap(),
+        add("mico-indication", tree!({"raai": true})).unwrap(),
         with("b1")
     );
     assert_eq!(
@@ -1093,42 +986,36 @@ fn an_optional_ie_that_the_message_does_not_have_is_null_and_is_added() {
         with("b0")
     );
     // A value is encoded, also when it is the one of no octets.
-    let tnan = fgs_edited(&fgs("7e00440b"), |view| {
-        view["tnan-information"] = tree!({"value": {"tngf-id": null, "ssid": null}})
+    let tnan = fgs_edited(&fgs("7e00440b"), |tree| {
+        tree["tnan-information"] = tree!({"tngf-id": null, "ssid": null})
     });
     assert_eq!(tnan.unwrap(), "7e00440b4d0100");
     // Two at once take their places in the message.
-    let both = fgs_edited(&accept, |view| {
-        view["t3512-value"] = tree!({"value": "deactivated"});
-        view["configured-nssai"] = tree!({"octets": ""});
+    let both = fgs_edited(&accept, |tree| {
+        tree["t3512-value"] = tree!("deactivated");
+        tree["configured-nssai"] = tree!({"octets": ""});
     });
     assert_eq!(both.unwrap(), with("31005e01e0"));
-    // What is added is said: an entry with nothing is none, and neither is
-    // an IE that a message of this type does not have.
-    for nothing in [tree!({}), tree!({"value": null}), tree!("0101")] {
+    // What is added is said: `null` is nothing, and an IE that a message of
+    // this type does not have is none.
+    for nothing in [Value::Null, tree!({"octets": null})] {
         let error = add("configured-nssai", nothing).unwrap_err();
-        assert!(error.contains("configured-nssai: "), "{error}");
-        assert!(error.contains("with a `value` or `octets`"), "{error}");
+        assert!(
+            error.contains("configured-nssai: an IE is written with a `value` or `octets`"),
+            "{error}"
+        );
     }
-    let error = add("allowed-nssai", tree!({})).unwrap_err();
-    assert!(
-        error.contains("allowed-nssai: an IE is written with a `value` or `octets`"),
-        "{error}"
-    );
-    let error = add("t3512-value", tree!({"value": 3600, "octets": "22"})).unwrap_err();
-    assert!(error.contains("disagree"), "{error}");
-    let error = add("t3512-value", tree!({"value": "soon"})).unwrap_err();
+    let error = add("t3512-value", tree!("soon")).unwrap_err();
     assert!(error.contains("t3512-value: "), "{error}");
-    let error = add("5gmm-cause", tree!({"value": "congestion"})).unwrap_err();
+    let error = add("5gmm-cause", tree!("congestion")).unwrap_err();
     assert!(error.contains("no IE `5gmm-cause`"), "{error}");
-    assert_eq!(add("configured-nssai", Value::Null).unwrap(), with(""));
     // Inside the message of a container: SECURITY MODE COMPLETE with the
     // REGISTRATION REQUEST it replays.
     let complete = fgs("7e005e7100137e004101000d0102f8390000000021436587f9");
-    let edited = fgs_edited(&complete, |view| {
-        let replayed = &mut view["nas-message-container"]["value"];
-        assert_eq!(replayed["requested-nssai"], Value::Null);
-        replayed["requested-nssai"] = tree!({"value": [{"sst": 1}]});
+    let edited = fgs_edited(&complete, |tree| {
+        let replayed = &mut tree["nas-message-container"];
+        assert_eq!(replayed.get("requested-nssai"), None);
+        replayed["requested-nssai"] = tree!([{"sst": 1}]);
     });
     assert_eq!(
         edited.unwrap(),
@@ -1136,70 +1023,74 @@ fn an_optional_ie_that_the_message_does_not_have_is_null_and_is_added() {
     );
     // EPS: ATTACH REJECT with EMM cause #3.
     let reject = eps("074403");
-    assert_eq!(reject.to_view()["t3402-value"], Value::Null);
-    let edited = eps_edited(&reject, |view| {
-        view["t3402-value"] = tree!({"value": 720});
-        view["extended-emm-cause"] = tree!({"octets": "01"});
+    assert_eq!(reject.to_tree().get("t3402-value"), None);
+    let edited = eps_edited(&reject, |tree| {
+        tree["t3402-value"] = tree!(720);
+        tree["extended-emm-cause"] = tree!({"octets": "01"});
     });
     assert_eq!(edited.unwrap(), "07440316012ca1");
-    assert_eq!(
-        e::EmmMessageType::AttachReject.names().len(),
-        reject.to_view().as_object().unwrap().len()
-    );
 }
 
 /// Every optional IE that a fixture does not have is added to it from
-/// octets, and the view then has it with them.
+/// octets, and the message then has it with them.
 #[test]
 fn every_optional_ie_is_added_from_its_octets() {
-    fn check(view: Value, with_view: impl Fn(Value) -> Option<Value>) -> usize {
-        let absent = view.as_object().unwrap().iter();
-        let absent = absent.filter(|(_, ie)| ie.is_null()).map(|(name, _)| name);
+    use crate::common::view::Viewed;
+    /// The optional IEs that `message` does not have.
+    fn absent(message: &impl Viewed) -> Vec<&'static str> {
+        let mut absent = Vec::new();
+        if let Some(body) = message.body() {
+            body.absent(&mut |name, _| absent.push(name));
+        }
         absent
-            .map(|name| {
-                // An IE has the octets of a length that its message encodes.
-                let added = (1..=32)
-                    .map(|length| "00".repeat(length))
-                    .find_map(|octets| {
-                        let mut view = view.clone();
-                        view[name.as_str()] = tree!({ "octets": &octets });
-                        with_view(view).filter(|view| {
-                            view[name.as_str()]["octets"].as_str() == Some(octets.as_str())
-                        })
-                    });
-                assert!(added.is_some(), "{name}");
-            })
-            .count()
+    }
+    fn check(absent: Vec<&str>, added: impl Fn(&str, &str) -> bool) -> usize {
+        for name in &absent {
+            // An IE has the octets of a length that its message encodes.
+            let mut lengths = (1..=32).map(|length| "00".repeat(length));
+            assert!(lengths.any(|octets| added(name, &octets)), "{name}");
+        }
+        absent.len()
     }
     let mut added = 0;
     for (_, wire) in fixtures(include_str!("../tests/fixtures/nas-5gs.tsv")) {
         let message = f::Message::decode(&wire).unwrap();
-        added += check(message.to_view(), |view| {
-            Some(message.with_view(view).ok()?.to_view())
+        let tree = message.to_tree();
+        added += check(absent(&message), |name, octets| {
+            let mut tree = tree.clone();
+            tree[name] = tree!({ "octets": octets });
+            let edited = message.with_tree(tree).ok();
+            let selected = edited.map(|edited| edited.select(&format!("/nas/{name}/octets")));
+            selected == Some(Ok(vec![tree!(octets)]))
         });
     }
     for (name, wire) in fixtures(include_str!("../tests/fixtures/nas-eps.tsv")) {
         let message = eps_fixture(name, &wire);
-        added += check(message.to_view(), |view| {
-            Some(message.with_view(view).ok()?.to_view())
+        let tree = message.to_tree();
+        added += check(absent(&message), |name, octets| {
+            let mut tree = tree.clone();
+            tree[name] = tree!({ "octets": octets });
+            let edited = message.with_tree(tree).ok();
+            let selected = edited.map(|edited| edited.select(&format!("/nas/{name}/octets")));
+            selected == Some(Ok(vec![tree!(octets)]))
         });
     }
     assert!(added > 500, "{added}");
 }
 
 /// The names of every message type that the crate has a message of are the
-/// entries of the view of that message.
+/// members that its tree can have, in the order of the message.
 #[test]
-fn the_names_of_a_message_type_are_the_entries_of_its_view() {
-    let check = |view: Value, mut names: Vec<String>, name: &str| {
-        let entries: Vec<_> = view.as_object().unwrap().keys().collect();
-        assert!(entries.len() > 2, "{name}");
-        // An EPS DETACH REQUEST is one message from the UE and another to it.
-        if name.starts_with("DetachRequest") {
-            names.retain(|name| entries.contains(&name));
-        }
+fn the_names_of_a_message_type_are_the_members_of_its_tree() {
+    let check = |tree: Value, names: Vec<String>, name: &str| {
+        let members: Vec<_> = tree.as_object().unwrap().keys().collect();
+        assert!(!members.is_empty(), "{name}");
         // In the order of the message: the header, then the table
-        assert_eq!(entries, names.iter().collect::<Vec<_>>(), "{name}");
+        let places: Vec<_> = (members.iter())
+            .map(|member| names.iter().position(|known| known == *member))
+            .collect();
+        assert!(places.iter().all(Option::is_some), "{name}: {members:?}");
+        assert!(places.is_sorted(), "{name}: {members:?}");
     };
     for (name, wire) in fixtures(include_str!("../tests/fixtures/nas-5gs.tsv")) {
         let message = f::Message::decode(&wire).unwrap();
@@ -1208,7 +1099,7 @@ fn the_names_of_a_message_type_are_the_entries_of_its_view() {
             f::Message::Gsm(header, _) => header.message_type.names(),
             _ => panic!("{name}"),
         };
-        check(message.to_view(), names, name);
+        check(message.to_tree(), names, name);
     }
     for (name, wire) in fixtures(include_str!("../tests/fixtures/nas-eps.tsv")) {
         let message = eps_fixture(name, &wire);
@@ -1217,7 +1108,7 @@ fn the_names_of_a_message_type_are_the_entries_of_its_view() {
             e::Message::Esm(header, _) => header.message_type.names(),
             _ => panic!("{name}"),
         };
-        check(message.to_view(), names, name);
+        check(message.to_tree(), names, name);
     }
     let detach = e::EmmMessageType::DetachRequest.names();
     assert!(detach.contains(&"eps-mobile-identity".to_string()));
@@ -1232,28 +1123,28 @@ fn the_parts_of_a_configuration_or_a_restriction_read_and_write_by_name() {
     // paging restriction.
     let reject = fgs("7e00440b4d060301aa026162");
     assert_eq!(
-        reject.to_view()["tnan-information"]["value"],
+        reject.to_tree()["tnan-information"],
         tree!({"tngf-id": "aa", "ssid": "ab"})
     );
-    let edited = fgs_edited(&reject, |view| {
-        view["tnan-information"]["value"] = tree!({"tngf-id": null, "ssid": "home"})
+    let edited = fgs_edited(&reject, |tree| {
+        tree["tnan-information"] = tree!({"tngf-id": null, "ssid": "home"})
     });
     assert_eq!(edited.unwrap(), "7e00440b4d060204686f6d65");
     let request = fgs("7e004c010007f4004211223344280303a202");
     assert_eq!(
-        request.to_view()["paging-restriction"]["value"],
+        request.to_tree()["paging-restriction"],
         tree!({
             "restriction-type": "all-restricted-except-specified-pdu-sessions",
             "unrestricted-psis": [1, 5, 7, 9],
         })
     );
-    let edited = fgs_edited(&request, |view| {
-        view["paging-restriction"]["value"]["unrestricted-psis"] = tree!([2, 15])
+    let edited = fgs_edited(&request, |tree| {
+        tree["paging-restriction"]["unrestricted-psis"] = tree!([2, 15])
     });
     assert_eq!(edited.unwrap(), "7e004c010007f40042112233442803030480");
     // What the type of restriction has no place for is refused.
-    let error = fgs_edited(&request, |view| {
-        view["paging-restriction"]["value"] = tree!({
+    let error = fgs_edited(&request, |tree| {
+        tree["paging-restriction"] = tree!({
             "restriction-type": "all-restricted",
             "unrestricted-psis": [2],
         })
@@ -1263,12 +1154,12 @@ fn the_parts_of_a_configuration_or_a_restriction_read_and_write_by_name() {
     ));
     // EPS: a SERVICE REJECT is given S&F satellite operation parameters.
     let reject = eps("074e0a");
-    let edited = eps_edited(&reject, |view| {
-        view["s-and-f-satellite-operation-parameters"] = tree!({"value": {
+    let edited = eps_edited(&reject, |tree| {
+        tree["s-and-f-satellite-operation-parameters"] = tree!({
             "wait-time": 10,
             "uplink-delivery-time": 60,
             "monitoring-list": {"present": "0102"},
-        }})
+        })
     });
     assert_eq!(edited.unwrap(), "074e0a21090b000a00003c020102");
 }
@@ -1729,33 +1620,26 @@ fn a_path_into_the_message_of_a_container_adds_an_ie_that_it_has_not() {
     );
 }
 
-/// The pointers to every part of the values of a view.
-fn values(view: &Value, path: String, inside: bool, found: &mut Vec<String>) {
-    if inside {
+/// The pointers to every part of the members of a tree.
+fn values(tree: &Value, path: String, found: &mut Vec<String>) {
+    if !path.is_empty() {
         found.push(path.clone());
     }
-    match view {
-        Value::Object(object) => object.iter().for_each(|(key, value)| {
-            values(
-                value,
-                format!("{path}/{key}"),
-                inside || key == "value",
-                found,
-            )
-        }),
-        Value::Array(array) => array
-            .iter()
-            .enumerate()
-            .for_each(|(index, value)| values(value, format!("{path}/{index}"), inside, found)),
+    match tree {
+        Value::Object(object) => {
+            (object.iter()).for_each(|(key, value)| values(value, format!("{path}/{key}"), found))
+        }
+        Value::Array(array) => (array.iter().enumerate())
+            .for_each(|(index, value)| values(value, format!("{path}/{index}"), found)),
         _ => {}
     }
 }
 
-/// Every fixture has a view that is the message, and whatever a value of it
+/// Every fixture has a tree that is the message, and whatever a value of it
 /// is given, the answer is a message that has it or an error: nothing is
 /// taken unchecked into an encoder.
 #[test]
-fn a_view_is_the_message_and_takes_nothing_unchecked() {
+fn a_tree_is_the_message_and_takes_nothing_unchecked() {
     let parts = [
         tree!(255),
         tree!(65_536),
@@ -1770,15 +1654,15 @@ fn a_view_is_the_message_and_takes_nothing_unchecked() {
     ];
     fn check<M: PartialEq + std::fmt::Debug>(
         message: &M,
-        view: impl Fn(&M) -> Value,
-        with_view: impl Fn(&M, Value) -> Option<M>,
+        tree: impl Fn(&M) -> Value,
+        with_tree: impl Fn(&M, Value) -> Option<M>,
         parts: &[Value],
         counts: &mut [usize; 2],
     ) {
-        let whole = view(message);
-        assert_eq!(with_view(message, whole.clone()).as_ref(), Some(message));
+        let whole = tree(message);
+        assert_eq!(with_tree(message, whole.clone()).as_ref(), Some(message));
         let mut pointers = Vec::new();
-        values(&whole, String::new(), false, &mut pointers);
+        values(&whole, String::new(), &mut pointers);
         // A sample of the parts of a message with many, such as capabilities.
         let step = pointers.len().div_ceil(16).max(1);
         let pointers = pointers.iter().step_by(step);
@@ -1786,8 +1670,8 @@ fn a_view_is_the_message_and_takes_nothing_unchecked() {
             let mut edited = whole.clone();
             *pointer_mut(&mut edited, pointer).unwrap() = part.clone();
             counts[0] += 1;
-            if let Some(message) = with_view(message, edited) {
-                view(&message);
+            if let Some(message) = with_tree(message, edited) {
+                tree(&message);
                 counts[1] += 1;
             }
         }
@@ -1797,8 +1681,8 @@ fn a_view_is_the_message_and_takes_nothing_unchecked() {
         let message = f::Message::decode(&wire).unwrap();
         check(
             &message,
-            f::Message::to_view,
-            |message, view| message.with_view(view).ok().inspect(|m| drop(m.encode())),
+            f::Message::to_tree,
+            |message, tree| message.with_tree(tree).ok().inspect(|m| drop(m.encode())),
             &parts,
             &mut counts,
         );
@@ -1807,8 +1691,8 @@ fn a_view_is_the_message_and_takes_nothing_unchecked() {
         let message = eps_fixture(name, &wire);
         check(
             &message,
-            e::Message::to_view,
-            |message, view| message.with_view(view).ok().inspect(|m| drop(m.encode())),
+            e::Message::to_tree,
+            |message, tree| message.with_tree(tree).ok().inspect(|m| drop(m.encode())),
             &parts,
             &mut counts,
         );
@@ -1816,7 +1700,259 @@ fn a_view_is_the_message_and_takes_nothing_unchecked() {
     assert!(counts[0] > 4_000 && counts[1] > 100, "{counts:?}");
 }
 
-/// A SERVICE REQUEST has the fields of its short header (TS 24.301 §8.2.25).
+#[test]
+fn a_code_is_written_by_its_name_or_by_its_number() {
+    // 5GMM STATUS, cause #22: one coded value.
+    let status = fgs("7e006416");
+    let cause = |value: Value| fgs_edited(&status, |tree| tree["5gmm-cause"] = value);
+    assert_eq!(cause(tree!("illegal-ue")).unwrap(), "7e006403");
+    assert_eq!(cause(tree!(3)).unwrap(), "7e006403");
+    assert_eq!(cause(tree!("0x03")).unwrap(), "7e006403");
+    assert_eq!(cause(tree!(22)).unwrap(), "7e006416");
+    // The fields of an octet: REGISTRATION ACCEPT, 3GPP access.
+    let accept = fgs("7e0042010177000bf202f8390100421122334415020101");
+    let result = |value: Value| {
+        fgs_edited(&accept, |tree| {
+            tree["5gs-registration-result"]["result"] = value
+        })
+    };
+    let named = result(tree!("non-3gpp-access")).unwrap();
+    assert_eq!(&named[..10], "7e00420102");
+    assert_eq!(result(tree!(2)).unwrap(), named);
+    assert_eq!(
+        result(tree!(1)).unwrap(),
+        hex::encode(accept.encode().unwrap())
+    );
+    // A number that the field cannot hold is refused.
+    assert!(result(tree!(9)).unwrap_err().contains("result"));
+    // The two values of one octet: PDU SESSION ESTABLISHMENT ACCEPT.
+    let accept = fgs("2e0101c211000901000631310101ff0106060064060032");
+    let selected = |kind: Value, mode: Value| {
+        fgs_edited(&accept, |tree| {
+            tree["selected-pdu-session-type"] = kind;
+            tree["selected-ssc-mode"] = mode;
+        })
+    };
+    let named = selected(tree!("ipv6"), tree!("ssc2")).unwrap();
+    assert_eq!(&named[..10], "2e0101c222");
+    assert_eq!(selected(tree!(2), tree!(2)).unwrap(), named);
+    // A half octet has four bits.
+    assert!(selected(tree!(16), tree!(2)).is_err());
+    // EPS: ATTACH REJECT, cause #3.
+    let reject = eps("074403");
+    let cause = |value: Value| eps_edited(&reject, |tree| tree["emm-cause"] = value);
+    assert_eq!(cause(tree!("congestion")).unwrap(), "074416");
+    assert_eq!(cause(tree!(22)).unwrap(), "074416");
+}
+
+#[test]
+fn the_spare_half_octet_of_a_5gmm_header_is_read_and_written() {
+    // REGISTRATION COMPLETE, received with a spare half octet of 15
+    let complete = fgs("7ef043");
+    assert_eq!(
+        complete.to_tree(),
+        tree!({"message-type": "registration-complete", "spare-half-octet": 15})
+    );
+
+    // A tree writes it, and a tree that leaves it out writes zero
+    let written = |tree: Value| {
+        let message = f::Message::from_tree(tree).unwrap();
+        hex::encode(message.encode().unwrap())
+    };
+    let zero = tree!({"message-type": "registration-complete"});
+    assert_eq!(written(complete.to_tree()), "7ef043");
+    assert_eq!(written(zero.clone()), "7e0043");
+    assert_eq!(fgs("7e0043").to_tree(), zero);
+
+    // An edit writes it, and an edit that leaves it out keeps it
+    let edited = fgs_edited(&complete, |tree| tree["spare-half-octet"] = tree!(5));
+    assert_eq!(edited.unwrap(), "7e5043");
+    let kept = fgs_edited(&complete, |tree| {
+        tree.as_object_mut()
+            .unwrap()
+            .shift_remove("spare-half-octet");
+    });
+    assert_eq!(kept.unwrap(), "7ef043");
+
+    // It has four bits
+    let wide = fgs_edited(&complete, |tree| tree["spare-half-octet"] = tree!(16));
+    assert!(wide.is_err());
+
+    // The header that protects a message has its own
+    let protected = fgs("7ea1aabbccdd057ef043");
+    let tree = protected.to_tree();
+    assert_eq!(tree["security-header"]["spare-half-octet"], tree!(10));
+    assert_eq!(tree["spare-half-octet"], tree!(15));
+    assert_eq!(
+        hex::encode(protected.encode().unwrap()),
+        "7ea1aabbccdd057ef043"
+    );
+}
+
+#[test]
+fn a_message_in_many_containers_is_read_to_a_depth_and_is_octets_further_in() {
+    // Three containers are three trees, down to a message without one.
+    let message = fgs(&hex::encode(nested_registration_requests(3)));
+    assert_eq!(containers_read_in_tree(&message.to_tree()), 3);
+
+    // Octets of a peer may nest as deep as a message is long: a tree reads
+    // eight containers and has the octets of the ninth, where it called
+    // itself until the stack ran out.
+    let wire = nested_registration_requests(2000);
+    let message = fgs(&hex::encode(&wire));
+    let tree = message.to_tree();
+    assert_eq!(containers_read_in_tree(&tree), 8);
+    let mut innermost = &tree;
+    for _ in 0..8 {
+        innermost = &innermost["nas-message-container"];
+    }
+    assert!(innermost["nas-message-container"]["octets"].is_string());
+
+    // An edit is of the same depth, and the message is whole.
+    assert_eq!(message.with_tree(tree.clone()).unwrap(), message);
+    let mut edited = tree;
+    edited["nas-message-container"]["5gs-registration-type"]["follow-on-request"] = tree!(true);
+    let edited = message.with_tree(edited).unwrap().encode().unwrap();
+    assert_eq!(edited.len(), wire.len());
+    assert_ne!(edited, wire);
+
+    // A tree that is written nests as deep and no deeper.
+    let request = fgs("7e004101000d0102f8390000000021436587f9").to_tree();
+    let written = |depth: usize| {
+        let mut tree = request.clone();
+        for _ in 0..depth {
+            let mut outer = request.clone();
+            outer["nas-message-container"] = tree;
+            tree = outer;
+        }
+        f::Message::from_tree(tree)
+    };
+    assert_eq!(
+        written(8).unwrap().encode().unwrap(),
+        nested_registration_requests(8)
+    );
+    let error = written(9).unwrap_err().to_string();
+    assert!(error.contains("more containers than are read"), "{error}");
+}
+
+#[test]
+fn every_fixture_is_the_message_of_its_tree_alone() {
+    for (name, wire) in fixtures(include_str!("../tests/fixtures/nas-5gs.tsv")) {
+        let message = f::Message::decode(&wire).unwrap();
+        let alone = f::Message::from_tree(message.to_tree());
+        let alone = alone.unwrap_or_else(|error| panic!("{name}: {error}"));
+        assert!(alone.means_the_same(&message), "{name}");
+    }
+    for (name, wire) in fixtures(include_str!("../tests/fixtures/nas-eps.tsv")) {
+        let message = eps_fixture(name, &wire);
+        if matches!(message, e::Message::EmmTransport(_)) {
+            continue;
+        }
+        let alone = e::Message::from_tree(message.to_tree());
+        let alone = alone.unwrap_or_else(|error| panic!("{name}: {error}"));
+        assert!(alone.means_the_same(&message), "{name}");
+    }
+}
+
+/// What a value has not is left out of its tree, as an IE that the message
+/// has not is: a tree has no `null`, and a path selects nothing there.
+#[test]
+fn a_tree_leaves_out_what_a_value_has_not() {
+    let mut found = Vec::new();
+    for (name, wire) in fixtures(include_str!("../tests/fixtures/nas-5gs.tsv")) {
+        let message = f::Message::decode(&wire).unwrap();
+        nulls(&message.to_tree(), format!("{name}: "), &mut found);
+    }
+    for (name, wire) in fixtures(include_str!("../tests/fixtures/nas-eps.tsv")) {
+        let message = eps_fixture(name, &wire);
+        nulls(&message.to_tree(), format!("{name}: "), &mut found);
+    }
+    assert!(found.is_empty(), "{found:#?}");
+
+    // An S-NSSAI of an SST alone, which the tree writes back
+    let request = fgs("7e004179000d0102f839f0ff000021436587f92f020101");
+    let tree = request.to_tree();
+    assert_eq!(tree["requested-nssai"], tree!([{"sst": 1}]));
+    assert_eq!(f::Message::from_tree(tree.clone()).unwrap(), request);
+    // which has no SD: a path to it is to no member
+    let sd = crate::paths::select(&tree, "/nas/requested-nssai/0/sd").unwrap_err();
+    assert_eq!(sd.kind(), tree::ErrorKind::NoSuchMember);
+}
+
+#[test]
+fn a_tree_gives_a_message_that_has_octets() {
+    // A type that the IEs are not those of: the message had no octets, and
+    // came back all the same.
+    let status = fgs("7e006416");
+    let error = fgs_edited(&status, |tree| {
+        tree["message-type"] = tree!("registration-complete")
+    });
+    assert!(error.is_err(), "{error:?}");
+    let reject = eps("074403");
+    let error = eps_edited(&reject, |tree| {
+        tree["message-type"] = tree!("attach-complete")
+    });
+    assert!(error.is_err(), "{error:?}");
+    // A tree that changes nothing gives the message back as it is.
+    assert_eq!(status.with_tree(status.to_tree()).unwrap(), status);
+}
+
+#[test]
+fn one_value_of_an_octet_is_edited_and_the_other_stays() {
+    // PDU SESSION ESTABLISHMENT ACCEPT whose selected type is the reserved 0,
+    // with SSC mode 1: the type is its number, and stays when the mode changes.
+    let accept = fgs("2e0101c210000901000631310101ff0106060064060032");
+    let tree = accept.to_tree();
+    assert_eq!(tree["selected-pdu-session-type"], tree!(0));
+    assert_eq!(tree["selected-ssc-mode"], tree!("ssc1"));
+    let edited = fgs_edited(&accept, |tree| tree["selected-ssc-mode"] = tree!("ssc2"));
+    assert_eq!(&edited.unwrap()[..10], "2e0101c220");
+    // And the mode stays when the type changes.
+    let edited = fgs_edited(&accept, |tree| {
+        tree["selected-pdu-session-type"] = tree!("ipv4")
+    });
+    assert_eq!(&edited.unwrap()[..10], "2e0101c211");
+}
+
+#[test]
+fn an_optional_ie_that_is_added_with_zeros_has_its_octets() {
+    // REGISTRATION REQUEST without extended DRX parameters: the IE that a
+    // tree adds has its octet, of zeros as of anything else.
+    let request = fgs("7e004101000d0102f8390000000021436587f9");
+    let added = |window: u8, value: u8| {
+        fgs_edited(&request, |tree| {
+            tree["requested-extended-drx-parameters"] =
+                tree!({"paging-time-window": window, "edrx-value": value});
+        })
+    };
+    let wire = hex::encode(request.encode().unwrap());
+    assert_eq!(added(0, 0).unwrap(), format!("{wire}6e0100"));
+    assert_eq!(added(1, 0).unwrap(), format!("{wire}6e0110"));
+    // Flags that are all false too.
+    let flags = fgs_edited(&request, |tree| {
+        tree["ue-status"] = tree!({"s1-mode-reg": false, "n1-mode-reg": false});
+    });
+    assert_eq!(flags.unwrap(), format!("{wire}2b0100"));
+}
+
+#[test]
+fn a_time_whose_digits_are_no_digits_has_its_octets_alone() {
+    let command = |time: &str| fgs(&format!("7e005447{time}"));
+    let shown = command("62017151406380").to_tree();
+    let time = &shown["universal-time-and-local-time-zone"];
+    assert_eq!(time["year"], tree!(26), "{time}");
+    assert_eq!(time["month"], tree!(10));
+    // A year of the digits A and 0: no year writes these octets.
+    for octets in ["0a017151406380", "a0017151406380", "620171514063f0"] {
+        let shown = command(octets).to_tree();
+        let time = &shown["universal-time-and-local-time-zone"];
+        assert_eq!(time, &tree!({"octets": octets}), "{octets}");
+        // The tree is still that of the message.
+        let message = command(octets);
+        assert_eq!(message.with_tree(shown).unwrap(), message);
+    }
+}
+
 #[test]
 fn a_service_request_reads_and_writes_its_short_header() {
     use crate::paths;
@@ -1890,115 +2026,6 @@ fn a_service_request_reads_and_writes_its_short_header() {
 }
 
 #[test]
-fn a_code_is_written_by_its_name_or_by_its_number() {
-    // 5GMM STATUS, cause #22: one coded value.
-    let status = fgs("7e006416");
-    let cause = |value: Value| fgs_edited(&status, |view| view["5gmm-cause"]["value"] = value);
-    assert_eq!(cause(tree!("illegal-ue")).unwrap(), "7e006403");
-    assert_eq!(cause(tree!(3)).unwrap(), "7e006403");
-    assert_eq!(cause(tree!("0x03")).unwrap(), "7e006403");
-    assert_eq!(cause(tree!(22)).unwrap(), "7e006416");
-    // The fields of an octet: REGISTRATION ACCEPT, 3GPP access.
-    let accept = fgs("7e0042010177000bf202f8390100421122334415020101");
-    let result = |value: Value| {
-        fgs_edited(&accept, |view| {
-            view["5gs-registration-result"]["value"]["result"] = value
-        })
-    };
-    let named = result(tree!("non-3gpp-access")).unwrap();
-    assert_eq!(&named[..10], "7e00420102");
-    assert_eq!(result(tree!(2)).unwrap(), named);
-    assert_eq!(
-        result(tree!(1)).unwrap(),
-        hex::encode(accept.encode().unwrap())
-    );
-    // A number that the field cannot hold is refused.
-    assert!(result(tree!(9)).unwrap_err().contains("result"));
-    // The two values of one octet: PDU SESSION ESTABLISHMENT ACCEPT.
-    let accept = fgs("2e0101c211000901000631310101ff0106060064060032");
-    let selected = |kind: Value, mode: Value| {
-        fgs_edited(&accept, |view| {
-            view["selected-pdu-session-type"]["value"] = kind;
-            view["selected-ssc-mode"]["value"] = mode;
-        })
-    };
-    let named = selected(tree!("ipv6"), tree!("ssc2")).unwrap();
-    assert_eq!(&named[..10], "2e0101c222");
-    assert_eq!(selected(tree!(2), tree!(2)).unwrap(), named);
-    // A half octet has four bits.
-    assert!(selected(tree!(16), tree!(2)).is_err());
-    // EPS: ATTACH REJECT, cause #3.
-    let reject = eps("074403");
-    let cause = |value: Value| eps_edited(&reject, |view| view["emm-cause"]["value"] = value);
-    assert_eq!(cause(tree!("congestion")).unwrap(), "074416");
-    assert_eq!(cause(tree!(22)).unwrap(), "074416");
-}
-
-#[test]
-fn the_type_of_a_message_is_written_by_its_name_or_by_its_number() {
-    let status = |kind: Value| {
-        tree!({
-            "extended-protocol-discriminator": {"value": 126},
-            "security-header-type": {"value": 0},
-            "message-type": {"value": kind},
-            "5gmm-cause": {"value": "congestion"},
-        })
-    };
-    let kind = f::GmmMessageType::FiveGmmStatus;
-    for written in [tree!("5gmm-status"), tree!(0x64)] {
-        let message = kind.message_from_view(status(written.clone())).unwrap();
-        assert_eq!(
-            message.encode().unwrap(),
-            [0x7e, 0x00, 0x64, 0x16],
-            "{written}"
-        );
-        // The view says what message it is of: the type is not needed twice.
-        let alone = f::Message::from_view(status(written)).unwrap();
-        assert_eq!(alone, message);
-    }
-    // The number of another type is the name of another type.
-    let other = f::GmmMessageType::RegistrationComplete.message_from_view(status(tree!(0x64)));
-    let error = other.unwrap_err().to_string();
-    assert!(error.contains("`message-type` is 5gmm-status"), "{error}");
-    for (view, reason) in [
-        (
-            tree!({"5gmm-cause": {"value": "congestion"}}),
-            "names the message",
-        ),
-        (
-            status(tree!("no-such-message")),
-            "no message `no-such-message`",
-        ),
-        (status(tree!(0xff)), "names the message"),
-    ] {
-        let error = f::Message::from_view(view).unwrap_err().to_string();
-        assert!(error.contains(reason), "{error}");
-    }
-    // A 5GSM message, an EMM and an ESM one, and the short SERVICE REQUEST.
-    let accept = fgs("2e0101c211000901000631310101ff0106060064060032");
-    assert_eq!(f::Message::from_view(accept.to_view()).unwrap(), accept);
-    for wire in ["074403", "0209da280908696e7465726e6574", "c725abcd"] {
-        let message = eps(wire);
-        let alone = e::Message::from_view(message.to_view()).unwrap();
-        assert_eq!(hex::encode(alone.encode().unwrap()), wire);
-    }
-    let mut reject = eps("074403").to_view();
-    reject["message-type"]["value"] = tree!(0x44);
-    let alone = e::Message::from_view(reject).unwrap();
-    assert_eq!(alone.encode().unwrap(), [0x07, 0x44, 0x03]);
-    // The number of a 5GSM type and of an ESM one.
-    let mut by_number = accept.to_view();
-    by_number["message-type"]["value"] = tree!(0xc2);
-    assert_eq!(f::Message::from_view(by_number).unwrap(), accept);
-    let information = eps("0209da280908696e7465726e6574");
-    let mut by_number = information.to_view();
-    by_number["message-type"]["value"] = tree!(0xda);
-    assert_eq!(e::Message::from_view(by_number).unwrap(), information);
-    let error = e::Message::from_view(tree!({})).unwrap_err().to_string();
-    assert!(error.contains("names the message"), "{error}");
-}
-
-#[test]
 fn a_tree_names_its_message_by_its_name_or_by_its_number() {
     // 5GMM STATUS, cause #22
     let status = fgs("7e006416");
@@ -2051,58 +2078,8 @@ fn a_tree_names_its_message_by_its_name_or_by_its_number() {
 
     let error = e::Message::from_tree(tree!({"message-type": 0xff})).unwrap_err();
     assert!(error.to_string().contains("no message `255`"), "{error}");
-}
-
-#[test]
-fn the_spare_half_octet_of_a_5gmm_header_is_read_and_written() {
-    // REGISTRATION COMPLETE, received with a spare half octet of 15
-    let complete = fgs("7ef043");
-    let view = complete.to_view();
-    assert_eq!(view["spare-half-octet"], tree!({"value": 15}));
-    assert_eq!(
-        complete.to_tree(),
-        tree!({"message-type": "registration-complete", "spare-half-octet": 15})
-    );
-
-    // A tree writes it, and a tree that leaves it out writes zero
-    let written = |tree: Value| {
-        let message = f::Message::from_tree(tree).unwrap();
-        hex::encode(message.encode().unwrap())
-    };
-    let zero = tree!({"message-type": "registration-complete"});
-    assert_eq!(written(complete.to_tree()), "7ef043");
-    assert_eq!(written(zero.clone()), "7e0043");
-    assert_eq!(fgs("7e0043").to_tree(), zero);
-
-    // A view edits it, and a view that leaves it out keeps it
-    let edited = fgs_edited(&complete, |view| {
-        view["spare-half-octet"]["value"] = tree!(5)
-    });
-    assert_eq!(edited.unwrap(), "7e5043");
-    let kept = fgs_edited(&complete, |view| {
-        view.as_object_mut()
-            .unwrap()
-            .shift_remove("spare-half-octet");
-    });
-    assert_eq!(kept.unwrap(), "7ef043");
-
-    // It has four bits
-    let mut wide = view.clone();
-    wide["spare-half-octet"]["value"] = tree!(16);
-    assert!(complete.with_view(wide).is_err());
-
-    // The header that protects a message has its own
-    let protected = fgs("7ea1aabbccdd057ef043");
-    let view = protected.to_view();
-    assert_eq!(
-        view["security-header"]["value"]["spare-half-octet"],
-        tree!(10)
-    );
-    assert_eq!(view["spare-half-octet"]["value"], tree!(15));
-    assert_eq!(
-        hex::encode(protected.encode().unwrap()),
-        "7ea1aabbccdd057ef043"
-    );
+    let error = e::Message::from_tree(tree!({})).unwrap_err().to_string();
+    assert!(error.contains("names the message"), "{error}");
 }
 
 /// A REGISTRATION REQUEST whose NAS message container holds another one,
@@ -2120,66 +2097,6 @@ fn nested_registration_requests(depth: usize) -> Vec<u8> {
     message
 }
 
-/// The containers of `view` that have the view of a message, one inside
-/// another, and the innermost message.
-fn containers_read(view: &Value) -> (usize, &Value) {
-    let (mut read, mut message) = (0, view);
-    while let Some(inner) = message["nas-message-container"].get("value") {
-        read += 1;
-        message = inner;
-    }
-    (read, message)
-}
-
-#[test]
-fn a_message_in_many_containers_is_read_to_a_depth_and_is_octets_further_in() {
-    // Three containers are three views, down to a message without one.
-    let message = fgs(&hex::encode(nested_registration_requests(3)));
-    let view = message.to_view();
-    let (read, innermost) = containers_read(&view);
-    assert_eq!(read, 3);
-    assert!(innermost["nas-message-container"].is_null());
-
-    // Octets of a peer may nest as deep as a message is long: a view reads
-    // eight containers and has the octets of the ninth, where it called
-    // itself until the stack ran out.
-    let wire = nested_registration_requests(2000);
-    let message = fgs(&hex::encode(&wire));
-    let view = message.to_view();
-    let (read, innermost) = containers_read(&view);
-    assert_eq!(read, 8);
-    assert!(innermost["nas-message-container"]["octets"].is_string());
-
-    // The tree and an edit are of the same depth, and the message is whole.
-    let tree = message.to_tree();
-    assert_eq!(containers_read_in_tree(&tree), 8);
-    assert_eq!(message.with_view(view.clone()).unwrap(), message);
-    let mut edited = view;
-    edited["nas-message-container"]["value"]["5gs-registration-type"]["value"]["follow-on-request"] =
-        tree!(true);
-    let edited = message.with_view(edited).unwrap().encode().unwrap();
-    assert_eq!(edited.len(), wire.len());
-    assert_ne!(edited, wire);
-
-    // A tree that is written nests as deep and no deeper.
-    let request = fgs("7e004101000d0102f8390000000021436587f9").to_tree();
-    let written = |depth: usize| {
-        let mut tree = request.clone();
-        for _ in 0..depth {
-            let mut outer = request.clone();
-            outer["nas-message-container"] = tree;
-            tree = outer;
-        }
-        f::Message::from_tree(tree)
-    };
-    assert_eq!(
-        written(8).unwrap().encode().unwrap(),
-        nested_registration_requests(8)
-    );
-    let error = written(9).unwrap_err().to_string();
-    assert!(error.contains("more containers than are read"), "{error}");
-}
-
 /// The containers of `tree` that have the tree of a message, one inside
 /// another.
 fn containers_read_in_tree(tree: &Value) -> usize {
@@ -2194,31 +2111,6 @@ fn containers_read_in_tree(tree: &Value) -> usize {
     read
 }
 
-#[test]
-fn every_fixture_is_the_message_of_its_view_alone() {
-    for (name, wire) in fixtures(include_str!("../tests/fixtures/nas-5gs.tsv")) {
-        let message = f::Message::decode(&wire).unwrap();
-        if !matches!(message, f::Message::Gmm(..) | f::Message::Gsm(..)) {
-            continue;
-        }
-        let alone = f::Message::from_view(message.to_view());
-        let alone = alone.unwrap_or_else(|error| panic!("{name}: {error}"));
-        assert_eq!(alone.encode().unwrap(), wire, "{name}");
-    }
-    for (name, wire) in fixtures(include_str!("../tests/fixtures/nas-eps.tsv")) {
-        let message = eps_fixture(name, &wire);
-        if matches!(
-            message,
-            e::Message::SecurityProtected(..) | e::Message::EmmTransport(_) | e::Message::Opaque(_)
-        ) {
-            continue;
-        }
-        let alone = e::Message::from_view(message.to_view());
-        let alone = alone.unwrap_or_else(|error| panic!("{name}: {error}"));
-        assert_eq!(alone.encode().unwrap(), wire, "{name}");
-    }
-}
-
 /// The places of `value` that are `null`, from `path`.
 fn nulls(value: &Value, path: String, found: &mut Vec<String>) {
     match value {
@@ -2229,111 +2121,6 @@ fn nulls(value: &Value, path: String, found: &mut Vec<String>) {
         Value::Array(items) => (items.iter().enumerate())
             .for_each(|(at, value)| nulls(value, format!("{path}/{at}"), found)),
         _ => {}
-    }
-}
-
-/// What a value has not is left out of its tree, as an IE that the message
-/// has not is: a tree has no `null`. A view has `null` for both, which a
-/// path selects nothing at.
-#[test]
-fn a_tree_leaves_out_what_a_value_has_not() {
-    let mut found = Vec::new();
-    for (name, wire) in fixtures(include_str!("../tests/fixtures/nas-5gs.tsv")) {
-        let message = f::Message::decode(&wire).unwrap();
-        nulls(&message.to_tree(), format!("{name}: "), &mut found);
-    }
-    for (name, wire) in fixtures(include_str!("../tests/fixtures/nas-eps.tsv")) {
-        let message = eps_fixture(name, &wire);
-        nulls(&message.to_tree(), format!("{name}: "), &mut found);
-    }
-    assert!(found.is_empty(), "{found:#?}");
-
-    // An S-NSSAI of an SST alone, which the tree writes back
-    let request = fgs("7e004179000d0102f839f0ff000021436587f92f020101");
-    let tree = request.to_tree();
-    assert_eq!(tree["requested-nssai"], tree!([{"sst": 1}]));
-    assert_eq!(f::Message::from_tree(tree).unwrap(), request);
-    let view = request.to_view();
-    assert_eq!(view["requested-nssai"]["value"][0]["sd"], Value::Null);
-    // which the tree leaves out: a path to it is to no member
-    let tree = request.to_tree();
-    let sd = crate::paths::select(&tree, "/nas/requested-nssai/0/sd").unwrap_err();
-    assert_eq!(sd.kind(), tree::ErrorKind::NoSuchMember);
-}
-
-#[test]
-fn a_view_gives_a_message_that_has_octets() {
-    // A type that the IEs are not those of: the message had no octets, and
-    // came back all the same.
-    let status = fgs("7e006416");
-    let error = fgs_edited(&status, |view| {
-        view["message-type"]["value"] = tree!("registration-complete")
-    });
-    assert!(error.is_err(), "{error:?}");
-    let reject = eps("074403");
-    let error = eps_edited(&reject, |view| {
-        view["message-type"]["value"] = tree!("attach-complete")
-    });
-    assert!(error.is_err(), "{error:?}");
-    // A view that changes nothing gives the message back as it is.
-    assert_eq!(status.with_view(status.to_view()).unwrap(), status);
-}
-
-#[test]
-fn one_value_of_an_octet_is_edited_and_the_other_stays() {
-    // PDU SESSION ESTABLISHMENT ACCEPT whose selected type is the reserved 0,
-    // with SSC mode 1: the type is its number, and stays when the mode changes.
-    let accept = fgs("2e0101c210000901000631310101ff0106060064060032");
-    let view = accept.to_view();
-    assert_eq!(view["selected-pdu-session-type"]["value"], tree!(0));
-    assert_eq!(view["selected-ssc-mode"]["value"], tree!("ssc1"));
-    let edited = fgs_edited(&accept, |view| {
-        view["selected-ssc-mode"]["value"] = tree!("ssc2")
-    });
-    assert_eq!(&edited.unwrap()[..10], "2e0101c220");
-    // And the mode stays when the type changes.
-    let edited = fgs_edited(&accept, |view| {
-        view["selected-pdu-session-type"]["value"] = tree!("ipv4")
-    });
-    assert_eq!(&edited.unwrap()[..10], "2e0101c211");
-}
-
-#[test]
-fn an_optional_ie_that_is_added_with_zeros_has_its_octets() {
-    // REGISTRATION REQUEST without extended DRX parameters: the IE that a
-    // view adds has its octet, of zeros as of anything else.
-    let request = fgs("7e004101000d0102f8390000000021436587f9");
-    let added = |window: u8, value: u8| {
-        fgs_edited(&request, |view| {
-            view["requested-extended-drx-parameters"] =
-                tree!({"value": {"paging-time-window": window, "edrx-value": value}});
-        })
-    };
-    let wire = hex::encode(request.encode().unwrap());
-    assert_eq!(added(0, 0).unwrap(), format!("{wire}6e0100"));
-    assert_eq!(added(1, 0).unwrap(), format!("{wire}6e0110"));
-    // Flags that are all false too.
-    let flags = fgs_edited(&request, |view| {
-        view["ue-status"] = tree!({"value": {"s1-mode-reg": false, "n1-mode-reg": false}});
-    });
-    assert_eq!(flags.unwrap(), format!("{wire}2b0100"));
-}
-
-#[test]
-fn a_time_whose_digits_are_no_digits_has_its_octets_alone() {
-    let command = |time: &str| fgs(&format!("7e005447{time}"));
-    let shown = command("62017151406380").to_view();
-    let time = &shown["universal-time-and-local-time-zone"];
-    assert_eq!(time["value"]["year"], tree!(26), "{time}");
-    assert_eq!(time["value"]["month"], tree!(10));
-    // A year of the digits A and 0: no year writes these octets.
-    for octets in ["0a017151406380", "a0017151406380", "620171514063f0"] {
-        let shown = command(octets).to_view();
-        let time = &shown["universal-time-and-local-time-zone"];
-        assert_eq!(time, &tree!({"octets": octets}), "{octets}");
-        // The view is still that of the message.
-        let message = command(octets);
-        assert_eq!(message.with_view(shown).unwrap(), message);
     }
 }
 
@@ -2394,15 +2181,17 @@ fn protocol_configuration_options_are_units_by_the_direction_of_their_message() 
     let attach = eps(&format!(
         "07410108991007000020160605e0e00000000025{wire}d0c1"
     ));
-    let container = &attach.to_view()["esm-message-container"]["value"];
-    assert_eq!(container["protocol-configuration-options"], options);
+    let container = &attach.to_tree()["esm-message-container"];
+    assert_eq!(
+        container["protocol-configuration-options"],
+        options["value"]
+    );
     // The request alone
     let request = eps(wire);
-    let view = request.to_view();
-    assert_eq!(view["protocol-configuration-options"], options);
+    assert_eq!(ie(&request, "protocol-configuration-options"), options);
     // A unit is added, by its name, and the octets follow
-    let edited = eps_edited(&request, |view| {
-        let units = view["protocol-configuration-options"]["value"]
+    let edited = eps_edited(&request, |tree| {
+        let units = tree["protocol-configuration-options"]
             .as_array_mut()
             .unwrap();
         units.push(tree!("p-cscf-ipv4-address-request"));
@@ -2448,11 +2237,11 @@ fn protocol_configuration_options_are_units_by_the_direction_of_their_message() 
     let wire = format!("5201c101090908696e7465726e657405010a000001273e{options}");
     let request = eps(&wire);
     assert_eq!(
-        request.to_view()["protocol-configuration-options"],
+        ie(&request, "protocol-configuration-options"),
         tree!({"octets": options, "value": &units})
     );
-    let edited = eps_edited(&request, |view| {
-        view["protocol-configuration-options"]["value"][2]["ipv4-link-mtu"] = tree!(1500);
+    let edited = eps_edited(&request, |tree| {
+        tree["protocol-configuration-options"][2]["ipv4-link-mtu"] = tree!(1500);
     });
     assert_eq!(edited.unwrap(), wire.replace("0010020578", "00100205dc"));
     let written = e::Message::from_tree(request.to_tree()).unwrap();
@@ -2463,7 +2252,7 @@ fn protocol_configuration_options_are_units_by_the_direction_of_their_message() 
     let wire = format!("2e0101c211000901000631310101ff01060600640600327b003e{options}");
     let accept = fgs(&wire);
     assert_eq!(
-        accept.to_view()["extended-protocol-configuration-options"]["value"],
+        accept.to_tree()["extended-protocol-configuration-options"],
         units
     );
     // The tree writes the options back to their octets. The bit rates of
@@ -2471,28 +2260,28 @@ fn protocol_configuration_options_are_units_by_the_direction_of_their_message() 
     // message is not compared.
     let written = f::Message::from_tree(accept.to_tree()).unwrap();
     assert_eq!(
-        written.to_view()["extended-protocol-configuration-options"]["octets"],
+        ie(&written, "extended-protocol-configuration-options")["octets"],
         tree!(options)
     );
     // Uplink, the units of the same identifiers are requests: PDU SESSION
     // ESTABLISHMENT REQUEST
     let request = fgs("2e0101c1ffff7b000780000a00000d00");
     assert_eq!(
-        request.to_view()["extended-protocol-configuration-options"]["value"],
+        request.to_tree()["extended-protocol-configuration-options"],
         tree!([
             "ip-address-allocation-via-nas-signalling",
             "dns-server-ipv4-address-request"
         ])
     );
     // A unit of the other direction is refused
-    let error = fgs_edited(&request, |view| {
-        view["extended-protocol-configuration-options"]["value"] =
+    let error = fgs_edited(&request, |tree| {
+        tree["extended-protocol-configuration-options"] =
             tree!([{"dns-server-ipv4-address": "8.8.8.8"}]);
     });
     assert!(error.is_err(), "{error:?}");
     // and so is the identifier of a unit that has a name
-    let error = fgs_edited(&request, |view| {
-        view["extended-protocol-configuration-options"]["value"] =
+    let error = fgs_edited(&request, |tree| {
+        tree["extended-protocol-configuration-options"] =
             tree!([{"container": {"identifier": 13, "contents": ""}}]);
     });
     let error = error.unwrap_err();
@@ -2501,13 +2290,12 @@ fn protocol_configuration_options_are_units_by_the_direction_of_their_message() 
     // A container that the crate has no name for is its identifier and its
     // octets, read and written
     let request = fgs("2e0101c1ffff7b000680f00002abcd");
-    let view = request.to_view();
     assert_eq!(
-        view["extended-protocol-configuration-options"]["value"],
+        request.to_tree()["extended-protocol-configuration-options"],
         tree!([{"container": {"identifier": 0xf000, "contents": "abcd"}}])
     );
-    let edited = fgs_edited(&request, |view| {
-        view["extended-protocol-configuration-options"]["value"][0]["container"]["contents"] =
+    let edited = fgs_edited(&request, |tree| {
+        tree["extended-protocol-configuration-options"][0]["container"]["contents"] =
             tree!("0102ff");
     });
     assert_eq!(edited.unwrap(), "2e0101c1ffff7b000780f000030102ff");
@@ -2515,16 +2303,16 @@ fn protocol_configuration_options_are_units_by_the_direction_of_their_message() 
     // Octets that the units do not give back have no value: here the octet
     // of the configuration protocol has a spare bit
     let request = fgs("2e0101c1ffff7b000488000a00");
-    let options = &request.to_view()["extended-protocol-configuration-options"];
+    let options = &ie(&request, "extended-protocol-configuration-options");
     assert_eq!(options, &tree!({"octets": "88000a00"}));
     // a configuration protocol that is not PPP
     let request = fgs("2e0101c1ffff7b000481000a00");
-    let options = &request.to_view()["extended-protocol-configuration-options"];
+    let options = &ie(&request, "extended-protocol-configuration-options");
     assert_eq!(options, &tree!({"octets": "81000a00"}));
     // and a unit that a receiver ignores: the address of a DNS server in
     // three octets, in a message of the network
     let accept = fgs("2e0101c211000901000631310101ff01060600640600327b000780000d03080808");
-    let options = &accept.to_view()["extended-protocol-configuration-options"];
+    let options = &ie(&accept, "extended-protocol-configuration-options");
     assert_eq!(options, &tree!({"octets": "80000d03080808"}));
 }
 
@@ -2535,11 +2323,11 @@ fn each_unit_of_the_configuration_options_has_its_name() {
     let written = |message: &f::Message, units: &[(Value, &str)]| {
         let names: Vec<Value> = units.iter().map(|(unit, _)| unit.clone()).collect();
         let octets: String = units.iter().map(|(_, octets)| *octets).collect();
-        let edited = fgs_edited(message, |view| {
-            view["extended-protocol-configuration-options"]["value"] = tree!(names.as_slice());
+        let edited = fgs_edited(message, |tree| {
+            tree["extended-protocol-configuration-options"] = tree!(names.as_slice());
         })
         .unwrap();
-        let options = &fgs(&edited).to_view()["extended-protocol-configuration-options"];
+        let options = &ie(&fgs(&edited), "extended-protocol-configuration-options");
         assert_eq!(
             options,
             &tree!({"octets": format!("80{octets}"), "value": names})
@@ -2559,7 +2347,6 @@ fn each_unit_of_the_configuration_options_has_its_name() {
                     "identifier": 1,
                     "peer-id": "abc",
                     "password": "zyx",
-                    "message": null,
                 }}),
                 "c0230c0101000c03616263037a7978",
             ),
@@ -2626,7 +2413,7 @@ fn each_unit_of_the_configuration_options_has_its_name() {
     );
     // 000AH is of the UE alone: from the network, the options have no value
     let accept = fgs("2e0101c211000901000631310101ff01060600640600327b000480000a00");
-    let options = &accept.to_view()["extended-protocol-configuration-options"];
+    let options = &ie(&accept, "extended-protocol-configuration-options");
     assert_eq!(options, &tree!({"octets": "80000a00"}));
 }
 
@@ -2648,8 +2435,7 @@ fn the_units_of_a_pdu_session_in_a_pdn_connection_have_their_names() {
     };
     let units = tree!([{"pdu-session-id": 5}, {"5gsm-cause": "insufficient-resources"}]);
     let sent = request("001a01050022011a");
-    let view = sent.to_view();
-    assert_eq!(view["protocol-configuration-options"]["value"], units);
+    assert_eq!(sent.to_tree()["protocol-configuration-options"], units);
     let written = e::Message::from_tree(sent.to_tree()).unwrap();
     assert_eq!(written.encode().unwrap(), sent.encode().unwrap());
 
@@ -2660,7 +2446,7 @@ fn the_units_of_a_pdu_session_in_a_pdn_connection_have_their_names() {
     // unit has in the largest unit that holds each, 25 times 4 Mbps.
     let (rules, ambr, flows) = ("01000631310101ff01", "060064060032", "012041010109");
     let accept = fgs(&format!("2e0101c2110009{rules}06{ambr}790006{flows}"));
-    let accept = accept.to_view();
+    let accept = accept.to_tree();
     let activate = |units: &str| {
         let options = format!("80{units}");
         let length = options.len() / 2;
@@ -2669,25 +2455,22 @@ fn the_units_of_a_pdu_session_in_a_pdn_connection_have_their_names() {
         ))
     };
     let units = tree!([
-        {"s-nssai": {
-            "sst": 1, "sd": "010203", "mapped-sst": null, "mapped-sd": null, "plmn": "208-93",
-        }},
-        {"qos-rules": &accept["authorized-qos-rules"]["value"]},
-        {"session-ambr": &accept["session-ambr"]["value"]},
-        {"qos-flow-descriptions": &accept["authorized-qos-flow-descriptions"]["value"]},
+        {"s-nssai": {"sst": 1, "sd": "010203", "plmn": "208-93"}},
+        {"qos-rules": &accept["authorized-qos-rules"]},
+        {"session-ambr": &accept["session-ambr"]},
+        {"qos-flow-descriptions": &accept["authorized-qos-flow-descriptions"]},
     ]);
     let octets = format!("001b070101020302f839001c09{rules}001d06070019060032001f06{flows}");
     let sent = activate(&octets);
     assert_eq!(
-        sent.to_view()["protocol-configuration-options"],
+        ie(&sent, "protocol-configuration-options"),
         tree!({"octets": format!("80{octets}"), "value": &units})
     );
     let written = e::Message::from_tree(sent.to_tree()).unwrap();
     assert_eq!(written.encode().unwrap(), sent.encode().unwrap());
     // A unit that is edited by its value writes its octets
-    let edited = eps_edited(&sent, |view| {
-        view["protocol-configuration-options"]["value"][0]["s-nssai"] =
-            tree!({"sst": 2, "plmn": "001-01"});
+    let edited = eps_edited(&sent, |tree| {
+        tree["protocol-configuration-options"][0]["s-nssai"] = tree!({"sst": 2, "plmn": "001-01"});
     });
     let expected = activate(&octets.replace("001b070101020302f839", "001b040200f110"));
     assert_eq!(edited.unwrap(), hex::encode(expected.encode().unwrap()));
@@ -2695,30 +2478,30 @@ fn the_units_of_a_pdu_session_in_a_pdn_connection_have_their_names() {
     // Each is a unit of one direction: the identifier is reserved in the
     // other, where the options have their octets alone
     let reserved = activate("001a0105");
-    let options = &reserved.to_view()["protocol-configuration-options"];
+    let options = &ie(&reserved, "protocol-configuration-options");
     assert_eq!(options, &tree!({"octets": "80001a0105"}));
     let reserved = request("001b070101020302f839");
-    let options = &reserved.to_view()["protocol-configuration-options"];
+    let options = &ie(&reserved, "protocol-configuration-options");
     assert_eq!(options, &tree!({"octets": "80001b070101020302f839"}));
     // a name of the other direction is refused, and so is a unit that has a
     // name written as a container
-    let error = eps_edited(&sent, |view| {
-        view["protocol-configuration-options"]["value"] = tree!([{"pdu-session-id": 5}]);
+    let error = eps_edited(&sent, |tree| {
+        tree["protocol-configuration-options"] = tree!([{"pdu-session-id": 5}]);
     });
     let error = error.unwrap_err();
     assert!(
         error.contains("`pdu-session-id` is a unit of the direction UE to network"),
         "{error}"
     );
-    let error = eps_edited(&request("001a0105"), |view| {
-        view["protocol-configuration-options"]["value"] =
+    let error = eps_edited(&request("001a0105"), |tree| {
+        tree["protocol-configuration-options"] =
             tree!([{"container": {"identifier": 0x001a, "contents": "05"}}]);
     });
     let error = error.unwrap_err();
     assert!(error.contains("pdu-session-id"), "{error}");
     // and so is a value that the IE of its name cannot have
-    let error = eps_edited(&sent, |view| {
-        view["protocol-configuration-options"]["value"][0]["s-nssai"] =
+    let error = eps_edited(&sent, |tree| {
+        tree["protocol-configuration-options"][0]["s-nssai"] =
             tree!({"sst": 1, "mapped-sd": "010203", "plmn": "208-93"});
     });
     let error = error.unwrap_err();
@@ -2726,8 +2509,8 @@ fn the_units_of_a_pdu_session_in_a_pdn_connection_have_their_names() {
         error.contains("`s-nssai`") && error.contains("mapped-sd"),
         "{error}"
     );
-    let error = eps_edited(&request("001a0105"), |view| {
-        view["protocol-configuration-options"]["value"][0]["pdu-session-id"] = tree!(16);
+    let error = eps_edited(&request("001a0105"), |tree| {
+        tree["protocol-configuration-options"][0]["pdu-session-id"] = tree!(16);
     });
     assert!(error.unwrap_err().contains("0x001a"));
 
@@ -2736,11 +2519,11 @@ fn the_units_of_a_pdu_session_in_a_pdn_connection_have_their_names() {
     // and an identity that is no PDU session identity
     let other = activate("001d06060064060032");
     assert_eq!(
-        other.to_view()["protocol-configuration-options"]["value"],
+        other.to_tree()["protocol-configuration-options"],
         tree!([{"container": {"identifier": 0x001d, "contents": "060064060032"}}])
     );
     let other = request("001a0100");
-    let options = &other.to_view()["protocol-configuration-options"];
+    let options = &ie(&other, "protocol-configuration-options");
     assert_eq!(options, &tree!({"octets": "80001a0100"}));
 }
 
@@ -2755,13 +2538,13 @@ fn a_container_that_a_constructor_builds_is_written() {
     let wire = format!("7e004373001101{mac}");
     let complete = fgs(&wire);
     assert_eq!(
-        complete.to_view()["sor-transparent-container"]["value"],
+        complete.to_tree()["sor-transparent-container"],
         tree!({"acknowledgement": {
             "mssi": false, "mssnpnsi": false, "msssnpnsils": false, "sor-mac-iue": mac,
         }})
     );
-    let edited = fgs_edited(&complete, |view| {
-        view["sor-transparent-container"]["value"]["acknowledgement"]["mssi"] = tree!(true);
+    let edited = fgs_edited(&complete, |tree| {
+        tree["sor-transparent-container"]["acknowledgement"]["mssi"] = tree!(true);
     });
     assert_eq!(edited.unwrap(), wire.replace("001101", "001103"));
     let written = f::Message::from_tree(complete.to_tree()).unwrap();
@@ -2772,7 +2555,7 @@ fn a_container_that_a_constructor_builds_is_written() {
     let wire = format!("7e004201017300180e{mac}000102f8398000");
     let accept = fgs(&wire);
     assert_eq!(
-        accept.to_view()["sor-transparent-container"]["value"],
+        accept.to_tree()["sor-transparent-container"],
         tree!({"information": {
             "list-indication": true,
             "list-type": "plmn-access-technology-list",
@@ -2783,16 +2566,16 @@ fn a_container_that_a_constructor_builds_is_written() {
             "body": "02f8398000",
         }})
     );
-    let edited = fgs_edited(&accept, |view| {
-        view["sor-transparent-container"]["value"]["information"]["counter-sor"] = tree!(2);
+    let edited = fgs_edited(&accept, |tree| {
+        tree["sor-transparent-container"]["information"]["counter-sor"] = tree!(2);
     });
     assert_eq!(edited.unwrap(), wire.replace("000102f839", "000202f839"));
     let written = f::Message::from_tree(accept.to_tree()).unwrap();
     assert_eq!(hex::encode(written.encode().unwrap()), wire);
     // A list that is not one of PLMNs with their access technologies is
     // refused
-    let error = fgs_edited(&accept, |view| {
-        view["sor-transparent-container"]["value"]["information"]["body"] = tree!("02f839");
+    let error = fgs_edited(&accept, |tree| {
+        tree["sor-transparent-container"]["information"]["body"] = tree!("02f839");
     });
     assert!(error.is_err(), "{error:?}");
 
@@ -2800,7 +2583,7 @@ fn a_container_that_a_constructor_builds_is_written() {
     let wire = "0764016006118121436587";
     let notification = eps(wire);
     assert_eq!(
-        notification.to_view()["cli"],
+        ie(&notification, "cli"),
         tree!({
             "octets": "118121436587",
             "value": {
@@ -2812,22 +2595,22 @@ fn a_container_that_a_constructor_builds_is_written() {
             },
         })
     );
-    let edited = eps_edited(&notification, |view| {
-        view["cli"]["value"]["presentation"] = tree!("restricted");
-        view["cli"]["value"]["digits"] = tree!("123");
+    let edited = eps_edited(&notification, |tree| {
+        tree["cli"]["presentation"] = tree!("restricted");
+        tree["cli"]["digits"] = tree!("123");
     });
     assert_eq!(edited.unwrap(), "076401600411a121f3");
     let written = e::Message::from_tree(notification.to_tree()).unwrap();
     assert_eq!(hex::encode(written.encode().unwrap()), wire);
     // The two indicators are one octet: one without the other is refused
-    let error = eps_edited(&notification, |view| {
-        view["cli"]["value"]["screening"] = tree!(null);
+    let error = eps_edited(&notification, |tree| {
+        tree["cli"]["screening"] = tree!(null);
     });
     assert!(error.is_err(), "{error:?}");
     // Without them, the number has no octet 3a
-    let edited = eps_edited(&notification, |view| {
-        view["cli"]["value"]["presentation"] = tree!(null);
-        view["cli"]["value"]["screening"] = tree!(null);
+    let edited = eps_edited(&notification, |tree| {
+        tree["cli"]["presentation"] = tree!(null);
+        tree["cli"]["screening"] = tree!(null);
     });
     assert_eq!(edited.unwrap(), "07640160059121436587");
 
@@ -2836,15 +2619,15 @@ fn a_container_that_a_constructor_builds_is_written() {
     let wire = "7e004201017a0005000211f200";
     let accept = fgs(wire);
     assert_eq!(
-        accept.to_view()["extended-emergency-number-list"]["value"],
+        accept.to_tree()["extended-emergency-number-list"],
         tree!({
             "valid-only-in-plmn": false,
             "numbers": [{"digits": "112", "sub-services": ""}],
         })
     );
     // The list becomes that of the PLMN, with a number of the police
-    let edited = fgs_edited(&accept, |view| {
-        let list = &mut view["extended-emergency-number-list"]["value"];
+    let edited = fgs_edited(&accept, |tree| {
+        let list = &mut tree["extended-emergency-number-list"];
         list["valid-only-in-plmn"] = tree!(true);
         list["numbers"]
             .as_array_mut()
@@ -2853,7 +2636,7 @@ fn a_container_that_a_constructor_builds_is_written() {
     });
     let edited = fgs(&edited.unwrap());
     assert_eq!(
-        edited.to_view()["extended-emergency-number-list"],
+        ie(&edited, "extended-emergency-number-list"),
         tree!({
             // "police" in the 7-bit alphabet of TS 23.038, packed
             "octets": "010211f200017106f0373b3d2e03",
@@ -2873,14 +2656,14 @@ fn a_container_that_a_constructor_builds_is_written() {
                 7a0005000211f200";
     let accept = eps(wire);
     assert_eq!(
-        accept.to_view()["extended-emergency-number-list"]["value"],
+        accept.to_tree()["extended-emergency-number-list"],
         tree!({
             "valid-only-in-plmn": false,
             "numbers": [{"digits": "112", "sub-services": ""}],
         })
     );
-    let edited = eps_edited(&accept, |view| {
-        view["extended-emergency-number-list"]["value"]["valid-only-in-plmn"] = tree!(true);
+    let edited = eps_edited(&accept, |tree| {
+        tree["extended-emergency-number-list"]["valid-only-in-plmn"] = tree!(true);
     });
     assert_eq!(edited.unwrap(), wire.replace("7a000500", "7a000501"));
 }
@@ -2893,8 +2676,7 @@ fn a_container_that_a_constructor_builds_is_written() {
 /// tshark 4.6.4 reads the same in the octets of each message below.
 #[test]
 fn the_packets_of_the_configuration_protocols_have_their_names() {
-    let units =
-        |message: &e::Message| message.to_view()["protocol-configuration-options"]["value"].clone();
+    let units = |message: &e::Message| message.to_tree()["protocol-configuration-options"].clone();
     // The messages are written back from their trees to the same octets
     let written = |wire: &str| {
         let message = e::Message::from_tree(eps(wire).to_tree()).unwrap();
@@ -2919,7 +2701,6 @@ fn the_packets_of_the_configuration_protocols_have_their_names() {
                 "identifier": 1,
                 "peer-id": "user",
                 "password": "secret",
-                "message": null,
             }},
             {"ipcp": {
                 "code": "configure-request",
@@ -2934,11 +2715,13 @@ fn the_packets_of_the_configuration_protocols_have_their_names() {
     );
     written(wire);
     // Another password: the lengths follow
-    let edited = eps_edited(&response, |view| {
-        view["protocol-configuration-options"]["value"][0]["pap"]["password"] = tree!("hunter2");
+    let edited = eps_edited(&response, |tree| {
+        tree["protocol-configuration-options"][0]["pap"]["password"] = tree!("hunter2");
     });
     assert_eq!(
-        eps(&edited.unwrap()).to_view()["protocol-configuration-options"]["octets"],
+        eps(&edited.unwrap())
+            .select("/nas/protocol-configuration-options/octets")
+            .unwrap()[0],
         tree!(
             "80c023110101001104757365720768756e74657232\
          80211601000016030600000000810600000000830600000000"
@@ -2960,14 +2743,12 @@ fn the_packets_of_the_configuration_protocols_have_their_names() {
                 "identifier": 1,
                 "value": "101112131415161718191a1b1c1d1e1f",
                 "name": "gw",
-                "message": null,
             }},
             {"chap": {
                 "code": "response",
                 "identifier": 1,
                 "value": "a0a1a2a3a4a5a6a7a8a9aaabacadaeaf",
                 "name": "user",
-                "message": null,
             }},
         ])
     );
@@ -3003,8 +2784,10 @@ fn the_packets_of_the_configuration_protocols_have_their_names() {
     let wire = "5201c101090908696e7465726e657405010a000001272d80\
                 c0230c0201000c0777656c636f6d65c0230703010007026e6f\
                 c22306030100066f6bc2230704010007626164";
-    let answer = |code: &str, message: &str| tree!({"code": code, "identifier": 1, "peer-id": null, "password": null, "message": message});
-    let outcome = |code: &str, message: &str| tree!({"code": code, "identifier": 1, "value": null, "name": null, "message": message});
+    let answer =
+        |code: &str, message: &str| tree!({"code": code, "identifier": 1, "message": message});
+    let outcome =
+        |code: &str, message: &str| tree!({"code": code, "identifier": 1, "message": message});
     assert_eq!(
         units(&eps(wire)),
         tree!([
@@ -3045,8 +2828,7 @@ fn the_packets_of_the_configuration_protocols_have_their_names() {
 /// is written by them.
 #[test]
 fn a_packet_that_its_names_do_not_write_back_has_its_octets() {
-    let options =
-        |wire: &str| fgs(wire).to_view()["extended-protocol-configuration-options"].clone();
+    let options = |wire: &str| ie(&fgs(wire), "extended-protocol-configuration-options").clone();
     // A length that is not that of the packet
     assert_eq!(
         options("2e0101c1ffff7b00088080210401000005")["value"],
@@ -3100,8 +2882,8 @@ fn a_packet_that_its_names_do_not_write_back_has_its_octets() {
     // them are refused, and so is the type of an option that has a name
     let request = fgs("2e0101c1ffff7b00088080210401000004");
     let refused = |units: Value| {
-        fgs_edited(&request, |view| {
-            view["extended-protocol-configuration-options"]["value"] = units;
+        fgs_edited(&request, |tree| {
+            tree["extended-protocol-configuration-options"] = units;
         })
         .unwrap_err()
     };
@@ -3137,8 +2919,8 @@ fn a_unit_of_the_other_direction_is_refused_with_the_unit_of_this_one() {
     // server is what the network gives
     let request = fgs("2e0101c1ffff7b000780000a00000d00");
     let refused = |units: Value| {
-        fgs_edited(&request, |view| {
-            view["extended-protocol-configuration-options"]["value"] = units;
+        fgs_edited(&request, |tree| {
+            tree["extended-protocol-configuration-options"] = units;
         })
         .unwrap_err()
     };
@@ -3175,8 +2957,8 @@ fn a_unit_of_the_other_direction_is_refused_with_the_unit_of_this_one() {
     // options of EPS, and a request of the UE
     let activate = eps("5201c101090908696e7465726e657405010a0000012705800010020578");
     let refused = |units: Value| {
-        eps_edited(&activate, |view| {
-            view["protocol-configuration-options"]["value"] = units;
+        eps_edited(&activate, |tree| {
+            tree["protocol-configuration-options"] = units;
         })
         .unwrap_err()
     };
@@ -3211,8 +2993,8 @@ fn a_unit_of_the_other_direction_is_refused_with_the_unit_of_this_one() {
 fn a_value_that_is_refused_says_what_was_expected() {
     let request = fgs("2e0101c1ffff7b000780000a00000d00");
     let refused = |units: Value| {
-        fgs_edited(&request, |view| {
-            view["extended-protocol-configuration-options"]["value"] = units;
+        fgs_edited(&request, |tree| {
+            tree["extended-protocol-configuration-options"] = units;
         })
         .unwrap_err()
     };
@@ -3267,9 +3049,9 @@ fn a_value_that_is_refused_says_what_was_expected() {
     // The options together fit their IE: 251 octets, with one of the octet
     // that says the configuration protocol
     let request = eps("0201d011");
-    let error = eps_edited(&request, |view| {
+    let error = eps_edited(&request, |tree| {
         let unit = tree!({"container": {"identifier": 0xff00, "contents": "00".repeat(248)}});
-        view["protocol-configuration-options"] = tree!({"value": [unit]});
+        tree["protocol-configuration-options"] = tree!([unit]);
     })
     .unwrap_err();
     assert_eq!(
@@ -3367,8 +3149,8 @@ fn a_value_that_its_constructor_refuses_says_the_member_and_the_limit() {
     // A value that is there twice, a character that the member does not
     // have, and a number that it cannot be
     let accept = fgs("7e004201017200020516");
-    let error = fgs_edited(&accept, |view| {
-        view["pdu-session-reactivation-result-error-cause"]["value"] =
+    let error = fgs_edited(&accept, |tree| {
+        tree["pdu-session-reactivation-result-error-cause"] =
             tree!([[5, "congestion"], [5, "illegal-ue"]]);
     })
     .unwrap_err();
@@ -3390,14 +3172,14 @@ fn a_value_that_its_constructor_refuses_says_the_member_and_the_limit() {
          minute or 6 minutes"
     );
 
-    // An edited view and a view alone are told what a tree is: the fields
+    // An edited tree and a tree alone are told what a tree is: the fields
     // of an octet, and an IE that is added
     let command = fgs("7e0054");
-    let error = fgs_edited(&command, |view| {
-        view["universal-time-and-local-time-zone"] = tree!({"value": {
+    let error = fgs_edited(&command, |tree| {
+        tree["universal-time-and-local-time-zone"] = tree!({
             "year": 26, "month": 10, "day": 12, "hour": 1, "minute": 2, "second": 3,
             "time-zone-quarter-hours": 80,
-        }});
+        });
     })
     .unwrap_err();
     assert_eq!(
@@ -3405,24 +3187,24 @@ fn a_value_that_its_constructor_refuses_says_the_member_and_the_limit() {
         "cannot encode: universal-time-and-local-time-zone: `time-zone-quarter-hours` is 80, and \
          must be -79 to 79"
     );
-    let mut view = eps("0761").to_view();
-    view["local-time-zone"] = tree!({"value": 80});
+    let mut tree = eps("0761").to_tree();
+    tree["local-time-zone"] = tree!(80);
     assert_eq!(
-        e::Message::from_view(view).unwrap_err().to_string(),
+        e::Message::from_tree(tree).unwrap_err().to_string(),
         "cannot encode: local-time-zone: `time-zone` is 80, and must be -79 to 79"
     );
-    let mut view = accept.to_view();
-    view["pdu-session-status"] = tree!({"value": [0]});
+    let mut tree = accept.to_tree();
+    tree["pdu-session-status"] = tree!([0]);
     assert_eq!(
-        f::Message::from_view(view).unwrap_err().to_string(),
+        f::Message::from_tree(tree).unwrap_err().to_string(),
         "cannot encode: pdu-session-status: entry 0: `pdu-session-identity` is 0, and must be 1 to 15"
     );
 
     // The message of a container says why it does not encode: the PDN
     // CONNECTIVITY REQUEST of an ATTACH REQUEST
     let request = eps("07411108298039103254769802f07000040201d011");
-    let error = eps_edited(&request, |view| {
-        view["esm-message-container"]["value"]["eps-bearer-identity"] = tree!({"value": 16});
+    let error = eps_edited(&request, |tree| {
+        tree["esm-message-container"]["eps-bearer-identity"] = tree!(16);
     })
     .unwrap_err();
     assert_eq!(
@@ -3572,11 +3354,7 @@ fn nothing_that_is_written_is_cut_or_made_up() {
     // An SD of three octets, written with four: the last was left out.
     // Through a view, through a tree and through serde
     let accept = fgs("7e0042010115020101");
-    let edited = |sd: &str| {
-        fgs_edited(&accept, |view| {
-            view["allowed-nssai"]["value"][0]["sd"] = tree!(sd)
-        })
-    };
+    let edited = |sd: &str| fgs_edited(&accept, |tree| tree["allowed-nssai"][0]["sd"] = tree!(sd));
     assert_eq!(edited("010203").unwrap(), "7e0042010115050401010203");
     assert_eq!(
         edited("01020304"),
@@ -3760,11 +3538,11 @@ fn nothing_that_is_written_is_cut_or_made_up() {
              \"plain-nas-message-not-security-protected\": the header that protects a message is its `security-header`"
         )
     );
-    // A view alone gives a message that has octets, as an edited one does
-    let mut view = fgs("7e004416").to_view();
-    view["spare-half-octet"] = tree!({"value": 16});
+    // A tree alone gives a message that has octets, as an edited one does
+    let mut tree = fgs("7e004416").to_tree();
+    tree["spare-half-octet"] = tree!(16);
     assert_eq!(
-        f::Message::from_view(view).map_err(|e| e.to_string()),
+        f::Message::from_tree(tree).map_err(|e| e.to_string()),
         refused("`spare-half-octet` is 16, and must be 0 to 15")
     );
 }
@@ -4062,29 +3840,26 @@ fn a_transport_container_is_a_message_when_its_type_says_so() {
     // UL and DL NAS TRANSPORT of SMS whose octets read as a 5GSM message
     for hex in ["7e00670200072e0101c1ffff91", "7e006802000 72e0101c1ffff91"] {
         let transport = fgs(&hex.replace(' ', ""));
-        let container = &transport.to_view()["payload-container"];
+        let container = &ie(&transport, "payload-container");
         assert_eq!(container, &tree!({"octets": "2e0101c1ffff91"}), "{hex}");
     }
     // An N1 SM container whose octets are no 5GSM message
     let transport = fgs("7e00670100020102");
-    let message = fgs("2e0101c1ffff91").to_view();
-    let error = fgs_edited(&transport, |view| {
-        view["payload-container"]["value"] = message
-    })
-    .unwrap_err();
+    let message = fgs("2e0101c1ffff91").to_tree();
+    let error = fgs_edited(&transport, |tree| tree["payload-container"] = message).unwrap_err();
     assert!(
         error.contains("the octets are not a 5GSM message"),
         "{error}"
     );
 }
 
-/// A message is written back from its view with what it was received with: its IEs out
+/// A message is written back from its tree with what it was received with: its IEs out
 /// of sequence and its unknown IEs, also under a security header.
 #[test]
 fn a_message_is_written_back_with_what_it_was_received_with() {
     for hex in ["2e0101c1ffffa191", "7e01aabbccdd057e006416700101"] {
         let message = fgs(hex);
-        let written = message.with_view(message.to_view()).unwrap();
+        let written = message.with_tree(message.to_tree()).unwrap();
         assert_eq!(hex::encode(written.encode().unwrap()), hex);
     }
 }
@@ -4149,7 +3924,7 @@ fn an_algorithm_listed_twice_is_refused_as_the_ie_has_it_once() {
     );
 }
 
-/// An EPS message is written back from its view with what it was received with, also
+/// An EPS message is written back from its tree with what it was received with, also
 /// under a security header; a ciphered one means what an equal one means.
 #[test]
 fn an_eps_message_is_written_back_with_what_it_was_received_with() {
@@ -4157,7 +3932,7 @@ fn an_eps_message_is_written_back_with_what_it_was_received_with() {
     // integrity protection header too
     for hex in ["074403700101", "5201d9700101", "17aabbccdd05074403700101"] {
         let message = eps(hex);
-        let written = message.with_view(message.to_view()).unwrap();
+        let written = message.with_tree(message.to_tree()).unwrap();
         assert_eq!(hex::encode(written.encode().unwrap()), hex);
     }
     let ciphered = eps("2700000000051234");
@@ -4165,20 +3940,17 @@ fn an_eps_message_is_written_back_with_what_it_was_received_with() {
     assert!(!ciphered.means_the_same(&eps("2700000000055678")));
 }
 
-/// The fields of an EPS view that read as names are written by their numbers too, and
+/// The fields of an EPS tree that read as names are written by their numbers too, and
 /// those of a SERVICE REQUEST within their bits.
 #[test]
-fn the_fields_of_an_eps_view_are_written_by_their_numbers() {
+fn the_fields_of_an_eps_tree_are_written_by_their_numbers() {
     let reject = eps("074403");
-    let edited = eps_edited(&reject, |view| {
-        view["security-header-type"]["value"] = tree!(0)
-    });
+    let edited = eps_edited(&reject, |tree| tree["security-header-type"] = tree!(0));
     assert_eq!(edited, Ok("074403".into()));
     let request = eps("c7200000");
     let written = |sequence: u8| {
-        eps_edited(&request, |view| {
-            view["ksi-and-sequence-number"] =
-                tree!({"value": {"ksi": 1, "sequence-number": sequence}});
+        eps_edited(&request, |tree| {
+            tree["ksi-and-sequence-number"] = tree!({"ksi": 1, "sequence-number": sequence});
         })
     };
     assert_eq!(written(31), Ok("c73f0000".into()));
@@ -4189,8 +3961,8 @@ fn the_fields_of_an_eps_view_are_written_by_their_numbers() {
 #[test]
 fn an_emm_transport_has_no_other_entry() {
     let transport = eps("b70000000000abcd");
-    for entry in [tree!({"value": 1}), tree!({"octets": "01"})] {
-        let error = eps_edited(&transport, |view| view["other"] = entry).unwrap_err();
+    for entry in [tree!(1), tree!({"octets": "01"})] {
+        let error = eps_edited(&transport, |tree| tree["other"] = entry).unwrap_err();
         assert!(
             error.contains("`other` is no entry of an EMM TRANSPORT"),
             "{error}"
@@ -4223,19 +3995,15 @@ fn a_value_that_a_setter_does_not_write_is_refused() {
     );
 }
 
-/// A container without octets is written from the view of the message that it names.
+/// A container without octets is written from the tree of the message that it names.
 #[test]
 fn a_container_without_octets_is_written_from_its_message() {
-    let mut view = tree!({
-        "extended-protocol-discriminator": {"value": 126},
-        "security-header-type": {"value": "plain-5gs-nas-message-not-security-protected"},
-        "message-type": {"value": "ul-nas-transport"},
+    let tree = tree!({
+        "message-type": "ul-nas-transport",
         "payload-container-type": {"octets": "01"},
+        "payload-container": fgs("2e0101c1ffff91").to_tree(),
     });
-    view["payload-container"] = tree!({"value": fgs("2e0101c1ffff91").to_view()});
-    let transport = f::GmmMessageType::UlNasTransport
-        .message_from_view(view)
-        .unwrap();
+    let transport = f::Message::from_tree(tree).unwrap();
     assert_eq!(
         hex::encode(transport.encode().unwrap()),
         "7e00670100072e0101c1ffff91"
@@ -4247,8 +4015,8 @@ fn a_container_without_octets_is_written_from_its_message() {
 #[test]
 fn a_code_without_a_name_is_written_in_the_octets_that_the_ie_has() {
     let accept = fgs("7e0042010177000bf202f8390100421122334421020100");
-    let edited = fgs_edited(&accept, |view| {
-        view["5gs-network-feature-support"]["value"]["emc"] = tree!(1);
+    let edited = fgs_edited(&accept, |tree| {
+        tree["5gs-network-feature-support"]["emc"] = tree!(1);
     });
     assert_eq!(
         edited,

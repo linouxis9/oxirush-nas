@@ -18,9 +18,9 @@
 //! The messages of `tests/wireshark/corpus.tsv` as Wireshark reads them and
 //! as this crate reads them, compared field by field.
 //!
-//! The crate's reading of each message is its view, the internal form under
-//! its tree that has the octets of each IE beside its value, written here as one
-//! line of JSON; `tests/wireshark/compare.py` has tshark dissect the same
+//! The crate's reading of each message has the octets of each IE beside
+//! the value that the crate decodes from them, whether its tree shows that
+//! value or the octets, written here as one line of JSON; `tests/wireshark/compare.py` has tshark dissect the same
 //! octets and compares the two along `tests/wireshark/mapping.tsv`. A
 //! difference that `tests/wireshark/known.tsv` does not explain fails the
 //! test. Without tshark, or without Python 3, the test says that it is
@@ -112,6 +112,90 @@ fn codes_eps(message: &nas_eps::Message) -> Vec<Value> {
     }
 }
 
+/// What the crate reads of `message`: each member of its tree as
+/// `{"value": …, "octets": …}`, a field of a header with its value alone,
+/// and `null` for an optional IE that the message does not have.
+pub(crate) fn read<M: crate::common::view::Viewed>(
+    message: &M,
+    scope: crate::common::view::Scope,
+) -> crate::tree::Value {
+    use crate::tree::{Map, Value};
+    let entry = |member: &str, value: Value| Value::from(Map::from_iter([(member.into(), value)]));
+    let mut read = Map::new();
+    if let Some((header, ciphered)) = message.protection() {
+        read.insert("security-header".into(), entry("value", header));
+        if let Some(octets) = ciphered {
+            read.insert("ciphered-message".into(), entry("octets", octets));
+        }
+    }
+    let Some(Value::Object(header)) = message.header() else {
+        return read.into();
+    };
+    for (name, value) in header {
+        read.insert(name, entry("value", value));
+    }
+    message.ies(scope, &mut |field| {
+        let mut ie = Map::new();
+        if let Some(value) = field.ie.and_then(|ie| ie.reading(field.scope)) {
+            ie.insert("value".into(), value);
+        }
+        ie.insert("octets".into(), field.octets.hex().into());
+        read.insert(field.printed.into(), ie.into());
+    });
+    if let Some(body) = message.body() {
+        body.absent(&mut |name, _| drop(read.insert(name.into(), Value::Null)));
+        if !body.unknown_ies().is_empty() {
+            let tree = crate::common::view::tree(message, scope);
+            read.insert(
+                "unknown-ies".into(),
+                entry("value", tree["unknown-ies"].clone()),
+            );
+        }
+    }
+    read.into()
+}
+
+/// [`read`] of a message of either system; a message that has no table
+/// has the members of its tree.
+fn reading_of<M: crate::common::view::Viewed + Tree>(message: &M) -> crate::tree::Value {
+    use crate::tree::Value;
+    if message.header().is_some() || message.protection().is_some() {
+        return read(message, crate::common::view::Scope::NONE);
+    }
+    let Value::Object(members) = message.tree() else {
+        return Value::Null;
+    };
+    let members = members.into_iter().map(|(name, member)| {
+        if member.get("octets").is_some() {
+            return (name, member);
+        }
+        let path = format!("/nas/{name}");
+        let mut entry = oxirush_utils::tree!({ "value": member });
+        if let Ok(Some(octets)) = crate::common::view::ie_octets(message, &path) {
+            entry["octets"] = oxirush_utils::tree::hex(&octets).into();
+        }
+        (name, entry)
+    });
+    crate::tree::Map::from_iter(members).into()
+}
+
+/// A message whose tree [`reading_of`] reads.
+trait Tree {
+    fn tree(&self) -> crate::tree::Value;
+}
+
+impl Tree for nas_5gs::Message {
+    fn tree(&self) -> crate::tree::Value {
+        self.to_tree()
+    }
+}
+
+impl Tree for nas_eps::Message {
+    fn tree(&self) -> crate::tree::Value {
+        self.to_tree()
+    }
+}
+
 /// What the crate reads of `octets`, as one object of JSON.
 fn reading(system: &str, octets: &[u8]) -> Value {
     let mut entry = json!({"system": system, "octets": hex::encode(octets)});
@@ -123,7 +207,7 @@ fn reading(system: &str, octets: &[u8]) -> Value {
     let read = if system == "5gs" {
         match nas_5gs::Message::decode(octets) {
             Ok(message) => Ok((
-                message.to_view(),
+                reading_of(&message),
                 codes_5gs(&message),
                 unknown(message.unknown_ies()),
             )),
@@ -133,7 +217,7 @@ fn reading(system: &str, octets: &[u8]) -> Value {
                     .ok()
                     .map(|(message, faults)| {
                         (
-                            message.to_view(),
+                            reading_of(&message),
                             faults.iter().map(ToString::to_string).collect::<Vec<_>>(),
                         )
                     }),
@@ -142,7 +226,7 @@ fn reading(system: &str, octets: &[u8]) -> Value {
     } else {
         match nas_eps::Message::decode(octets) {
             Ok(message) => Ok((
-                message.to_view(),
+                reading_of(&message),
                 codes_eps(&message),
                 unknown(message.unknown_ies()),
             )),
@@ -152,7 +236,7 @@ fn reading(system: &str, octets: &[u8]) -> Value {
                     .ok()
                     .map(|(message, faults)| {
                         (
-                            message.to_view(),
+                            reading_of(&message),
                             faults.iter().map(ToString::to_string).collect::<Vec<_>>(),
                         )
                     }),
@@ -161,7 +245,7 @@ fn reading(system: &str, octets: &[u8]) -> Value {
     };
     match read {
         Ok((view, codes, unknown)) => {
-            entry["view"] = serde_json::to_value(view).expect("a view is JSON");
+            entry["view"] = serde_json::to_value(view).expect("a reading is JSON");
             entry["codes"] = json!(codes);
             entry["unknown"] = unknown;
         }
@@ -169,7 +253,7 @@ fn reading(system: &str, octets: &[u8]) -> Value {
             entry["error"] = json!(error);
             if let Some((view, faults)) = lenient {
                 entry["lenient"] = json!({
-                    "view": serde_json::to_value(view).expect("a view is JSON"),
+                    "view": serde_json::to_value(view).expect("a reading is JSON"),
                     "faults": faults,
                 });
             }

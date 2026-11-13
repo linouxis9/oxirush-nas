@@ -397,24 +397,17 @@ pub(crate) trait MessageBody: crate::common::Encode + crate::common::Validate {
     fn ie_order_findings(&self) -> Vec<ValidationError>;
     /// Order findings followed by the sender check findings.
     fn ie_findings(&self) -> Vec<ValidationError>;
-    /// Visit the IEs that the message has, for its view.
+    /// Visit the IEs that the message has, for its tree.
     #[cfg(feature = "tree")]
     fn ies(&self, scope: crate::common::view::Scope, visit: &mut crate::common::view::Visit<'_>);
-    /// Give `visit` the name, as a view prints it, of each optional IE that
+    /// Give `visit` the name, as a tree prints it, of each optional IE that
     /// the message does not have, and its place among the IEs of the message.
     #[cfg(feature = "tree")]
     fn absent(&self, visit: &mut dyn FnMut(&'static str, usize));
-    /// What the message keeps of how it was received: its unknown IEs and
-    /// the order of its optional IEs.
+    /// Give the message the IEs `unknown_ies` for those that its table has
+    /// no place for, after the optional IEs of its table, in their order.
     #[cfg(feature = "tree")]
-    fn received(&self) -> (&UnknownIes, &IeOrder);
-    /// Give the message what another one kept of how it was received.
-    #[cfg(feature = "tree")]
-    fn set_received(&mut self, unknown_ies: &UnknownIes, order: &IeOrder);
-    /// The readable serde form, without a value, of the optional IE that
-    /// the message does not have and whose field prints as `name`.
-    #[cfg(feature = "tree")]
-    fn blank(&self, name: &str) -> Option<oxirush_utils::tree::Value>;
+    fn set_unknown(&mut self, unknown_ies: UnknownIes);
     /// The field whose IE prints as `name`, to write it.
     #[cfg(feature = "tree")]
     fn slot(&mut self, name: &str) -> Option<&mut dyn crate::common::view::Slot>;
@@ -670,7 +663,6 @@ macro_rules! nas_message {
                         octets: &self.$mfield.value,
                         ie: (&DecodedProbe(&self.$mfield)).decoded_ie(),
                         optional: false,
-                        place,
                         scope,
                     });
                     place += 1;
@@ -683,7 +675,6 @@ macro_rules! nas_message {
                             octets: &ie.value,
                             ie: (&DecodedProbe(ie)).decoded_ie(),
                             optional: true,
-                            place,
                             scope,
                         });
                     }
@@ -707,31 +698,9 @@ macro_rules! nas_message {
                 )*
             }
             #[cfg(feature = "tree")]
-            fn received(&self) -> (&UnknownIes, &crate::common::IeOrder) {
-                (&self.unknown_ies, &self.optional_ie_order)
-            }
-            #[cfg(feature = "tree")]
-            fn set_received(
-                &mut self,
-                unknown_ies: &UnknownIes,
-                order: &crate::common::IeOrder,
-            ) {
-                self.unknown_ies = unknown_ies.clone();
-                self.optional_ie_order = order.clone();
-            }
-            #[cfg(feature = "tree")]
-            #[allow(unused_variables)]
-            fn blank(&self, name: &str) -> Option<oxirush_utils::tree::Value> {
-                #[allow(unused_imports)]
-                use crate::common::readable::to_value;
-                $(
-                    if self.$ofield.is_none()
-                        && crate::common::names::name!(stringify!($ofield)) == name
-                    {
-                        return to_value(&<$otype>::blank()).ok();
-                    }
-                )*
-                None
+            fn set_unknown(&mut self, unknown_ies: UnknownIes) {
+                self.unknown_ies = unknown_ies;
+                self.optional_ie_order = crate::common::IeOrder::new();
             }
             #[cfg(feature = "tree")]
             #[allow(unused_variables, unused_mut, unused_assignments)]
@@ -1145,15 +1114,6 @@ macro_rules! nas_messages {
                 match self {
                     $(Self::$variant(message) => &**message,)+
                     $($(Self::$svariant(message) => &**message,)+)*
-                }
-            }
-
-            /// The name of the variant, as the code writes it.
-            #[cfg(all(test, feature = "tree"))]
-            pub(crate) fn variant_name(&self) -> &'static str {
-                match self {
-                    $(Self::$variant(_) => stringify!($variant),)+
-                    $($(Self::$svariant(_) => stringify!($svariant),)+)*
                 }
             }
 

@@ -30,8 +30,6 @@ use crate::prelude::*;
 use core::net::{Ipv4Addr, Ipv6Addr};
 use oxirush_utils::tree::{Map, Value};
 
-pub(crate) use crate::common::names::printed;
-
 /// The letters and the digits of a name, in lower case: those of any way to
 /// write it.
 pub(crate) fn letters(name: &str) -> String {
@@ -1165,6 +1163,7 @@ pub(crate) fn pair<A: Readable, B: Readable>(held: &'static str, first: &A, seco
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::common::names::printed;
     use crate::common::view::{PlmnText, TaiForm};
     use crate::nas_5gs::*;
     use oxirush_utils::tree;
