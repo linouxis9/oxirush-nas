@@ -1192,6 +1192,7 @@ built_ie!(
 );
 
 /// What an LP-WUS PS assistance information is, by its type.
+#[derive(Clone, PartialEq)]
 enum LpWuspsAssistance {
     PagingSubgroupId(u8),
     UePagingProbabilityInformation(u8),
@@ -1232,6 +1233,7 @@ decoded_ie!(
 );
 
 /// The identity of a 5GS mobile identity, by its type of identity.
+#[derive(Clone, PartialEq)]
 enum MobileIdentityForm {
     NoIdentity,
     Suci(SuciForm),
@@ -1247,6 +1249,7 @@ enum MobileIdentityForm {
 crate::common::readable::readable!(enum MobileIdentityForm { NoIdentity, Suci(SuciForm), Guti(GutiForm), Imei(String), STmsi(STmsiForm), Imeisv(String), MacAddress { address, mauri }, Eui64([u8; 8]) });
 
 /// A 5G-GUTI by its parts, as a view writes it.
+#[derive(Clone, PartialEq)]
 struct GutiForm {
     plmn: Plmn,
     amf_region_id: u8,
@@ -1259,6 +1262,7 @@ struct GutiForm {
 crate::common::readable::readable!(struct GutiForm { plmn as plmn, amf_region_id, amf_set_id, amf_pointer, tmsi });
 
 /// A 5G-S-TMSI by its parts, as a view writes it.
+#[derive(Clone, PartialEq)]
 struct STmsiForm {
     amf_set_id: u16,
     amf_pointer: u8,
@@ -1270,7 +1274,7 @@ crate::common::readable::readable!(struct STmsiForm { amf_set_id, amf_pointer, t
 
 /// The protection scheme of a SUCI by its name (TS 33.501 Annex C.1), or the
 /// identifier of a scheme of the operator.
-#[derive(Clone, Copy)]
+#[derive(PartialEq, Clone, Copy)]
 enum SchemeName {
     Null,
     ProfileA,
@@ -1288,6 +1292,7 @@ crate::common::readable::readable!(
 
 /// A SUCI with its digits: the MSIN of the null scheme, else the output of
 /// the protection scheme; or the text of a NAI.
+#[derive(Clone, PartialEq)]
 enum SuciForm {
     Imsi {
         plmn: Plmn,
@@ -1437,6 +1442,7 @@ decoded_ie!(
 );
 
 /// The algorithms a UE security capability has the bits of, by number.
+#[derive(Clone, PartialEq)]
 struct SecurityCapability {
     ea: Vec<u16>,
     ia: Vec<u16>,
@@ -1516,6 +1522,7 @@ decoded_ie!(
 );
 
 /// A rejected S-NSSAI and the cause of its rejection.
+#[derive(Clone, PartialEq)]
 struct RejectedSNssai {
     cause: RejectedNssaiCause,
     s_nssai: SNssaiContents,
@@ -1592,6 +1599,7 @@ decoded_ie!(
 /// The fields of an intra N1 mode NAS transparent container (TS 24.501
 /// §9.11.2.6). The algorithms and the ngKSI are coded as in a SECURITY MODE
 /// COMMAND, whose names they have.
+#[derive(Clone, PartialEq)]
 struct IntraN1ModeFields {
     message_authentication_code: u32,
     selected_nas_security_algorithms: SecurityAlgorithms,
@@ -1627,6 +1635,7 @@ decoded_ie!(
 /// The fields of an S1 mode to N1 mode NAS transparent container (TS 24.501
 /// §9.11.2.9), named as those of [`IntraN1ModeFields`]. Its octets 9 and 10
 /// are spare.
+#[derive(Clone, PartialEq)]
 struct S1ModeToN1ModeFields {
     message_authentication_code: u32,
     selected_nas_security_algorithms: SecurityAlgorithms,
@@ -1702,6 +1711,7 @@ decoded_ie!(
 );
 
 /// The addresses of a PDU address, by the PDU session type that has them.
+#[derive(Clone, PartialEq)]
 struct PduAddressForm {
     ipv4: Option<Ipv4Addr>,
     ipv6_interface_id: Option<[u8; 8]>,
@@ -1744,6 +1754,7 @@ decoded_ie!(
 );
 
 /// The maximum data rates of user plane integrity protection.
+#[derive(Clone, PartialEq)]
 struct MaximumDataRates {
     ul: MaxDataRate,
     dl: MaxDataRate,

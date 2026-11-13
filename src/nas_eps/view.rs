@@ -1274,6 +1274,7 @@ fields_ie!(UeAdditionalSecurityCapability {
 });
 
 /// The identity of an EPS mobile identity, by its type of identity.
+#[derive(Clone, PartialEq)]
 enum EpsMobileIdentityForm {
     Imsi(String),
     Imei(String),
@@ -1290,6 +1291,7 @@ crate::common::readable::readable!(
 );
 
 /// A GUTI by its parts, as a view writes it.
+#[derive(Clone, PartialEq)]
 struct GutiForm {
     plmn: crate::common::Plmn,
     mme_group_id: u16,
@@ -1329,6 +1331,7 @@ decoded_ie!(
 );
 
 /// The identity of a mobile identity of TS 24.008, by its type of identity.
+#[derive(Clone, PartialEq)]
 enum MobileIdentityForm {
     NoIdentity,
     Imsi(String),
@@ -1559,6 +1562,7 @@ built_ie!(
 
 /// The value of a CLI: the calling party number, with the names of its
 /// codes. Octet 3a has the two indicators, or neither is there.
+#[derive(Clone, PartialEq)]
 struct CallingNumber {
     type_of_number: CallingPartyTypeOfNumber,
     numbering_plan: CallingPartyNumberingPlan,

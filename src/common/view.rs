@@ -1883,18 +1883,70 @@ fn is_hex(text: &str) -> bool {
     oxirush_utils::tree::unhex(text).is_some()
 }
 
-/// The IE that `encode` builds from the readable form `value` of a `D`,
-/// if it decodes to that value.
-pub(crate) fn built<T: Decoded, D: Readable>(
-    ie: &T,
-    value: &Value,
-    encode: fn(&T, D) -> Result<T, ValueError>,
-    scope: Scope,
-) -> Result<T, String> {
-    let typed: D = readable::from_value(value)?;
-    let written = readable::to_value(&typed)?;
-    let new = encode(ie, typed).map_err(refused)?;
-    carried(new, &written, scope)
+/// How the value of an IE type of [`decoded_ie`] is read from its octets
+/// and written in them.
+pub(crate) struct Coded<T, F> {
+    /// The value of the octets, if they have one.
+    pub(crate) decode: fn(&T) -> Option<F>,
+    /// The IE with the octets of the value, from the IE that it is written
+    /// over.
+    pub(crate) encode: fn(&T, F) -> Result<T, ValueError>,
+}
+
+impl<T: Decoded, F: Readable + Clone + PartialEq> Coded<T, F> {
+    /// The value of the octets of `ie`, where encoding it over `ie` gives an
+    /// IE that reads as it: octets that `decode` reads and `encode` does not
+    /// write have no value.
+    pub(crate) fn value(&self, ie: &T) -> Option<F> {
+        let value = (self.decode)(ie)?;
+        let again = (self.encode)(ie, value.clone()).ok()?;
+        (again == *ie || self.reads(&again, &value)).then_some(value)
+    }
+
+    /// Whether `ie` has the value `value`: the same value, or one of the same
+    /// readable form.
+    fn reads(&self, ie: &T, value: &F) -> bool {
+        match self.value(ie) {
+            Some(read) if read == *value => true,
+            Some(read) => readable::to_value(&read).ok() == readable::to_value(value).ok(),
+            None => false,
+        }
+    }
+
+    /// The value of `ie` where it writes the IE back alone, as
+    /// [`Ie::written_back`] says of it: the IE that the value writes means
+    /// what `ie` means; `by_value` says of an IE whose value says all that
+    /// its octets mean without deciding them.
+    pub(crate) fn shown(&self, ie: &T, by_value: fn(&T) -> bool, scope: Scope) -> Option<Value> {
+        let value = self.value(ie)?;
+        let new = (self.encode)(&T::unwritten(), value.clone()).ok()?;
+        let back = match by_value(ie) || by_value(&new) {
+            false => new == *ie,
+            true => self.reads(&new, &value) && new.meant(scope) == ie.meant(scope),
+        };
+        back.then(|| readable::to_value(&value).ok())?
+    }
+
+    /// The IE that stands for those that mean what `ie` means, where
+    /// `by_value` says that its value says all that they mean.
+    pub(crate) fn meant(&self, ie: &T, by_value: fn(&T) -> bool) -> T {
+        let written = || (self.encode)(&T::unwritten(), self.value(ie)?).ok();
+        match by_value(ie) {
+            true => written().unwrap_or_else(|| ie.clone()),
+            false => ie.clone(),
+        }
+    }
+
+    /// `ie` with the octets of the readable form `value`, if it reads as
+    /// that value.
+    pub(crate) fn built(&self, ie: &T, value: &Value, scope: Scope) -> Result<T, String> {
+        let typed: F = readable::from_value(value)?;
+        let new = (self.encode)(ie, typed.clone()).map_err(refused)?;
+        match self.reads(&new, &typed) {
+            true => Ok(new),
+            false => carried(new, &readable::to_value(&typed)?, scope),
+        }
+    }
 }
 
 /// Why the constructor of an IE refuses the value that is written, as an
@@ -1970,6 +2022,7 @@ pub(crate) fn octets(
 
 /// A value that is a name where the specification has one, else a number:
 /// a coded value, or a timer that runs or is `deactivated`.
+#[derive(Clone, PartialEq)]
 pub(crate) enum Code<E, N = u8> {
     Name(E),
     Number(N),
@@ -2053,6 +2106,7 @@ impl<T: crate::common::plmn::TaiParts> readable::Readable for TaiForm<T> {
 }
 
 /// The name of a timer that does not run.
+#[derive(Clone, PartialEq)]
 pub(crate) enum Deactivated {
     Deactivated,
 }
@@ -2293,37 +2347,23 @@ macro_rules! decoded_ie {
     // though it does not decide them: the IE then stands with all those of
     // its value, in the form that the value is written in.
     ($ie:ty: $form:ty, $decode:expr, $encode:expr, meant: $meant:expr) => {
+        impl $ie {
+            /// How the value of the IE is read and written.
+            const CODED: $crate::common::view::Coded<Self, $form> =
+                $crate::common::view::Coded { decode: $decode, encode: $encode };
+        }
+
         impl $crate::common::view::Decoded for $ie {
             fn unwritten() -> Self {
                 <$ie>::blank()
             }
 
-            fn meant(&self, scope: $crate::common::view::Scope) -> Self {
-                let by_value: fn(&Self) -> bool = $meant;
-                let written = || {
-                    let value = $crate::common::view::Decoded::decoded(self, scope)?;
-                    $crate::common::view::Decoded::with_decoded(&Self::unwritten(), &value, scope).ok()
-                };
-                match by_value(self) {
-                    true => written().unwrap_or_else(|| self.clone()),
-                    false => self.clone(),
-                }
+            fn meant(&self, _: $crate::common::view::Scope) -> Self {
+                Self::CODED.meant(self, $meant)
             }
 
             fn decoded(&self, _: $crate::common::view::Scope) -> Option<oxirush_utils::tree::Value> {
-                let decode: fn(&Self) -> Option<$form> = $decode;
-                let encode: fn(
-                    &Self,
-                    $form,
-                ) -> core::result::Result<Self, $crate::common::ValueError> = $encode;
-                let value = $crate::common::readable::to_value(&decode(self)?).ok()?;
-                let typed: $form = $crate::common::readable::from_value(&value).ok()?;
-                // An IE that the value writes as this one reads as it.
-                let again = encode(self, typed).ok()?;
-                if again == *self {
-                    return Some(value);
-                }
-                ($crate::common::readable::to_value(&decode(&again)?).ok()? == value).then_some(value)
+                $crate::common::readable::to_value(&Self::CODED.value(self)?).ok()
             }
 
             fn with_decoded(
@@ -2331,37 +2371,14 @@ macro_rules! decoded_ie {
                 value: &oxirush_utils::tree::Value,
                 scope: $crate::common::view::Scope,
             ) -> core::result::Result<Self, String> {
-                let encode: fn(
-                    &Self,
-                    $form,
-                ) -> core::result::Result<Self, $crate::common::ValueError> = $encode;
-                $crate::common::view::built(self, value, encode, scope)
+                Self::CODED.built(self, value, scope)
             }
 
-            // What `written_back` says of the value of the IE, without
-            // decoding the IE that the value writes again where it is this
-            // one: it has the same value.
             fn shown_value(
                 &self,
                 scope: $crate::common::view::Scope,
             ) -> Option<oxirush_utils::tree::Value> {
-                use $crate::common::readable::{from_value, to_value};
-                use $crate::common::view::Decoded;
-                let by_value: fn(&Self) -> bool = $meant;
-                let encode: fn(
-                    &Self,
-                    $form,
-                ) -> core::result::Result<Self, $crate::common::ValueError> = $encode;
-                let value = Decoded::decoded(self, scope)?;
-                let typed: $form = from_value(&value).ok()?;
-                let written = to_value(&typed).ok()?;
-                let new = encode(&Self::unwritten(), typed).ok()?;
-                if !by_value(self) && !by_value(&new) {
-                    return (new == *self && written == value).then_some(value);
-                }
-                let carried = Decoded::decoded(&new, scope) == Some(written);
-                (carried && Decoded::meant(&new, scope) == Decoded::meant(self, scope))
-                    .then_some(value)
+                Self::CODED.shown(self, $meant, scope)
             }
         }
     };
@@ -2451,6 +2468,30 @@ macro_rules! fields_ie {
             }
         }
 
+        impl $ie {
+            /// `onto` with the members of this IE written in it, as a value
+            /// that has them writes them: every member where `built`, and
+            /// else those that differ. `None` where a member is not written
+            /// as it is.
+            fn members_onto(&self, mut onto: Self, built: bool) -> Option<Self> {
+                $(
+                    let get: fn(&Self) -> _ = $get;
+                    let set: fn(&mut Self, _) -> _ = $set;
+                    let member = get(self);
+                    if built || get(&onto) != member {
+                        #[allow(clippy::let_unit_value)]
+                        let wrote = set(&mut onto, member.clone());
+                        let exact = $crate::common::view::Wrote::exact(wrote).ok()?;
+                        if !exact && get(&onto) != member {
+                            return None;
+                        }
+                    }
+                )*
+                $crate::common::view::fields_ie!(@onto self, onto, built $(, $flags)?);
+                Some(onto)
+            }
+        }
+
         impl $crate::common::view::Decoded for $ie {
 
             fn unwritten() -> Self {
@@ -2530,6 +2571,24 @@ macro_rules! fields_ie {
                 }
                 Ok(ie)
             }
+
+            // What `written_back` says of the value of the IE, on the typed
+            // members.
+            fn shown_value(
+                &self,
+                scope: $crate::common::view::Scope,
+            ) -> Option<oxirush_utils::tree::Value> {
+                #[allow(unused_imports)]
+                use $crate::common::IeRules;
+                use $crate::common::view::Decoded;
+                let value = Decoded::decoded(self, scope)?;
+                #[allow(unused_mut)]
+                let mut ie = self.members_onto(Self::unwritten(), true)?;
+                $crate::common::view::fields_ie!(@shortest ie $(, $flags)?);
+                let none = value.as_object().is_none_or(oxirush_utils::tree::Map::is_empty);
+                (!none && ie.receiver_length_ok() && Decoded::meant(&ie, scope) == Decoded::meant(self, scope))
+                    .then_some(value)
+            }
         }
 
         #[cfg(test)]
@@ -2607,9 +2666,22 @@ macro_rules! fields_ie {
                 octets.flip(bit);
             }
         }
-        let again = $crate::common::view::Decoded::with_decoded(&blank, &$members, $crate::common::view::Scope::NONE).ok()?;
+        let again = $ie.members_onto(blank, false)?;
         (again.value == $ie.value).then_some($members)
     }};
+    (@onto $from:ident, $onto:ident, $built:ident) => {};
+    (@onto $from:ident, $onto:ident, $built:ident, exact) => {};
+    (@onto $from:ident, $onto:ident, $built:ident, flags) => {
+        for (flag, on) in $crate::common::view::Flags::flags($from) {
+            let current = $crate::common::view::Flags::flags(&$onto).contains(&(flag, true));
+            if ($built || current != on)
+                && !($crate::common::view::Flags::set_flag(&mut $onto, flag, on)
+                    && $crate::common::view::Flags::flags(&$onto).contains(&(flag, on)))
+            {
+                return None;
+            }
+        }
+    };
     (@member $from:ident, $ie:ident, $name:ident, $written:ident) => {
         return Err(format!("no member `{}`", $name))
     };
@@ -2876,6 +2948,7 @@ mod shared_types {
     use crate::common::view;
 
     /// A network name and whether the country initials are to be added to it.
+    #[derive(Clone, PartialEq)]
     struct NetworkNameForm {
         name: String,
         add_ci: bool,
