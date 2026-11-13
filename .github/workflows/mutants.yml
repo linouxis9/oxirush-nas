@@ -1,16 +1,12 @@
 name: Mutants
 
-# cargo-mutants changes the code of the crate at one place at a time, a mutant, and runs
-# the tests on each: a mutant that every test passes is code that no test checks.
-# .cargo/mutants.toml says what it leaves alone, and why. The workflow is run by hand
-# before a release: with `full`, every mutant; without it, the mutants of the code that
-# the commits since the last run changed, and none without such a commit; with
-# `recheck`, the mutants that a file of the repository names, as a missed.txt has them,
-# again at the head. Each job keeps its mutants.out, with the commit that it ran at, and
-# a missed mutant fails it. Few jobs run at once, to leave runners to the other CI:
-# two shards at a time, unless `parallel` says how many. A shard takes every n-th mutant,
-# so that the shards of a job last alike, and they are as many as keep each to 2 hours or
-# less.
+# The mutation testing of the crate: the jobs of crate-mutants.yml of oxirush-aper,
+# which every crate of the family calls, here with 72 shards, two at a time, and the
+# mutants of the stack wiping. The workflow is run by hand before a release: with
+# `full`, every mutant; without it, the mutants of the code that the commits since the
+# last run changed, and none without such a commit; with `recheck`, the mutants that a
+# file of the repository names, as a missed.txt has them, again at the head.
+# .cargo/mutants.toml says what it leaves alone, and why.
 on:
   workflow_dispatch:
     inputs:
@@ -43,200 +39,22 @@ env:
   CARGO_PROFILE_DEV_DEBUG: 0
 
 jobs:
-  # What the run mutates: every mutant, the mutants of what the commits since the last run
-  # changed, or nothing without such a commit.
-  plan:
-    name: What to mutate
-    runs-on: ubuntu-latest
-    outputs:
-      mode: ${{ steps.plan.outputs.mode }}
-      base: ${{ steps.plan.outputs.base }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - id: plan
-        env:
-          GH_TOKEN: ${{ github.token }}
-          FULL: ${{ inputs.full }}
-          RECHECK: ${{ inputs.recheck }}
-        run: |
-          # The head of the last run of this workflow on this branch that ended after its
-          # plan, or the empty tree: the commits after it are the ones to mutate, however
-          # late a run starts and however old the date of a commit is. A run whose plan
-          # succeeded and whose shards then failed, for a missed mutant as for a lost runner
-          # or a shard that ended early, is such a base too, and no later run mutates its
-          # commits again: it stays red until someone reads it, and is run again itself. A
-          # run of `recheck`, which mutates named mutants alone, is none.
-          runs=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow mutants.yml \
-            --branch "$GITHUB_REF_NAME" --status completed --limit 100 \
-            --json databaseId,conclusion \
-            --jq '.[] | select(.conclusion == "success" or .conclusion == "failure") | .databaseId')
-          base=
-          for run in $runs; do
-            base=$(gh run view "$run" --repo "$GITHUB_REPOSITORY" --json headSha,jobs --jq '
-              select(any(.jobs[]; .name == "What to mutate" and .conclusion == "success")
-                and all(.jobs[]; (.name | startswith("Mutants named by the file") | not)
-                  or .conclusion == "skipped"))
-              | .headSha')
-            if [ -n "$base" ]; then break; fi
-          done
-          if [ -z "$base" ] || ! git cat-file -e "$base^{commit}" 2>/dev/null; then
-            base=$(git hash-object -t tree /dev/null)
-          fi
-          if [ -n "$RECHECK" ]; then
-            mode=recheck
-          elif [ "$FULL" = true ]; then
-            mode=full
-          elif [ "$base" != "$(git rev-parse HEAD)" ]; then
-            mode=diff
-          else
-            mode=none
-          fi
-          echo "mode=$mode" >> "$GITHUB_OUTPUT"
-          echo "base=$base" >> "$GITHUB_OUTPUT"
-
-  # The lines that no test reaches: the summary of each file in the log, and each line
-  # in the report that the job keeps (cargo-llvm-cov 0.9.1): once in each run that
-  # mutates something.
-  coverage:
-    name: Coverage
-    needs: plan
-    if: needs.plan.outputs.mode != 'none'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: llvm-tools-preview
-      - uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-llvm-cov@0.9.1
-      - uses: Swatinem/rust-cache@v2
-      - run: cargo llvm-cov --all-features --html
-      - run: cargo llvm-cov report --summary-only
-      - run: cargo llvm-cov report --lcov --output-path target/llvm-cov/lcov.info
-      - uses: actions/upload-artifact@v4
-        with:
-          name: coverage
-          path: |
-            target/llvm-cov/html
-            target/llvm-cov/lcov.info
-
   mutants:
-    name: Mutants (shard ${{ matrix.shard }} of 72)
-    needs: plan
-    if: needs.plan.outputs.mode == 'full'
-    runs-on: ubuntu-latest
-    env:
-      # A test of a mutant that allocates without end fails once it has 4 GiB of
-      # address space, instead of taking the memory of the runner, which then dies.
-      CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUNNER: prlimit --as=4294967296
-    timeout-minutes: 300
-    strategy:
-      fail-fast: false
-      max-parallel: ${{ fromJSON(inputs.parallel || '2') }}
-      matrix:
-        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
-          20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38,
-          39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57,
-          58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-mutants@27.1.0
-      # cargo-mutants exits with 3 when a mutant made a test run until its timeout,
-      # before it says whether a mutant was missed: a mutant that makes a test loop
-      # forever is one that the tests see, and missed.txt has those that they do not.
-      - run: |
-          cargo mutants --shard ${{ matrix.shard }}/72 --sharding round-robin -j 2 || [ $? -eq 3 ]
-          test ! -s mutants.out/missed.txt
-      - if: always()
-        run: mkdir -p mutants.out && git rev-parse HEAD > mutants.out/commit
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: mutants.out-${{ matrix.shard }}
-          path: mutants.out
-
-  # The mutants that the file `recheck` names, as a missed.txt has them: each again at the
-  # head, in as many shards as every mutant. A name that is no mutant of the head, as one
-  # whose line has moved since, is not tried, and fails its shard as one that ends early
-  # does (.github/mutants-recheck.py).
-  recheck:
-    name: Mutants named by the file (shard ${{ matrix.shard }} of 72)
-    needs: plan
-    if: needs.plan.outputs.mode == 'recheck'
-    runs-on: ubuntu-latest
-    env:
-      CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUNNER: prlimit --as=4294967296
-    timeout-minutes: 300
-    strategy:
-      fail-fast: false
-      max-parallel: ${{ fromJSON(inputs.parallel || '2') }}
-      matrix:
-        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
-          20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38,
-          39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57,
-          58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-mutants@27.1.0
-      - env:
-          NAMED: ${{ inputs.recheck }}
-        run: python3 .github/mutants-recheck.py "$NAMED" ${{ matrix.shard }} 72
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: mutants.out-recheck-${{ matrix.shard }}
-          path: mutants.out
-
-  # The mutants of the lines that the commits since the last run changed.
-  changes:
-    name: Mutants of the changes since the last run (shard ${{ matrix.shard }} of 2)
-    needs: plan
-    if: needs.plan.outputs.mode == 'diff'
-    runs-on: ubuntu-latest
-    env:
-      CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUNNER: prlimit --as=4294967296
-    timeout-minutes: 300
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [0, 1]
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-mutants@27.1.0
-      - run: |
-          git diff ${{ needs.plan.outputs.base }} HEAD > "$RUNNER_TEMP/changes.diff"
-          cargo mutants --in-diff "$RUNNER_TEMP/changes.diff" --shard ${{ matrix.shard }}/2 -j 2 || [ $? -eq 3 ]
-          test ! -s mutants.out/missed.txt
-      - if: always()
-        run: mkdir -p mutants.out && git rev-parse HEAD > mutants.out/commit
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: mutants.out-changes-${{ matrix.shard }}
-          path: mutants.out
-
+    uses: linouxis9/oxirush-aper/.github/workflows/crate-mutants.yml@7ff6f4df878d24cb90b62059144e728ca30beac2
+    with:
+      shards: 72
+      changes-shards: 2
+      full: ${{ inputs.full }}
+      parallel: ${{ inputs.parallel || '2' }}
+      recheck: ${{ inputs.recheck }}
 
   # The functions that wipe what a key derivation leaves on the stack, which
   # .cargo/mutants.toml leaves out: only tests/key_wiping.rs, which reads the memory
   # of its process in an optimized build, sees what they do.
   key-wiping:
     name: Mutants of the stack wiping (release)
-    needs: plan
-    if: needs.plan.outputs.mode == 'full'
+    # Every mutant, as the shards, beside them
+    if: inputs.full && inputs.recheck == ''
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
