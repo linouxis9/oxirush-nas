@@ -19,8 +19,7 @@
 //! one type for both protocols, which `nas_5gs` and `nas_eps` re-export.
 
 use crate::common::{
-    Decode, Encode, Error, Reader, Result, nas_ie_lv, nas_ie_lve, nas_ie_tv1, nas_ie_v,
-    nas_ie_v_fixed,
+    Decode, Encode, Error, Reader, Result, nas_ie_lv, nas_ie_lve, nas_ie_v, nas_ie_v_fixed,
 };
 use crate::prelude::*;
 
@@ -87,7 +86,7 @@ nas_ie_lv!(
     /// GPRS timer 3 (TS 24.008 §10.5.7.4a; TS 24.501 §9.11.2.5, TS 24.301 §9.9.3.16B). LV format.
     GprsTimer3
 );
-nas_ie_tv1!(
+nas_ie_v!(
     /// IMEISV request (TS 24.008 §10.5.5.10; TS 24.501 §9.11.3.28, TS 24.301 §9.9.3.18).
     /// Half octet.
     ImeisvRequest
@@ -101,7 +100,7 @@ nas_ie_lv!(
     /// Network name (TS 24.008 §10.5.3.5a; TS 24.501 §9.11.3.35, TS 24.301 §9.9.3.24). LV format.
     NetworkName
 );
-nas_ie_tv1!(
+nas_ie_v!(
     /// Non-3GPP NW provided policies (TS 24.008 §10.5.5.37;
     /// TS 24.501 §9.11.3.36A, TS 24.301 §9.9.3.49).
     /// Half octet.
@@ -182,7 +181,7 @@ nas_ie_lve!(
     /// Extended emergency number list (TS 24.301 §9.9.3.37A; TS 24.501 §9.11.3.26). LV-E format.
     ExtendedEmergencyNumberList
 );
-nas_ie_tv1!(
+nas_ie_v!(
     /// Release assistance indication (TS 24.301 §9.9.4.25; TS 24.501 §9.11.3.46A). Half octet.
     ReleaseAssistanceIndication
 );
@@ -226,7 +225,7 @@ nas_ie_lv!(
     /// UE radio capability ID (TS 24.501 §9.11.3.68; TS 24.301 §9.9.3.60). LV format.
     UeRadioCapabilityId
 );
-nas_ie_tv1!(
+nas_ie_v!(
     /// UE radio capability ID deletion indication (TS 24.501 §9.11.3.69; TS 24.301 §9.9.3.61).
     /// Half octet.
     UeRadioCapabilityIdDeletionIndication

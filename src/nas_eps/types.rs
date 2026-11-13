@@ -46,7 +46,7 @@
 use crate::common::Reader;
 pub(crate) use crate::common::Result;
 pub(crate) use crate::common::{Decode, Encode, Error, ValueError};
-use crate::common::{nas_ie_lv, nas_ie_lve, nas_ie_tv1, nas_ie_v, nas_ie_v_fixed};
+use crate::common::{nas_ie_lv, nas_ie_lve, nas_ie_v, nas_ie_v_fixed};
 use crate::prelude::*;
 
 // The IE types that TS 24.008, TS 24.301 or TS 24.501 defines and the other
@@ -78,11 +78,11 @@ nas_ie_v!(
     /// Additional information requested (TS 24.301 §9.9.3.55). V format.
     AdditionalInformationRequested
 );
-nas_ie_tv1!(
+nas_ie_v!(
     /// Additional update result (TS 24.301 §9.9.3.0A). Half octet.
     AdditionalUpdateResult
 );
-nas_ie_tv1!(
+nas_ie_v!(
     /// Additional update type (TS 24.301 §9.9.3.0B). Half octet.
     AdditionalUpdateType
 );
@@ -114,11 +114,11 @@ nas_ie_lv!(
     /// CLI (TS 24.301 §9.9.3.38). LV format.
     Cli
 );
-nas_ie_tv1!(
+nas_ie_v!(
     /// Connectivity type (TS 24.301 §9.9.4.2A). Half octet.
     ConnectivityType
 );
-nas_ie_tv1!(
+nas_ie_v!(
     /// Control plane only indication (TS 24.301 §9.9.4.23). Half octet.
     ControlPlaneOnlyIndication
 );
@@ -126,7 +126,7 @@ nas_ie_v!(
     /// Control plane service type (TS 24.301 §9.9.3.47). V format.
     ControlPlaneServiceType
 );
-nas_ie_tv1!(
+nas_ie_v!(
     /// CSFB response (TS 24.301 §9.9.3.5). Half octet.
     CsfbResponse
 );
@@ -138,7 +138,7 @@ nas_ie_v!(
     /// Detach type (TS 24.301 §9.9.3.7). V format.
     DetachType
 );
-nas_ie_tv1!(
+nas_ie_v!(
     /// Device properties (TS 24.301 §9.9.2.0A). Half octet.
     DeviceProperties
 );
@@ -190,7 +190,7 @@ nas_ie_v!(
     /// ESM cause (TS 24.301 §9.9.4.4). V format.
     EsmCause
 );
-nas_ie_tv1!(
+nas_ie_v!(
     /// ESM information transfer flag (TS 24.301 §9.9.4.5). Half octet.
     EsmInformationTransferFlag
 );
@@ -202,7 +202,7 @@ nas_ie_lv!(
     /// Extended APN aggregate maximum bit rate (TS 24.301 §9.9.4.29). LV format.
     ExtendedApnAggregateMaximumBitRate
 );
-nas_ie_tv1!(
+nas_ie_v!(
     /// Extended EMM cause (TS 24.301 §9.9.3.26A). Half octet.
     ExtendedEmmCause
 );
@@ -222,7 +222,7 @@ nas_ie_v!(
     /// Generic message container type (TS 24.301 §9.9.3.42). V format.
     GenericMessageContainerType
 );
-nas_ie_tv1!(
+nas_ie_v!(
     /// Ciphering key sequence number (TS 24.301 §9.9.3.4A). Half octet.
     CipheringKeySequenceNumber
 );
@@ -295,7 +295,7 @@ nas_ie_lv!(
     /// MS network capability (TS 24.301 §9.9.3.20). LV format.
     MsNetworkCapability
 );
-nas_ie_tv1!(
+nas_ie_v!(
     /// MS network feature support (TS 24.301 §9.9.3.20A). Half octet.
     MsNetworkFeatureSupport
 );
@@ -319,7 +319,7 @@ nas_ie_lv!(
     /// Quality of service (TS 24.301 §9.9.4.12). LV format.
     QualityOfService
 );
-nas_ie_tv1!(
+nas_ie_v!(
     /// Network policy (TS 24.301 §9.9.3.52). Half octet.
     NetworkPolicy
 );
@@ -331,7 +331,7 @@ nas_ie_lv!(
     /// Notification indicator (TS 24.301 §9.9.4.7A). LV format.
     NotificationIndicator
 );
-nas_ie_tv1!(
+nas_ie_v!(
     /// GUTI type (TS 24.301 §9.9.3.45). Half octet.
     GutiType
 );
@@ -367,7 +367,7 @@ nas_ie_lv!(
     /// Protocol configuration options (TS 24.301 §9.9.4.11). LV format.
     ProtocolConfigurationOptions
 );
-nas_ie_tv1!(
+nas_ie_v!(
     /// Radio priority (TS 24.301 §9.9.4.13). Half octet.
     RadioPriority
 );
@@ -403,7 +403,7 @@ nas_ie_v!(
     /// Service type (TS 24.301 §9.9.3.27). V format.
     ServiceType
 );
-nas_ie_tv1!(
+nas_ie_v!(
     /// SMS services status (TS 24.301 §9.9.3.4B). Half octet.
     SmsServicesStatus
 );
@@ -427,7 +427,7 @@ nas_ie_lv!(
     /// Network resource identifier container (TS 24.301 §9.9.3.24A). LV format.
     NetworkResourceIdentifierContainer
 );
-nas_ie_tv1!(
+nas_ie_v!(
     /// TMSI status (TS 24.301 §9.9.3.31). Half octet.
     TmsiStatus
 );
@@ -447,7 +447,7 @@ nas_ie_lv!(
     /// UE coarse location information (TS 24.301 §9.9.3.72). LV format.
     UeCoarseLocationInformation
 );
-nas_ie_tv1!(
+nas_ie_v!(
     /// UE information request (TS 24.301 §9.9.3.71). Half octet.
     UeInformationRequest
 );
@@ -463,7 +463,7 @@ nas_ie_lv!(
     /// UE radio capability ID request (TS 24.301 §9.9.3.59). LV format.
     UeRadioCapabilityIdRequest
 );
-nas_ie_tv1!(
+nas_ie_v!(
     /// UE radio capability information update needed (TS 24.301 §9.9.3.35). Half octet.
     UeRadioCapabilityInformationUpdateNeeded
 );
@@ -475,7 +475,7 @@ nas_ie_lv!(
     /// Voice domain preference and UE's usage setting (TS 24.301 §9.9.3.44). LV format.
     VoiceDomainPreferenceAndUeUsageSetting
 );
-nas_ie_tv1!(
+nas_ie_v!(
     /// WLAN offload acceptability (TS 24.301 §9.9.4.18). Half octet.
     WlanOffloadAcceptability
 );

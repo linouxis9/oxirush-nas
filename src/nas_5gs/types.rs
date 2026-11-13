@@ -41,7 +41,7 @@
 use crate::common::Reader;
 pub(crate) use crate::common::Result;
 pub(crate) use crate::common::{Decode, Encode, Error, Octets, ValueError};
-use crate::common::{nas_ie_lv, nas_ie_lve, nas_ie_tv1, nas_ie_v, nas_ie_v_fixed, nas_ie_v_u16};
+use crate::common::{nas_ie_lv, nas_ie_lve, nas_ie_v, nas_ie_v_fixed, nas_ie_v_u16};
 use crate::prelude::*;
 
 // The IE types that TS 24.008, TS 24.301 or TS 24.501 defines and the other
@@ -223,75 +223,75 @@ nas_ie_lve!(
 
 // ── Half octet ───────────────────────────────────────────────────────────────
 
-nas_ie_tv1!(
+nas_ie_v!(
     /// Access Type (TS 24.501 §9.11.2.1A). Half octet.
     AccessType
 );
-nas_ie_tv1!(
+nas_ie_v!(
     /// Additional Configuration Indication (TS 24.501 §9.11.3.74). Half octet.
     AdditionalConfigurationIndication
 );
-nas_ie_tv1!(
+nas_ie_v!(
     /// Allowed SSC Mode (TS 24.501 §9.11.4.5). Half octet.
     AllowedSscMode
 );
-nas_ie_tv1!(
+nas_ie_v!(
     /// Always-on PDU Session Indication (TS 24.501 §9.11.4.3). Half octet.
     AlwaysOnPduSessionIndication
 );
-nas_ie_tv1!(
+nas_ie_v!(
     /// Always-on PDU Session Requested (TS 24.501 §9.11.4.4). Half octet.
     AlwaysOnPduSessionRequested
 );
-nas_ie_tv1!(
+nas_ie_v!(
     /// Configuration Update Indication (TS 24.501 §9.11.3.18). Half octet.
     ConfigurationUpdateIndication
 );
-nas_ie_tv1!(
+nas_ie_v!(
     /// Control Plane Only Indication (TS 24.501 §9.11.4.23). Half octet.
     ControlPlaneOnlyIndication
 );
-nas_ie_tv1!(
+nas_ie_v!(
     /// LP-WUS Status (TS 24.501 §9.11.3.112). Half octet.
     LpWusStatus
 );
-nas_ie_tv1!(
+nas_ie_v!(
     /// MA PDU Session Information (TS 24.501 §9.11.3.31A). Half octet.
     MaPduSessionInformation
 );
-nas_ie_tv1!(
+nas_ie_v!(
     /// MICO Indication (TS 24.501 §9.11.3.31). Half octet.
     MicoIndication
 );
-nas_ie_tv1!(
+nas_ie_v!(
     /// N5GC Indication (TS 24.501 §9.11.3.72). Half octet.
     N5gcIndication
 );
-nas_ie_tv1!(
+nas_ie_v!(
     /// Network Slicing Indication (TS 24.501 §9.11.3.36). Half octet.
     NetworkSlicingIndication
 );
-nas_ie_tv1!(
+nas_ie_v!(
     /// NSSAI Inclusion Mode (TS 24.501 §9.11.3.37A). Half octet.
     NssaiInclusionMode
 );
-nas_ie_tv1!(
+nas_ie_v!(
     /// PDU Session Type (TS 24.501 §9.11.4.11). Half octet.
     PduSessionType
 );
-nas_ie_tv1!(
+nas_ie_v!(
     /// Priority Indicator (TS 24.501 §9.11.3.91). Half octet.
     PriorityIndicator
 );
-nas_ie_tv1!(
+nas_ie_v!(
     /// Request Type (TS 24.501 §9.11.3.47). Half octet.
     RequestType
 );
-nas_ie_tv1!(
+nas_ie_v!(
     /// SMS Indication (TS 24.501 §9.11.3.50A). Half octet.
     SmsIndication
 );
-nas_ie_tv1!(
+nas_ie_v!(
     /// SSC Mode (TS 24.501 §9.11.4.16). Half octet.
     SscMode
 );
@@ -716,7 +716,7 @@ nas_ie_lve!(
     /// Partial NSSAI (TS 24.501 §9.11.3.103). LV-E format.
     PartialNssai
 );
-nas_ie_tv1!(
+nas_ie_v!(
     /// Payload container information (TS 24.501 §9.11.3.106). Half octet.
     PayloadContainerInformation
 );

@@ -29,66 +29,26 @@ macro_rules! nas_ie_struct {
     // Octets of which the IE type writes its own `Debug`: one that holds a key
     // prints their length alone, as `Display` does.
     ($(#[$meta:meta])* $name:ident, $doc:literal, octets, own_debug) => {
-        $(#[$meta])*
-        #[derive(Clone, PartialEq, Eq)]
-        pub struct $name {
-            #[doc = $doc]
-            pub value: crate::common::Octets,
-        }
-        impl $name {
-            /// Build the IE from its value.
-            pub fn new(value: impl Into<crate::common::Octets>) -> Self {
-                Self { value: value.into() }
-            }
-
-            /// The IE without a value yet.
-            #[allow(dead_code)]
-            pub(crate) fn blank() -> Self {
-                Self { value: Default::default() }
-            }
-        }
-        #[cfg(feature = "tree")]
-        crate::common::readable::readable!(struct $name { value });
-        #[cfg(feature = "tree")]
-        crate::common::view::ie_tree!($name, <$name>::blank());
+        crate::common::nas_ie_struct!(@struct [$(#[$meta])* #[derive(Clone, PartialEq, Eq)]]
+            $name, $doc, crate::common::Octets, octets);
     };
     ($(#[$meta:meta])* $name:ident, $doc:literal, octets) => {
-        $(#[$meta])*
-        #[derive(Debug, Clone, PartialEq, Eq)]
-        pub struct $name {
-            #[doc = $doc]
-            pub value: crate::common::Octets,
-        }
-        impl $name {
-            /// Build the IE from its value.
-            pub fn new(value: impl Into<crate::common::Octets>) -> Self {
-                Self { value: value.into() }
-            }
-
-            /// The IE without a value yet.
-            #[allow(dead_code)]
-            pub(crate) fn blank() -> Self {
-                Self { value: Default::default() }
-            }
-        }
-        #[cfg(feature = "tree")]
-        crate::common::readable::readable!(struct $name { value });
-        #[cfg(feature = "tree")]
-        crate::common::view::ie_tree!($name, <$name>::blank());
+        crate::common::nas_ie_struct!(@struct [$(#[$meta])* #[derive(Debug, Clone, PartialEq, Eq)]]
+            $name, $doc, crate::common::Octets, octets);
     };
     // A value of one or two octets: the IE is `Copy`, as its value is.
     ($(#[$meta:meta])* $name:ident, $doc:literal, $value:ty) => {
-        $(#[$meta])*
-        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+        crate::common::nas_ie_struct!(@struct [$(#[$meta])* #[derive(Debug, Clone, Copy, PartialEq, Eq)]]
+            $name, $doc, $value, $value);
+    };
+    (@struct [$($attributes:tt)*] $name:ident, $doc:literal, $value:ty, $new:tt) => {
+        $($attributes)*
         pub struct $name {
             #[doc = $doc]
             pub value: $value,
         }
         impl $name {
-            /// Build the IE from its value.
-            pub fn new(value: $value) -> Self {
-                Self { value }
-            }
+            crate::common::nas_ie_struct!(@new $new);
 
             /// The IE without a value yet.
             #[allow(dead_code)]
@@ -101,13 +61,33 @@ macro_rules! nas_ie_struct {
         #[cfg(feature = "tree")]
         crate::common::view::ie_tree!($name, <$name>::blank());
     };
+    (@new octets) => {
+        /// Build the IE from its value.
+        pub fn new(value: impl Into<crate::common::Octets>) -> Self {
+            Self { value: value.into() }
+        }
+    };
+    (@new $value:ty) => {
+        /// Build the IE from its value.
+        pub fn new(value: $value) -> Self {
+            Self { value }
+        }
+    };
 }
 
-/// An IE whose value is one octet: a type 3 IE of one octet, or the value
-/// of a type 1 IE in the bits of its octet.
+/// An IE whose value is one octet: a type 3 IE of one octet, or a type 1 IE,
+/// whose value is a half octet, bits 4 to 1 of an octet that has its IEI or
+/// another half octet in bits 8 to 5. A message puts the half octet beside
+/// its IEI, or beside the half octet that shares its octet. An IE that has a
+/// mandatory octet to itself is that octet, with the spare half octet in bits
+/// 8 to 5 of its value: this is what the type encodes and decodes alone.
 macro_rules! nas_ie_v {
     ($(#[$meta:meta])* $name:ident) => {
-        crate::common::nas_ie_struct!($(#[$meta])* $name, "Value octet.", u8);
+        crate::common::nas_ie_struct!(
+            $(#[$meta])* $name,
+            "Value octet, or the half octet of a type 1 IE in bits 4 to 1.",
+            u8
+        );
         impl Encode for $name {
             fn encode_into(&self, buffer: &mut Vec<u8>) -> Result<()> {
                 buffer.push(self.value);
@@ -188,13 +168,10 @@ macro_rules! nas_ie_lv {
             }
         }
     };
-    // An IE that writes its own `Debug`, as one that holds a key does.
-    ($(#[$meta:meta])* $name:ident, own_debug) => {
-        crate::common::nas_ie_struct!($(#[$meta])* $name, "Value octets.", octets, own_debug);
-        crate::common::nas_ie_lv!(@codec $name);
-    };
-    ($(#[$meta:meta])* $name:ident) => {
-        crate::common::nas_ie_struct!($(#[$meta])* $name, "Value octets.", octets);
+    // `own_debug`: an IE that writes its own `Debug`, as one that holds a
+    // key does.
+    ($(#[$meta:meta])* $name:ident $(, $own_debug:ident)?) => {
+        crate::common::nas_ie_struct!($(#[$meta])* $name, "Value octets.", octets $(, $own_debug)?);
         crate::common::nas_ie_lv!(@codec $name);
     };
 }
@@ -223,37 +200,11 @@ macro_rules! nas_ie_lve {
             }
         }
     };
-    // An IE that writes its own `Debug`, as one that holds a key does.
-    ($(#[$meta:meta])* $name:ident, own_debug) => {
-        crate::common::nas_ie_struct!($(#[$meta])* $name, "Value octets.", octets, own_debug);
+    // `own_debug`: an IE that writes its own `Debug`, as one that holds a
+    // key does.
+    ($(#[$meta:meta])* $name:ident $(, $own_debug:ident)?) => {
+        crate::common::nas_ie_struct!($(#[$meta])* $name, "Value octets.", octets $(, $own_debug)?);
         crate::common::nas_ie_lve!(@codec $name);
-    };
-    ($(#[$meta:meta])* $name:ident) => {
-        crate::common::nas_ie_struct!($(#[$meta])* $name, "Value octets.", octets);
-        crate::common::nas_ie_lve!(@codec $name);
-    };
-}
-
-/// An IE whose value is a half octet (type 1): bits 4 to 1 of an octet that
-/// has its IEI or another half octet in bits 8 to 5. A message puts the half
-/// octet beside its IEI, or beside the half octet that shares its octet. An
-/// IE that has a mandatory octet to itself is that octet, with the spare
-/// half octet in bits 8 to 5 of its value: this is what the type encodes
-/// and decodes alone.
-macro_rules! nas_ie_tv1 {
-    ($(#[$meta:meta])* $name:ident) => {
-        crate::common::nas_ie_struct!($(#[$meta])* $name, "Value half octet.", u8);
-        impl Encode for $name {
-            fn encode_into(&self, buffer: &mut Vec<u8>) -> Result<()> {
-                buffer.push(self.value);
-                Ok(())
-            }
-        }
-        impl Decode for $name {
-            fn decode_from(buffer: &mut &[u8]) -> Result<Self> {
-                Ok(Self { value: buffer.take(1)?[0] })
-            }
-        }
     };
 }
 
@@ -339,6 +290,5 @@ macro_rules! nas_ie_flags {
 }
 
 pub(crate) use {
-    nas_ie_flags, nas_ie_lv, nas_ie_lve, nas_ie_struct, nas_ie_tv1, nas_ie_v, nas_ie_v_fixed,
-    nas_ie_v_u16,
+    nas_ie_flags, nas_ie_lv, nas_ie_lve, nas_ie_struct, nas_ie_v, nas_ie_v_fixed, nas_ie_v_u16,
 };
