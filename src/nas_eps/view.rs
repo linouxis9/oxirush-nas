@@ -116,16 +116,19 @@ impl Viewed for Message {
     }
 
     fn blank_of(family: &str, kind: &str) -> Option<Self> {
-        use crate::common::readable::blank;
+        use crate::nas_eps::{EmmHeader, EsmHeader};
         match family {
-            "Emm" => Some(Self::Emm(
-                blank(&[family, kind])?,
-                EmmMessage::blank_named(kind)?,
-            )),
-            "Esm" => Some(Self::Esm(
-                blank(&[family, kind])?,
-                EsmMessage::blank_named(kind)?,
-            )),
+            "Emm" => {
+                let message = EmmMessage::blank_named(kind)?;
+                Some(Self::Emm(EmmHeader::new(message.message_type()), message))
+            }
+            "Esm" => {
+                let message = EsmMessage::blank_named(kind)?;
+                Some(Self::Esm(
+                    EsmHeader::new(message.message_type(), 0, 0),
+                    message,
+                ))
+            }
             _ => None,
         }
     }
@@ -309,6 +312,21 @@ impl Message {
         .and_then(sendable)
     }
 }
+
+/// The fields of the header of an EMM message, as a tree names them.
+pub(crate) const EMM_HEADER: [&str; 3] = [
+    "protocol-discriminator",
+    "security-header-type",
+    "message-type",
+];
+
+/// The fields of the header of an ESM message, as a tree names them.
+pub(crate) const ESM_HEADER: [&str; 4] = [
+    "protocol-discriminator",
+    "eps-bearer-identity",
+    "procedure-transaction-identity",
+    "message-type",
+];
 
 /// The message types of EMM, in the order of their numbers.
 fn emm_types() -> impl Iterator<Item = EmmMessageType> {
@@ -844,13 +862,18 @@ impl EmmMessageType {
     /// message, with those that are optional. A type that the crate has no
     /// message of has none.
     pub fn names(self) -> Vec<String> {
-        use crate::nas_eps::{EmmHeader, EmmMessage};
+        use crate::nas_eps::EmmMessage;
         match self {
-            Self::DetachRequest => view::names::<EmmHeader>(
+            Self::DetachRequest => view::names(
+                &EMM_HEADER,
                 &["DetachRequestUeOriginating", "DetachRequestUeTerminated"],
                 EmmMessage::fields_named,
             ),
-            _ => view::names::<EmmHeader>(&[&format!("{self:?}")], EmmMessage::fields_named),
+            _ => view::names(
+                &EMM_HEADER,
+                &[&format!("{self:?}")],
+                EmmMessage::fields_named,
+            ),
         }
     }
 }
@@ -861,7 +884,11 @@ impl EsmMessageType {
     /// message, with those that are optional. A type that the crate has no
     /// message of has none.
     pub fn names(self) -> Vec<String> {
-        view::names::<crate::nas_eps::EsmHeader>(&[&format!("{self:?}")], EsmMessage::fields_named)
+        view::names(
+            &ESM_HEADER,
+            &[&format!("{self:?}")],
+            EsmMessage::fields_named,
+        )
     }
 }
 

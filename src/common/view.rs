@@ -533,16 +533,17 @@ pub(crate) trait Viewed: Clone + PartialEq {
     }
 }
 
-/// The names that the view of a message has: the fields of its header `H`,
-/// and the IEs that `ies` gives of the message structs of the variants
-/// `kinds`. There are none when there is no such variant.
-pub(crate) fn names<H: Readable>(
+/// The names that the tree of a message has: the fields `header` of its
+/// header, and the IEs that `ies` gives of the message structs of the
+/// variants `kinds`. There are none when there is no such variant.
+pub(crate) fn names(
+    header: &[&str],
     kinds: &[&str],
     ies: fn(&str) -> Option<&'static [&'static str]>,
 ) -> Vec<String> {
     let mut names = Vec::new();
     for kind in kinds {
-        let (Some(header), Some(ies)) = (readable::fields::<H>(""), ies(kind)) else {
+        let Some(ies) = ies(kind) else {
             continue;
         };
         for name in header.iter().chain(ies) {
@@ -2098,10 +2099,6 @@ impl<E: readable::Readable, N: readable::Readable> readable::Readable for Code<E
             Err(_) => E::read(value).map(Self::Name),
         }
     }
-
-    fn blank(_: &[&str], _: usize) -> Option<Self> {
-        None
-    }
 }
 
 /// The value of a GPRS timer: its seconds, or that it is deactivated.
@@ -2136,10 +2133,6 @@ impl<T: crate::common::plmn::TaiParts> readable::Readable for TaiForm<T> {
 
     fn read(value: &Value) -> Result<Self, String> {
         crate::common::forms::tai::read(value).map(Self)
-    }
-
-    fn blank(_: &[&str], _: usize) -> Option<Self> {
-        None
     }
 }
 

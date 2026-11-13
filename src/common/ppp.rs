@@ -80,10 +80,6 @@ impl<T: crate::common::readable::Readable> crate::common::readable::Readable for
             false => Vec::<u8>::read(value).map(Self::Octets),
         }
     }
-
-    fn blank(_: &[&str], _: usize) -> Option<Self> {
-        None
-    }
 }
 
 /// The code, the identifier and the data of the packet that `octets` are:

@@ -17,7 +17,7 @@
 
 //! The forms of a member of a struct that its type alone does not give, as
 //! [`readable!`](crate::common::readable::readable) names them: each module
-//! has `shown`, `read`, `missing` and `blank` for the type of the member,
+//! has `shown`, `read` and `missing` for the type of the member,
 //! which a form may not need all of.
 #![allow(dead_code)]
 
@@ -41,10 +41,6 @@ pub(crate) mod plmn {
     pub(crate) fn missing() -> Option<Plmn> {
         None
     }
-
-    pub(crate) fn blank() -> Option<Plmn> {
-        None
-    }
 }
 
 /// An optional PLMN identity, as its text or `null`.
@@ -65,10 +61,6 @@ pub(crate) mod plmn_option {
     }
 
     pub(crate) fn missing() -> Option<Option<Plmn>> {
-        Some(None)
-    }
-
-    pub(crate) fn blank() -> Option<Option<Plmn>> {
         Some(None)
     }
 }
@@ -95,10 +87,6 @@ pub(crate) mod plmn_list {
 
     pub(crate) fn missing() -> Option<Vec<Plmn>> {
         None
-    }
-
-    pub(crate) fn blank() -> Option<Vec<Plmn>> {
-        Some(Vec::new())
     }
 }
 
@@ -130,10 +118,6 @@ pub(crate) mod tai {
     pub(crate) fn missing<T>() -> Option<T> {
         None
     }
-
-    pub(crate) fn blank<T>() -> Option<T> {
-        None
-    }
 }
 
 /// A list of tracking area identities.
@@ -158,10 +142,6 @@ pub(crate) mod tai_list {
     pub(crate) fn missing<T>() -> Option<Vec<T>> {
         None
     }
-
-    pub(crate) fn blank<T>() -> Option<Vec<T>> {
-        Some(Vec::new())
-    }
 }
 
 /// Octets in hexadecimal, also when there are none: a list of no octets
@@ -181,10 +161,6 @@ pub(crate) mod hexadecimal {
 
     pub(crate) fn missing() -> Option<Vec<u8>> {
         None
-    }
-
-    pub(crate) fn blank() -> Option<Vec<u8>> {
-        Some(Vec::new())
     }
 }
 
@@ -208,10 +184,6 @@ pub(crate) mod hexadecimal_if_any {
     pub(crate) fn missing() -> Option<Option<Vec<u8>>> {
         Some(None)
     }
-
-    pub(crate) fn blank() -> Option<Option<Vec<u8>>> {
-        Some(None)
-    }
 }
 
 /// An IE that a value holds, as the tree of a message shows it: its value
@@ -230,10 +202,6 @@ pub(crate) mod tree {
     }
 
     pub(crate) fn missing<T>() -> Option<T> {
-        None
-    }
-
-    pub(crate) fn blank<T>() -> Option<T> {
         None
     }
 }
@@ -256,10 +224,6 @@ pub(crate) mod tree_option {
     }
 
     pub(crate) fn missing<T>() -> Option<Option<T>> {
-        Some(None)
-    }
-
-    pub(crate) fn blank<T>() -> Option<Option<T>> {
         Some(None)
     }
 }
@@ -294,10 +258,6 @@ macro_rules! ie_octets {
             pub(crate) fn missing() -> Option<Vec<u8>> {
                 Some(Vec::new())
             }
-
-            pub(crate) fn blank() -> Option<Vec<u8>> {
-                Some(Vec::new())
-            }
         }
     )+};
 }
@@ -313,12 +273,11 @@ ie_octets!(
 mod tests {
     use crate::common::Plmn;
     use crate::nas_5gs::GmmCause;
-    use crate::prelude::*;
     use oxirush_utils::tree;
     use oxirush_utils::tree::Tree;
 
     /// Each form shows and reads the values of its type, and gives the value of a member
-    /// that is not written and the blank one: none, absent or empty.
+    /// that is not written.
     #[test]
     fn each_form_gives_its_values() {
         let plmn: Plmn = "208-93".parse().unwrap();
@@ -326,22 +285,16 @@ mod tests {
         assert_eq!(super::plmn_option::read(&tree!("208-93")), Ok(Some(plmn)));
         assert_eq!(super::plmn_option::read(&tree!(null)), Ok(None));
         assert_eq!(super::plmn_option::missing(), Some(None));
-        assert_eq!(super::plmn_option::blank(), Some(None));
         assert_eq!(super::plmn_list::shown(&[plmn]), tree!(["208-93"]));
         assert_eq!(super::plmn_list::read(&tree!(["208-93"])), Ok(vec![plmn]));
         assert_eq!(super::plmn_list::missing(), None);
-        assert_eq!(super::plmn_list::blank(), Some(Vec::new()));
         assert_eq!(super::tai_list::missing::<u8>(), None);
-        assert_eq!(super::tai_list::blank::<u8>(), Some(Vec::new()));
         assert_eq!(super::hexadecimal::missing(), None);
-        assert_eq!(super::hexadecimal::blank(), Some(Vec::new()));
-        assert_eq!(super::hexadecimal_if_any::blank(), Some(None));
         let cause = GmmCause::new(0x16);
         assert_eq!(super::tree::shown(&cause), cause.to_tree());
         assert_eq!(super::tree_option::shown(&Some(cause)), cause.to_tree());
         let read = super::tree_option::read::<GmmCause>(&cause.to_tree());
         assert_eq!(read, Ok(Some(cause)));
         assert_eq!(super::tree_option::missing::<GmmCause>(), Some(None));
-        assert_eq!(super::tree_option::blank::<GmmCause>(), Some(None));
     }
 }

@@ -3791,10 +3791,6 @@ impl crate::common::readable::Readable for TftPacketFilter {
             contents,
         })
     }
-
-    fn blank(_: &[&str], _: usize) -> Option<Self> {
-        Some(Self::new(0, 0, None, Vec::new()))
-    }
 }
 
 #[cfg(feature = "tree")]

@@ -229,10 +229,6 @@ impl crate::common::readable::Readable for UnknownIes {
     fn missing() -> Option<Self> {
         Some(UnknownIes::new())
     }
-
-    fn blank(_: &[&str], _: usize) -> Option<Self> {
-        Some(UnknownIes::new())
-    }
 }
 
 /// Position of an optional IE in a decoded user equipment policy message,
@@ -384,6 +380,5 @@ mod tests {
         ies.push(0x70, &[1, 2]);
         assert_eq!(from_value::<UnknownIes>(&to_value(&ies).unwrap()), Ok(ies));
         assert_eq!(UnknownIes::missing(), Some(UnknownIes::new()));
-        assert_eq!(UnknownIes::blank(&[], 0), Some(UnknownIes::new()));
     }
 }

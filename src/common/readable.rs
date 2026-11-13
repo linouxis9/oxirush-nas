@@ -123,17 +123,6 @@ pub(crate) trait Readable: Sized {
     fn missing() -> Option<Self> {
         None
     }
-
-    /// The value with nothing in it: a number is zero, octets and lists are
-    /// empty and what is optional is absent. An enum has the variant that
-    /// one of `variants` names, however it is written, or else its first.
-    fn blank(variants: &[&str], depth: usize) -> Option<Self>;
-
-    /// The names of the members of the struct, or of the struct that the
-    /// variant `variant` of the enum holds.
-    fn fields(_variant: &str) -> Option<&'static [&'static str]> {
-        None
-    }
 }
 
 /// The readable form of a typed value.
@@ -144,27 +133,6 @@ pub(crate) fn to_value<T: Readable>(value: &T) -> Result<Value, String> {
 /// The typed value of a readable form.
 pub(crate) fn from_value<T: Readable>(value: &Value) -> Result<T, String> {
     T::read(value)
-}
-
-/// The fields of the struct `T`, or of the struct in the variant `variant`
-/// of the enum `T`.
-pub(crate) fn fields<T: Readable>(variant: &str) -> Option<&'static [&'static str]> {
-    T::fields(variant)
-}
-
-/// A value of `T` with nothing in it: a number is zero, octets and lists are
-/// empty and what is optional is absent. An enum has the variant that one of
-/// `variants` names, however it is written, or else its first.
-pub(crate) fn blank<T: Readable>(variants: &[&str]) -> Option<T> {
-    T::blank(variants, 0)
-}
-
-/// How deep a blank value is made: a value nested deeper has none.
-const BLANK_DEPTH: usize = 64;
-
-/// Whether a blank value can still be made `depth` levels in.
-pub(crate) fn blank_at(depth: usize) -> Option<usize> {
-    (depth < BLANK_DEPTH).then_some(depth + 1)
 }
 
 /// What `value` is, as an error says it is not what is expected.
@@ -429,20 +397,6 @@ pub(crate) fn unit_variant(name: &str, contents: Option<&Value>) -> Result<(), S
     }
 }
 
-/// The place among `variants`, which print as `names`, of the first that
-/// one of `wanted` names, or that of the first variant.
-pub(crate) fn blank_variant(
-    variants: &'static [&'static str],
-    names: &'static [&'static str],
-    wanted: &[&str],
-) -> Option<usize> {
-    let named = (wanted
-        .iter()
-        .filter_map(|wanted| index_of(variants, names, wanted)))
-    .min();
-    named.or((!variants.is_empty()).then_some(0))
-}
-
 /// The number that a `"0x…"` string writes.
 fn hexadecimal(text: &str) -> Option<u64> {
     let digits = text
@@ -519,10 +473,6 @@ macro_rules! readable_number {
                     |number| $ty::try_from(number).ok(),
                 )
             }
-
-            fn blank(_: &[&str], _: usize) -> Option<Self> {
-                Some(0)
-            }
         }
     )+};
 }
@@ -546,10 +496,6 @@ impl Readable for u8 {
             |number| u8::try_from(number).ok(),
         )
     }
-
-    fn blank(_: &[&str], _: usize) -> Option<Self> {
-        Some(0)
-    }
 }
 
 impl Readable for usize {
@@ -565,10 +511,6 @@ impl Readable for usize {
             |number| usize::try_from(number).ok(),
         )
     }
-
-    fn blank(_: &[&str], _: usize) -> Option<Self> {
-        Some(0)
-    }
 }
 
 impl Readable for bool {
@@ -581,10 +523,6 @@ impl Readable for bool {
             .as_bool()
             .ok_or_else(|| invalid_type(value, "a boolean"))
     }
-
-    fn blank(_: &[&str], _: usize) -> Option<Self> {
-        Some(false)
-    }
 }
 
 impl Readable for String {
@@ -594,10 +532,6 @@ impl Readable for String {
 
     fn read(value: &Value) -> Result<Self, String> {
         (value.as_str().map(str::to_owned)).ok_or_else(|| invalid_type(value, "a string"))
-    }
-
-    fn blank(_: &[&str], _: usize) -> Option<Self> {
-        Some(String::new())
     }
 }
 
@@ -611,10 +545,6 @@ impl Readable for Ipv4Addr {
         text.parse()
             .map_err(|_| "invalid IPv4 address syntax".into())
     }
-
-    fn blank(_: &[&str], _: usize) -> Option<Self> {
-        None
-    }
 }
 
 impl Readable for Ipv6Addr {
@@ -627,10 +557,6 @@ impl Readable for Ipv6Addr {
         text.parse()
             .map_err(|_| "invalid IPv6 address syntax".into())
     }
-
-    fn blank(_: &[&str], _: usize) -> Option<Self> {
-        None
-    }
 }
 
 impl Readable for core::net::IpAddr {
@@ -641,10 +567,6 @@ impl Readable for core::net::IpAddr {
     fn read(value: &Value) -> Result<Self, String> {
         let text = (value.as_str()).ok_or_else(|| invalid_type(value, "IP address"))?;
         text.parse().map_err(|_| "invalid IP address syntax".into())
-    }
-
-    fn blank(_: &[&str], _: usize) -> Option<Self> {
-        None
     }
 }
 
@@ -666,10 +588,6 @@ impl<T: Readable> Readable for Option<T> {
     fn missing() -> Option<Self> {
         Some(None)
     }
-
-    fn blank(_: &[&str], _: usize) -> Option<Self> {
-        Some(None)
-    }
 }
 
 impl<T: Readable> Readable for Box<T> {
@@ -688,14 +606,6 @@ impl<T: Readable> Readable for Box<T> {
     fn missing() -> Option<Self> {
         T::missing().map(Box::new)
     }
-
-    fn blank(variants: &[&str], depth: usize) -> Option<Self> {
-        T::blank(variants, depth).map(Box::new)
-    }
-
-    fn fields(variant: &str) -> Option<&'static [&'static str]> {
-        T::fields(variant)
-    }
 }
 
 impl<T: Readable> Readable for Vec<T> {
@@ -711,10 +621,6 @@ impl<T: Readable> Readable for Vec<T> {
             (Value::Array(items), _) => items.iter().map(T::read).collect(),
             (value, _) => Err(invalid_type(value, "a sequence")),
         }
-    }
-
-    fn blank(_: &[&str], _: usize) -> Option<Self> {
-        Some(Vec::new())
     }
 }
 
@@ -733,12 +639,6 @@ impl<T: Readable, const N: usize> Readable for [T; N] {
         })?;
         Ok(read.map(|item| item.expect("each item is read")))
     }
-
-    fn blank(variants: &[&str], depth: usize) -> Option<Self> {
-        let depth = blank_at(depth)?;
-        let blank: Option<Vec<T>> = (0..N).map(|_| T::blank(variants, depth)).collect();
-        blank?.try_into().ok()
-    }
 }
 
 impl<A: Readable, B: Readable> Readable for (A, B) {
@@ -753,11 +653,6 @@ impl<A: Readable, B: Readable> Readable for (A, B) {
     fn read(value: &Value) -> Result<Self, String> {
         pair_items(value)
     }
-
-    fn blank(variants: &[&str], depth: usize) -> Option<Self> {
-        let depth = blank_at(depth)?;
-        Some((A::blank(variants, depth)?, B::blank(variants, depth)?))
-    }
 }
 
 impl Readable for crate::common::Octets {
@@ -767,10 +662,6 @@ impl Readable for crate::common::Octets {
 
     fn read(value: &Value) -> Result<Self, String> {
         Vec::<u8>::read(value).map(Self::from)
-    }
-
-    fn blank(_: &[&str], _: usize) -> Option<Self> {
-        Some(Self::default())
     }
 }
 
@@ -806,22 +697,6 @@ macro_rules! readable {
                     $($member: $crate::common::readable::readable!(@read read, $member $(as $form)? $(= $how)?),)*
                 })
             }
-
-            #[allow(unused_variables)]
-
-            fn blank(variants: &[&str], depth: usize) -> Option<Self> {
-                #[allow(unused_variables)]
-                let depth = $crate::common::readable::blank_at(depth)?;
-                Some(Self {
-                    $($member: $crate::common::readable::readable!(@blank variants, depth $(as $form)? $(= $how)?),)*
-                })
-            }
-
-            #[allow(unused_variables)]
-
-            fn fields(_: &str) -> Option<&'static [&'static str]> {
-                { const FIELDS: &[&str] = &[$($crate::common::names::name!(stringify!($member))),*]; Some(FIELDS) }
-            }
         }
     };
     // A struct of one value, which it is shown as.
@@ -843,32 +718,19 @@ macro_rules! readable {
             fn read(value: &oxirush_utils::tree::Value) -> core::result::Result<Self, alloc::string::String> {
                 Ok(Self($crate::common::readable::readable!(@value value, $ty $(as $form)?)))
             }
-
-            #[allow(unused_variables)]
-
-            fn blank(variants: &[&str], depth: usize) -> Option<Self> {
-                Some(Self($crate::common::readable::readable!(@blank variants, depth $(as $form)?)))
-            }
-
-            #[allow(unused_variables)]
-
-            fn fields(variant: &str) -> Option<&'static [&'static str]> {
-                $crate::common::readable::readable!(@fields variant, $ty $(as $form)?)
-            }
         }
     };
     // An enum.
     (enum $name:ident { $($variants:tt)* }) => {
-        $crate::common::readable::readable!(@enum $name (contents, variants, depth, variant, held)
-            [] [] [] [] [] $($variants)*);
+        $crate::common::readable::readable!(@enum $name (contents, held)
+            [] [] [] $($variants)*);
     };
 
     // The $variants of an enum, one at a time: what shows each, what reads
-    // it by its place, what makes a blank of it, the names of the $variants,
-    // and the fields of the struct that a variant holds.
-    (@enum $name:ident ($contents:ident, $variants:ident, $depth:ident, $variant_name:ident, $held:ident) [$($show:tt)*] [$($read:tt)*] [$($blank:tt)*] [$($names:tt)*] [$($fields:tt)*]
+    // it by its place, and the names of the $variants.
+    (@enum $name:ident ($contents:ident, $held:ident) [$($show:tt)*] [$($read:tt)*] [$($names:tt)*]
         $variant:ident = $rename:literal { $($member:ident $(as $form:ident)?),* $(,)? } $(, $($rest:tt)*)?) => {
-        $crate::common::readable::readable!(@enum $name ($contents, $variants, $depth, $variant_name, $held)
+        $crate::common::readable::readable!(@enum $name ($contents, $held)
             [$($show)* Self::$variant { $($member),* } => {
                 let mut members = $crate::common::readable::Members::new();
                 $($crate::common::readable::readable!(@put members, *$member, $member $(as $form)?);)*
@@ -885,20 +747,12 @@ macro_rules! readable {
                     $($member: $crate::common::readable::readable!(@read read, $member $(as $form)?),)*
                 })
             }]
-            [$($blank)* $rename => {
-                #[allow(unused_variables)]
-                let $depth = $crate::common::readable::blank_at($depth)?;
-                Some(Self::$variant {
-                    $($member: $crate::common::readable::readable!(@blank $variants, $depth $(as $form)?),)*
-                })
-            }]
             [$($names)* ($rename)]
-            [$($fields)* $rename => { const FIELDS: &[&str] = &[$($crate::common::names::name!(stringify!($member))),*]; Some(FIELDS) },]
             $($($rest)*)?);
     };
-    (@enum $name:ident ($contents:ident, $variants:ident, $depth:ident, $variant_name:ident, $held:ident) [$($show:tt)*] [$($read:tt)*] [$($blank:tt)*] [$($names:tt)*] [$($fields:tt)*]
+    (@enum $name:ident ($contents:ident, $held:ident) [$($show:tt)*] [$($read:tt)*] [$($names:tt)*]
         $variant:ident { $($member:ident $(as $form:ident)?),* $(,)? } $(, $($rest:tt)*)?) => {
-        $crate::common::readable::readable!(@enum $name ($contents, $variants, $depth, $variant_name, $held)
+        $crate::common::readable::readable!(@enum $name ($contents, $held)
             [$($show)* Self::$variant { $($member),* } => {
                 let mut members = $crate::common::readable::Members::new();
                 $($crate::common::readable::readable!(@put members, *$member, $member $(as $form)?);)*
@@ -915,20 +769,12 @@ macro_rules! readable {
                     $($member: $crate::common::readable::readable!(@read read, $member $(as $form)?),)*
                 })
             }]
-            [$($blank)* stringify!($variant) => {
-                #[allow(unused_variables)]
-                let $depth = $crate::common::readable::blank_at($depth)?;
-                Some(Self::$variant {
-                    $($member: $crate::common::readable::readable!(@blank $variants, $depth $(as $form)?),)*
-                })
-            }]
             [$($names)* (stringify!($variant))]
-            [$($fields)* stringify!($variant) => { const FIELDS: &[&str] = &[$($crate::common::names::name!(stringify!($member))),*]; Some(FIELDS) },]
             $($($rest)*)?);
     };
-    (@enum $name:ident ($contents:ident, $variants:ident, $depth:ident, $variant_name:ident, $held:ident) [$($show:tt)*] [$($read:tt)*] [$($blank:tt)*] [$($names:tt)*] [$($fields:tt)*]
+    (@enum $name:ident ($contents:ident, $held:ident) [$($show:tt)*] [$($read:tt)*] [$($names:tt)*]
         $variant:ident ($ty:ty $(as $form:ident)? $(,)?) $(, $($rest:tt)*)?) => {
-        $crate::common::readable::readable!(@enum $name ($contents, $variants, $depth, $variant_name, $held)
+        $crate::common::readable::readable!(@enum $name ($contents, $held)
             [$($show)* Self::$variant(value) => $crate::common::readable::tagged(
                 $crate::common::names::name!(stringify!($variant)),
                 $crate::common::readable::readable!(
@@ -940,17 +786,12 @@ macro_rules! readable {
                 let $contents = $contents.unwrap_or(&oxirush_utils::tree::Value::Null);
                 Ok(Self::$variant($crate::common::readable::readable!(@value $contents, $ty $(as $form)?)))
             }]
-            [$($blank)* stringify!($variant) => {
-                let $depth = $crate::common::readable::blank_at($depth)?;
-                Some(Self::$variant($crate::common::readable::readable!(@blank $variants, $depth $(as $form)?)))
-            }]
             [$($names)* (stringify!($variant))]
-            [$($fields)* stringify!($variant) => $crate::common::readable::readable!(@fields $variant_name, $ty $(as $form)?),]
             $($($rest)*)?);
     };
-    (@enum $name:ident ($contents:ident, $variants:ident, $depth:ident, $variant_name:ident, $held:ident) [$($show:tt)*] [$($read:tt)*] [$($blank:tt)*] [$($names:tt)*] [$($fields:tt)*]
+    (@enum $name:ident ($contents:ident, $held:ident) [$($show:tt)*] [$($read:tt)*] [$($names:tt)*]
         $variant:ident ($first:ty, $second:ty $(,)?) $(, $($rest:tt)*)?) => {
-        $crate::common::readable::readable!(@enum $name ($contents, $variants, $depth, $variant_name, $held)
+        $crate::common::readable::readable!(@enum $name ($contents, $held)
             [$($show)* Self::$variant(first, second) => $crate::common::readable::tagged(
                 $crate::common::names::name!(stringify!($variant)),
                 $crate::common::readable::pair(
@@ -965,20 +806,12 @@ macro_rules! readable {
                     $crate::common::readable::pair_items($contents)?;
                 Ok(Self::$variant(first, second))
             }]
-            [$($blank)* stringify!($variant) => {
-                let $depth = $crate::common::readable::blank_at($depth)?;
-                Some(Self::$variant(
-                    <$first as $crate::common::readable::Readable>::blank($variants, $depth)?,
-                    <$second as $crate::common::readable::Readable>::blank($variants, $depth)?,
-                ))
-            }]
             [$($names)* (stringify!($variant))]
-            [$($fields)*]
             $($($rest)*)?);
     };
-    (@enum $name:ident ($contents:ident, $variants:ident, $depth:ident, $variant_name:ident, $held:ident) [$($show:tt)*] [$($read:tt)*] [$($blank:tt)*] [$($names:tt)*] [$($fields:tt)*]
+    (@enum $name:ident ($contents:ident, $held:ident) [$($show:tt)*] [$($read:tt)*] [$($names:tt)*]
         $variant:ident $(, $($rest:tt)*)?) => {
-        $crate::common::readable::readable!(@enum $name ($contents, $variants, $depth, $variant_name, $held)
+        $crate::common::readable::readable!(@enum $name ($contents, $held)
             [$($show)* Self::$variant => oxirush_utils::tree::Value::from(
                 $crate::common::names::name!(stringify!($variant)),
             ),]
@@ -986,12 +819,10 @@ macro_rules! readable {
                 $crate::common::readable::unit_variant($crate::common::names::name!(stringify!($variant)), $contents)?;
                 Ok(Self::$variant)
             }]
-            [$($blank)* stringify!($variant) => Some(Self::$variant),]
             [$($names)* (stringify!($variant))]
-            [$($fields)*]
             $($($rest)*)?);
     };
-    (@enum $name:ident ($contents:ident, $variants:ident, $depth:ident, $variant_name:ident, $held:ident) [$($show:tt)*] [$($read:tt)*] [$($blank:tt)*] [$(($names:expr))*] [$($fields:tt)*]) => {
+    (@enum $name:ident ($contents:ident, $held:ident) [$($show:tt)*] [$($read:tt)*] [$(($names:expr))*]) => {
         impl $crate::common::readable::Readable for $name {
             #[allow(unused_variables)]
             fn shown(&self, $held: &'static str) -> oxirush_utils::tree::Value {
@@ -1011,35 +842,10 @@ macro_rules! readable {
                     _ => unreachable!(),
                 }
             }
-
-            #[allow(unused_variables)]
-            fn blank($variants: &[&str], $depth: usize) -> Option<Self> {
-                const VARIANTS: &[&str] = &[$($names),*];
-                const NAMES: &[&str] = &[$($crate::common::names::name!($names)),*];
-                let at = $crate::common::readable::blank_variant(VARIANTS, NAMES, $variants)?;
-                #[allow(unused_variables)]
-                match VARIANTS[at] {
-                    $($blank)*
-                    _ => None,
-                }
-            }
-
-            #[allow(unused_variables)]
-
-            fn fields($variant_name: &str) -> Option<&'static [&'static str]> {
-                const VARIANTS: &[&str] = &[$($names),*];
-                const NAMES: &[&str] = &[$($crate::common::names::name!($names)),*];
-                let at = $crate::common::readable::index_of(VARIANTS, NAMES, $variant_name)?;
-                #[allow(unused_variables)]
-                match VARIANTS[at] {
-                    $($fields)*
-                    _ => None,
-                }
-            }
         }
     };
 
-    // A member of a struct: shown, read and made blank, by its form.
+    // A member of a struct: shown and read, by its form.
     (@put $members:ident, $value:expr, $member:ident) => {
         $members.put($crate::common::names::name!(stringify!($member)), &$value)
     };
@@ -1072,18 +878,6 @@ macro_rules! readable {
         let _ = $read.next();
         Default::default()
     }};
-    (@blank $variants:ident, $depth:ident) => {
-        $crate::common::readable::Readable::blank($variants, $depth)?
-    };
-    (@blank $variants:ident, $depth:ident as $form:ident) => {
-        $crate::common::forms::$form::blank()?
-    };
-    (@blank $variants:ident, $depth:ident = default) => {
-        Default::default()
-    };
-    (@blank $variants:ident, $depth:ident = skip) => {
-        Default::default()
-    };
     // The value of a struct of one value, or of a variant.
     (@show $held:expr, [] $value:expr) => {
         $crate::common::readable::Readable::shown(&$value, $held)
@@ -1102,12 +896,6 @@ macro_rules! readable {
     };
     (@value $value:ident, $ty:ty as $form:ident) => {
         $crate::common::forms::$form::read($value)?
-    };
-    (@fields $variant:ident, $ty:ty) => {
-        <$ty as $crate::common::readable::Readable>::fields($variant)
-    };
-    (@fields $variant:ident, $ty:ty as $form:ident) => {
-        None
     };
 }
 
@@ -1410,22 +1198,10 @@ mod tests {
         assert_eq!(pair_items::<u8, u8>(&tree!([1, 2])), Ok((1, 2)));
     }
 
-    /// A blank value is made to 64 levels in, of each kind: zero, empty, false or
-    /// absent.
+    /// A member that may be left out is absent when it is.
     #[test]
-    fn a_blank_value_is_made_to_64_levels() {
-        assert_eq!(blank_at(0), Some(1));
-        assert_eq!(blank_at(2), Some(3));
-        assert_eq!(blank_at(63), Some(64));
-        assert_eq!(blank_at(64), None);
-        assert_eq!(blank::<usize>(&[]), Some(0));
-        assert_eq!(blank::<bool>(&[]), Some(false));
-        assert_eq!(blank::<String>(&[]), Some(String::new()));
-        assert_eq!(blank::<Vec<u8>>(&[]), Some(Vec::new()));
-        assert_eq!(blank::<[u8; 2]>(&[]), Some([0, 0]));
-        assert_eq!(blank::<(u8, bool)>(&[]), Some((0, false)));
+    fn a_member_that_may_be_left_out_is_absent() {
         assert_eq!(<Box<Option<u8>>>::missing(), Some(Box::new(None)));
-        assert_eq!(fields::<u8>(""), None);
     }
 
     /// A struct written as a list has one item for each of its members.

@@ -143,16 +143,19 @@ impl Viewed for Message {
     }
 
     fn blank_of(family: &str, kind: &str) -> Option<Self> {
-        use crate::common::readable::blank;
+        use crate::nas_5gs::{GmmHeader, GsmHeader};
         match family {
-            "Gmm" => Some(Self::Gmm(
-                blank(&[family, kind])?,
-                GmmMessage::blank_named(kind)?,
-            )),
-            "Gsm" => Some(Self::Gsm(
-                blank(&[family, kind])?,
-                GsmMessage::blank_named(kind)?,
-            )),
+            "Gmm" => {
+                let message = GmmMessage::blank_named(kind)?;
+                Some(Self::Gmm(GmmHeader::new(message.message_type()), message))
+            }
+            "Gsm" => {
+                let message = GsmMessage::blank_named(kind)?;
+                Some(Self::Gsm(
+                    GsmHeader::new(message.message_type(), 0, 0),
+                    message,
+                ))
+            }
             _ => None,
         }
     }
@@ -333,6 +336,22 @@ fn sendable(message: Message) -> Result<Message> {
         None => message.encode().map(|_| message),
     }
 }
+
+/// The fields of the header of a 5GMM message, as a tree names them.
+pub(crate) const GMM_HEADER: [&str; 4] = [
+    "extended-protocol-discriminator",
+    "security-header-type",
+    "spare-half-octet",
+    "message-type",
+];
+
+/// The fields of the header of a 5GSM message, as a tree names them.
+pub(crate) const GSM_HEADER: [&str; 4] = [
+    "extended-protocol-discriminator",
+    "pdu-session-identity",
+    "procedure-transaction-identity",
+    "message-type",
+];
 
 /// The message types of 5GMM, in the order of their numbers.
 fn gmm_types() -> impl Iterator<Item = GmmMessageType> {
@@ -607,7 +626,11 @@ impl GmmMessageType {
     /// message, with those that are optional. A type that the crate has no
     /// message of has none.
     pub fn names(self) -> Vec<String> {
-        view::names::<crate::nas_5gs::GmmHeader>(&[&format!("{self:?}")], GmmMessage::fields_named)
+        view::names(
+            &GMM_HEADER,
+            &[&format!("{self:?}")],
+            GmmMessage::fields_named,
+        )
     }
 }
 
@@ -617,7 +640,11 @@ impl GsmMessageType {
     /// message, with those that are optional. A type that the crate has no
     /// message of has none.
     pub fn names(self) -> Vec<String> {
-        view::names::<crate::nas_5gs::GsmHeader>(&[&format!("{self:?}")], GsmMessage::fields_named)
+        view::names(
+            &GSM_HEADER,
+            &[&format!("{self:?}")],
+            GsmMessage::fields_named,
+        )
     }
 }
 
