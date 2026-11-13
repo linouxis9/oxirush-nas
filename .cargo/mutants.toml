@@ -253,9 +253,6 @@ exclude_re = [
     'src/common/unknown_ie\.rs:\d+:9: replace IeOrder::is_empty -> bool with false$',
     # Keeping as many octets as there are changes nothing, as resizing to the same length.
     'src/common/octets\.rs:\d+:19: replace < with <= in Octets::truncate$',
-    # Each reader of a packet of the protocol configuration options reads only what its
-    # writer gives back, so the octets of what it read are always those it was given.
-    'src/common/ppp\.rs:\d+:29: replace match guard packet\.octets\(\)\.as_deref\(\) == Ok\(octets\) with true in Packet<T>::of$',
     # The views: a number in a view is that of an IE of one or two octets, the size that
     # a value of octets has, of 0 as of none, never reaches either; the defaults of
     # header_name and refused_header are those of no message, both systems having their

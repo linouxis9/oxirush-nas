@@ -19,7 +19,6 @@
 //! the specification gives it, with its value as the typed accessors decode
 //! it where that value writes the IE back, or its `octets` in hexadecimal.
 
-use crate::common::ppp::{Chap, Ipcp, Lcp, Packet, Pap};
 use crate::common::readable::{self, letters, same_name};
 use crate::common::ts24008::{Pco, PcoDirection, PcoEntry};
 use crate::common::{Plmn, ValueError, within};
@@ -616,20 +615,12 @@ pub(crate) struct ExtendedEmergencyNumbers {
 crate::common::readable::readable!(struct ExtendedEmergencyNumbers { valid_only_in_plmn, numbers });
 
 /// A unit of the protocol configuration options (TS 24.008 §10.5.6.3): a
-/// configuration protocol with its packet, or a container of the additional
-/// parameters list by the name that Table 10.5.154 gives its identifier in
-/// the direction of the message. A container that has no name here is its
-/// identifier and its octets.
+/// container of the additional parameters list by the name that Table
+/// 10.5.154 gives its identifier in the direction of the message. A
+/// container that has no name here, and the packet of a configuration
+/// protocol, is its identifier and its octets.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum ConfigurationUnit {
-    /// Link control protocol (C021H): its packet.
-    Lcp(Packet<Lcp>),
-    /// Password authentication protocol (C023H): its packet.
-    Pap(Packet<Pap>),
-    /// Challenge handshake authentication protocol (C223H): its packet.
-    Chap(Packet<Chap>),
-    /// Internet protocol control protocol (8021H): its packet.
-    Ipcp(Packet<Ipcp>),
     // What the MS asks for or says of itself: no contents.
     PCscfIpv6AddressRequest,
     ImCnSubsystemSignallingFlag,
@@ -678,7 +669,7 @@ pub(crate) enum ConfigurationUnit {
 }
 
 #[cfg(feature = "tree")]
-crate::common::readable::readable!(enum ConfigurationUnit { Lcp(Packet<Lcp>), Pap(Packet<Pap>), Chap(Packet<Chap>), Ipcp(Packet<Ipcp>), PCscfIpv6AddressRequest, ImCnSubsystemSignallingFlag, DnsServerIpv6AddressRequest, MsSupportOfNetworkRequestedBearerControl, IpAddressAllocationViaNasSignalling, Ipv4AddressAllocationViaDhcpv4, PCscfIpv4AddressRequest, DnsServerIpv4AddressRequest, MsisdnRequest, Ipv4LinkMtuRequest, MsSupportOfLocalAddressInTft, PCscfReselectionSupport, NonIpLinkMtuRequest, PCscfIpv6Address(Ipv6Addr), DnsServerIpv6Address(Ipv6Addr), SelectedBearerControlMode(BearerControlMode), PCscfIpv4Address(Ipv4Addr), DnsServerIpv4Address(Ipv4Addr), Ipv4LinkMtu(u16), NetworkSupportOfLocalAddressInTft, NonIpLinkMtu(u16), PduSessionId(u8), FgsmCause(GsmCauseValue), SNssai { sst, sd, mapped_sst, mapped_sd, plmn }, QosRules(Vec<QosRule>), SessionAmbr(SessionAmbrValue), QosFlowDescriptions(Vec<QosFlowDescription>), Container { identifier, contents } });
+crate::common::readable::readable!(enum ConfigurationUnit { PCscfIpv6AddressRequest, ImCnSubsystemSignallingFlag, DnsServerIpv6AddressRequest, MsSupportOfNetworkRequestedBearerControl, IpAddressAllocationViaNasSignalling, Ipv4AddressAllocationViaDhcpv4, PCscfIpv4AddressRequest, DnsServerIpv4AddressRequest, MsisdnRequest, Ipv4LinkMtuRequest, MsSupportOfLocalAddressInTft, PCscfReselectionSupport, NonIpLinkMtuRequest, PCscfIpv6Address(Ipv6Addr), DnsServerIpv6Address(Ipv6Addr), SelectedBearerControlMode(BearerControlMode), PCscfIpv4Address(Ipv4Addr), DnsServerIpv4Address(Ipv4Addr), Ipv4LinkMtu(u16), NetworkSupportOfLocalAddressInTft, NonIpLinkMtu(u16), PduSessionId(u8), FgsmCause(GsmCauseValue), SNssai { sst, sd, mapped_sst, mapped_sd, plmn }, QosRules(Vec<QosRule>), SessionAmbr(SessionAmbrValue), QosFlowDescriptions(Vec<QosFlowDescription>), Container { identifier, contents } });
 
 /// The selected bearer control mode (TS 24.008 Table 10.5.154).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -704,10 +695,6 @@ impl ConfigurationUnit {
         let ipv4 = || <[u8; 4]>::try_from(contents).ok().map(Ipv4Addr::from);
         let number = || <[u8; 2]>::try_from(contents).ok().map(u16::from_be_bytes);
         let unit = match (direction, entry.identifier, contents) {
-            (_, 0xc021, _) => Some(Self::Lcp(Packet::of(contents))),
-            (_, 0xc023, _) => Some(Self::Pap(Packet::of(contents))),
-            (_, 0xc223, _) => Some(Self::Chap(Packet::of(contents))),
-            (_, 0x8021, _) => Some(Self::Ipcp(Packet::of(contents))),
             (_, 0x0002, []) => Some(Self::ImCnSubsystemSignallingFlag),
             (Uplink, 0x0001, []) => Some(Self::PCscfIpv6AddressRequest),
             (Uplink, 0x0003, []) => Some(Self::DnsServerIpv6AddressRequest),
@@ -778,22 +765,14 @@ impl ConfigurationUnit {
         }
     }
 
-    /// The protocol or container that the unit is in a message sent in
-    /// `direction`, or why it is none: a unit of the other direction, or a
-    /// packet that its protocol does not have.
+    /// The container that the unit is in a message sent in `direction`, or
+    /// why it is none: a unit of the other direction.
     fn entry(&self, direction: PcoDirection) -> Result<PcoEntry, String> {
         use PcoDirection::{Downlink, Uplink};
-        let packet = |octets: Result<Vec<u8>, String>| {
-            octets.map_err(|error| format!("`{}`: {error}", self.name()))
-        };
         let value = |octets: Result<Vec<u8>, ValueError>| {
             octets.map_err(|error| format!("`{}`: {}", self.name(), refused(error)))
         };
         let (sent, identifier, contents) = match self {
-            Self::Lcp(written) => (None, 0xc021, packet(written.octets())?),
-            Self::Pap(written) => (None, 0xc023, packet(written.octets())?),
-            Self::Chap(written) => (None, 0xc223, packet(written.octets())?),
-            Self::Ipcp(written) => (None, 0x8021, packet(written.octets())?),
             Self::ImCnSubsystemSignallingFlag => (None, 0x0002, Vec::new()),
             Self::PCscfIpv6AddressRequest => (Some(Uplink), 0x0001, Vec::new()),
             Self::DnsServerIpv6AddressRequest => (Some(Uplink), 0x0003, Vec::new()),
@@ -966,8 +945,7 @@ fn towards(direction: PcoDirection) -> &'static str {
 /// visited. Options that are not in a message whose type says who sends
 /// it, and octets that the units do not give back, have no value. Units
 /// that are written and that the options cannot have are refused with the
-/// reason: the direction of a unit, the members of a packet, the contents
-/// of a container.
+/// reason: the direction of a unit, the contents of a container.
 macro_rules! configuration_options_ie {
     ($($ie:ty),+ $(,)?) => {$(
         impl $crate::common::view::Decoded for $ie {

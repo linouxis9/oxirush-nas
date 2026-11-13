@@ -187,16 +187,15 @@
 //! ## The protocol configuration options
 //!
 //! The value is the list of units. A unit is named by what it is in the
-//! message that has it: a request from a UE, an answer from the network. PAP,
-//! CHAP, IPCP and LCP packets have the
-//! [names of their protocol](#units-of-the-protocol-configuration-options).
+//! message that has it: a request from a UE, an answer from the network
+//! ([the names](#units-of-the-protocol-configuration-options)).
 //!
 //! ```rust
 //! use oxirush_nas::nas_eps::Message;
 //! use oxirush_nas::tree;
 //!
-//! // PDN CONNECTIVITY REQUEST with the credentials of PAP and a request for
-//! // the address of a DNS server
+//! // PDN CONNECTIVITY REQUEST with a request for the address of a DNS
+//! // server, and the packet of PAP with its credentials in a container
 //! let request = Message::from_tree(tree!({
 //!     "message-type": "pdn-connectivity-request",
 //!     "eps-bearer-identity": 0,
@@ -204,12 +203,7 @@
 //!     "pdn-type": "ipv4",
 //!     "request-type": "initial",
 //!     "protocol-configuration-options": [
-//!         {"pap": {
-//!             "code": "authenticate-request",
-//!             "identifier": 1,
-//!             "peer-id": "user",
-//!             "password": "secret",
-//!         }},
+//!         {"container": {"identifier": 0xc023, "contents": "01010010047573657206736563726574"}},
 //!         "dns-server-ipv4-address-request",
 //!     ],
 //! }))
@@ -230,10 +224,9 @@
 //! ```text
 //! [
 //!   {
-//!     "pap": {
-//!       "code": "authenticate-ack",
-//!       "identifier": 1,
-//!       "message": ""
+//!     "container": {
+//!       "identifier": 49187,
+//!       "contents": "0201000500"
 //!     }
 //!   },
 //!   {
@@ -470,7 +463,6 @@
 //!
 //! | Identifier | In a message of the UE | In a message of the network |
 //! |------------|------------------------|-----------------------------|
-//! | C021H, C023H, C223H, 8021H | `{"lcp": …}`, `{"pap": …}`, `{"chap": …}`, `{"ipcp": …}`: the [packet](#packets-of-the-configuration-protocols) of the configuration protocol | the same |
 //! | 0001H | `"p-cscf-ipv6-address-request"` | `{"p-cscf-ipv6-address": "2001:db8::1"}` |
 //! | 0002H | `"im-cn-subsystem-signalling-flag"` | the same |
 //! | 0003H | `"dns-server-ipv6-address-request"` | `{"dns-server-ipv6-address": "2001:db8::53"}` |
@@ -490,7 +482,7 @@
 //! | 001DH | | `{"session-ambr": {"dl-kbps": 100000, "ul-kbps": 50000}}` |
 //! | 001FH | | `{"qos-flow-descriptions": […]}`: the value of the QoS flow descriptions IE |
 //! | 0022H | `{"5gsm-cause": "insufficient-resources"}` | |
-//! | any other | `{"container": {"identifier": 65280, "contents": "01"}}`: the number of the identifier and the contents in hexadecimal | the same |
+//! | any other, and the packets of LCP (C021H), PAP (C023H), CHAP (C223H) and IPCP (8021H) | `{"container": {"identifier": 65280, "contents": "01"}}`: the number of the identifier and the contents in hexadecimal | the same |
 //!
 //! Where a cell is empty, the identifier has no name in that direction. It
 //! is a `container` if the specification has it there, as the MSISDN that
@@ -509,31 +501,6 @@
 //! protocol other than PPP, and not with a unit that the specification
 //! lets a receiver ignore (an address of another length). Those have their
 //! `octets`, which are written as they are.
-//!
-//! ## Packets of the configuration protocols
-//!
-//! The contents of a unit of LCP, PAP, CHAP or IPCP are a packet of that
-//! protocol (RFC 1661 §5): its `code`, its `identifier`, and its options or
-//! its fields. The length of a packet, of an option and of a field is that
-//! of what is written.
-//!
-//! | Protocol | `code` | Other members |
-//! |----------|--------|---------------|
-//! | `lcp` (RFC 1661) | `"configure-request"`, `"configure-ack"`, `"configure-nak"`, `"configure-reject"` | `options`, a list of `{"maximum-receive-unit": 1500}`, `{"authentication-protocol": "pap"}` or `"chap-md5"`, `{"magic-number": 305419896}`, `"protocol-field-compression"`, `"address-and-control-field-compression"` |
-//! | `ipcp` (RFC 1332, RFC 1877) | the same four | `options`, a list of `{"ip-address": "10.0.0.1"}`, `{"primary-dns-server-address": "8.8.8.8"}`, `{"secondary-dns-server-address": "8.8.4.4"}`, `{"primary-nbns-server-address": …}`, `{"secondary-nbns-server-address": …}` |
-//! | `pap` (RFC 1334) | `"authenticate-request"`; `"authenticate-ack"`, `"authenticate-nak"` | a request has the texts `peer-id` and `password`; an answer has the text `message`, or none |
-//! | `chap` (RFC 1994) | `"challenge"`, `"response"`; `"success"`, `"failure"` | the first two have `value` in hexadecimal and the text `name`; the last two have the text `message` |
-//!
-//! A member that the code of a packet does not have is `null`, and may be
-//! left out of what is written. An option that has no name here, or whose
-//! data is not that of its name, is its type and its data:
-//! `{"option": {"type": 2, "data": "002d"}}`.
-//!
-//! A packet has these names where they write its octets back. One with
-//! another code (a Terminate-Request of LCP), with a length that is not
-//! that of its unit, or with a peer-id, a password, a name or a message
-//! that is no text, is its octets in hexadecimal: `{"ipcp": "05000004"}`.
-//! A packet that has names is written by them, and so is an option.
 //!
 //! [`to_tree()`]: crate::nas_5gs::Message::to_tree
 //! [`means_the_same()`]: crate::nas_5gs::Message::means_the_same

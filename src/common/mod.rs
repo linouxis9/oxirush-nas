@@ -32,8 +32,6 @@ pub(crate) mod names;
 mod octets;
 mod plmn;
 #[cfg(feature = "tree")]
-mod ppp;
-#[cfg(feature = "tree")]
 pub(crate) mod readable;
 #[cfg(feature = "security")]
 mod security;

@@ -28,6 +28,12 @@ All notable changes to `oxirush-nas` are recorded here.
   without `Upds`: `EventNotificationContainer`, `EventNotificationIndicator`,
   `EventNotificationIndicatorType`, `MultiplePayloadContainer` and
   `MultiplePayloadEntry`. The fuzz target `upds` goes with them.
+- The packets of the configuration protocols in the protocol configuration
+  options: a unit of LCP, PAP, CHAP or IPCP (C021H, C023H, C223H, 8021H) is
+  a `container` of its identifier and its octets in a tree, as any unit
+  without a name: `{"container": {"identifier": 49187, "contents": "0101"}}`
+  where a tree had `{"pap": "0101"}`. A tree that names `lcp`, `pap`, `chap`
+  or `ipcp` is refused.
 
 ### Fixed
 
