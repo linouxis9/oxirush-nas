@@ -20,7 +20,7 @@
 //! `octets` in hexadecimal.
 
 use crate::common::ppp::{Chap, Ipcp, Lcp, Packet, Pap};
-use crate::common::readable::{self, letters, letters_into, printed, same_name};
+use crate::common::readable::{self, letters, printed, same_name};
 use crate::common::ts24008::{Pco, PcoDirection, PcoEntry};
 use crate::common::{Plmn, ValueError, within};
 use crate::nas_5gs::{
@@ -28,7 +28,6 @@ use crate::nas_5gs::{
     SNssaiContents, SessionAmbr, SessionAmbrValue,
 };
 use crate::prelude::*;
-use alloc::collections::BTreeMap;
 use core::net::{Ipv4Addr, Ipv6Addr};
 use oxirush_utils::tree::{self, ErrorKind, Map, Value};
 use readable::Readable;
@@ -1634,20 +1633,67 @@ pub(crate) fn ie_octets(view: &Value, path: &str) -> Result<Option<Vec<u8>>, tre
     Ok(None)
 }
 
+/// The entries of a view by the letters of their names ([`letters`]), which
+/// are those of a name however it is written, in their order: an entry is
+/// found by a name without the letters of the name written out.
+struct Entries(Vec<(Vec<u8>, String, Value)>);
+
+impl Entries {
+    /// The entries of `view`; an error names the first entry that a later
+    /// one names again.
+    fn of(view: Map) -> Result<Self, String> {
+        let mut entries: Vec<_> = (view.into_iter().enumerate())
+            .map(|(at, (name, entry))| (letters(&name).into_bytes(), at, name, entry))
+            .collect();
+        entries.sort_by(|one, other| (&one.0, one.1).cmp(&(&other.0, other.1)));
+        let twice = (entries.windows(2))
+            .filter(|pair| pair[0].0 == pair[1].0)
+            .min_by_key(|pair| pair[1].1);
+        if let Some(pair) = twice {
+            return Err(format!("`{}` is named twice", pair[0].2));
+        }
+        let entries = entries.into_iter();
+        Ok(Self(
+            entries
+                .map(|(key, _, name, entry)| (key, name, entry))
+                .collect(),
+        ))
+    }
+
+    /// The place of the entry that `name` names.
+    fn find(&self, name: &str) -> Option<usize> {
+        let letters = || {
+            (name.bytes().filter(u8::is_ascii_alphanumeric)).map(|octet| octet.to_ascii_lowercase())
+        };
+        (self
+            .0
+            .binary_search_by(|(key, ..)| key.iter().copied().cmp(letters())))
+        .ok()
+    }
+
+    /// The entry that `name` names.
+    fn get(&self, name: &str) -> Option<&Value> {
+        self.find(name).map(|at| &self.0[at].2)
+    }
+
+    /// The entry that `name` names, taken out.
+    fn remove(&mut self, name: &str) -> Option<Value> {
+        self.find(name).map(|at| self.0.remove(at).2)
+    }
+
+    /// The name of the first entry left, in the order of the letters.
+    fn first(self) -> Option<String> {
+        self.0.into_iter().next().map(|(_, name, _)| name)
+    }
+}
+
 /// The message that `view` describes: `original` as the view edits it, or
 /// with `alone` a message that has nothing but what the view writes.
 fn written<M: Viewed>(original: &M, view: Value, alone: bool, scope: Scope) -> Result<M, String> {
     let Value::Object(view) = view else {
         return Err(format!("{view} is not a view: an object of IEs by name"));
     };
-    // The entries by the letters of their names, which are those of a name
-    // however it is written.
-    let mut entries = BTreeMap::new();
-    for (name, entry) in view {
-        if let Some((name, _)) = entries.insert(letters(&name).into_bytes(), (name, entry)) {
-            return Err(format!("`{name}` is named twice"));
-        }
-    }
+    let mut entries = Entries::of(view)?;
     // The message is edited in place: each field that the view writes is
     // checked first, and then written, in the order of the fields of the
     // message, header first.
@@ -1657,8 +1703,7 @@ fn written<M: Viewed>(original: &M, view: Value, alone: bool, scope: Scope) -> R
     // a header is, and a message that is ciphered by its octets.
     let mut protection = None;
     if let Some((_, ciphered)) = original.protection() {
-        let mut taken =
-            |name: &str| (entries.remove(letters(name).as_bytes())).map(|(_, entry)| entry);
+        let mut taken = |name: &str| entries.remove(name);
         let header = match taken(SECURITY_HEADER).map(entry) {
             Some(Ok([Some(written), None])) => written,
             Some(Err(error)) => return Err(format!("{SECURITY_HEADER}: {error}")),
@@ -1690,26 +1735,19 @@ fn written<M: Viewed>(original: &M, view: Value, alone: bool, scope: Scope) -> R
     let mut absent = Vec::new();
     original.absent(&mut |name, _| absent.push(name));
     let mut added = Vec::new();
-    // The letters of a name, in one buffer for all of them.
-    let mut key = Vec::new();
     for name in absent {
-        letters_into(name, &mut key);
-        let Some((_, entry)) = entries.get(&key) else {
+        let Some(entry) = entries.get(name) else {
             continue;
         };
         if entry.is_null() {
-            entries.remove(&key);
+            entries.remove(name);
         } else if let Some(slot) = message.slot(name) {
             slot.read(&original.blank(name).unwrap_or_default())?;
             added.push(name);
         }
     }
     // An entry that is null is one left out.
-    let mut take = |name: &str| {
-        letters_into(name, &mut key);
-        let (_, entry) = entries.remove(&key)?;
-        Some(entry).filter(|entry| !entry.is_null())
-    };
+    let mut take = |name: &str| entries.remove(name).filter(|entry| !entry.is_null());
     // The IEs that the table of the message has no place for, when the view
     // lists them.
     let unknown = take(UNKNOWN_IES).map(unknown_ies).transpose()?;
@@ -1771,7 +1809,7 @@ fn written<M: Viewed>(original: &M, view: Value, alone: bool, scope: Scope) -> R
             values.push((name, value, octets, size));
         }
     });
-    if let Some((name, _)) = entries.into_values().next() {
+    if let Some(name) = entries.first() {
         original.absent(&mut |absent, _| ie_names.push(absent));
         return Err(readable::none_of(&name, &ie_names, "IE"));
     }
