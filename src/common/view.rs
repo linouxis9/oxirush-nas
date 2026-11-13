@@ -28,13 +28,14 @@ use crate::nas_5gs::{
     SNssaiContents, SessionAmbr, SessionAmbrValue,
 };
 use crate::prelude::*;
+use core::any::Any;
 use core::net::{Ipv4Addr, Ipv6Addr};
 use oxirush_utils::tree::{self, ErrorKind, Map, Value};
 use readable::Readable;
 
 /// An IE type whose octets have a value: what its typed accessors return,
 /// in the readable form of [`readable`].
-pub(crate) trait Decoded: Readable + Clone + PartialEq {
+pub(crate) trait Decoded: Readable + Clone + PartialEq + 'static {
     /// The value of the octets in `scope`; `None` when they have none.
     fn decoded(&self, scope: Scope) -> Option<Value>;
 
@@ -92,6 +93,10 @@ pub(crate) trait Ie {
     /// The readable serde form of the IE with the octets of `value`.
     fn encoded(&self, value: &Value, scope: Scope) -> Result<Value, String>;
 
+    /// The IE with the octets of `value`, of the type of the field of the
+    /// message that holds this one ([`Slot::put`]).
+    fn encoded_ie(&self, value: &Value, scope: Scope) -> Result<Box<dyn Any>, String>;
+
     /// The value of the octets of the IE that [`Self::encoded`] gives.
     #[cfg(test)]
     fn encoded_value(&self, value: &Value, scope: Scope) -> Result<Option<Value>, String>;
@@ -128,6 +133,10 @@ impl<T: Decoded> Ie for T {
 
     fn encoded(&self, value: &Value, scope: Scope) -> Result<Value, String> {
         readable::to_value(&self.with_decoded(value, scope)?)
+    }
+
+    fn encoded_ie(&self, value: &Value, scope: Scope) -> Result<Box<dyn Any>, String> {
+        Ok(Box::new(self.with_decoded(value, scope)?))
     }
 
     #[cfg(test)]
@@ -401,9 +410,12 @@ pub(crate) trait Slot {
 
     /// Take an optional IE out of the message.
     fn clear(&mut self);
+
+    /// Give the field the IE `ie`, of its type: `false` for one of another.
+    fn put(&mut self, ie: Box<dyn Any>) -> bool;
 }
 
-impl<T: crate::common::IeRules + Readable> Slot for T {
+impl<T: crate::common::IeRules + Readable + 'static> Slot for T {
     fn form(&self) -> Option<Value> {
         readable::to_value(self).ok()
     }
@@ -414,9 +426,13 @@ impl<T: crate::common::IeRules + Readable> Slot for T {
     }
 
     fn clear(&mut self) {}
+
+    fn put(&mut self, ie: Box<dyn Any>) -> bool {
+        ie.downcast().map(|ie| *self = *ie).is_ok()
+    }
 }
 
-impl<T: crate::common::IeRules + Readable> Slot for Option<T> {
+impl<T: crate::common::IeRules + Readable + 'static> Slot for Option<T> {
     fn form(&self) -> Option<Value> {
         self.as_ref().and_then(|ie| readable::to_value(ie).ok())
     }
@@ -428,6 +444,10 @@ impl<T: crate::common::IeRules + Readable> Slot for Option<T> {
 
     fn clear(&mut self) {
         *self = None;
+    }
+
+    fn put(&mut self, ie: Box<dyn Any>) -> bool {
+        ie.downcast().map(|ie| *self = Some(*ie)).is_ok()
     }
 }
 
@@ -1927,8 +1947,16 @@ fn written<M: Viewed>(original: &M, view: Value, mode: Mode, scope: Scope) -> Re
                 .as_ref()
                 .is_none_or(|octets| of(octets) == of(&octets_of(encoded, size)))
         };
+        // Without octets, the IE is put in its field as it is encoded.
+        if octets.is_none() {
+            match ie.encoded_ie(&value, visited.scope) {
+                Ok(encoded) => encoded_ies.push((name, Err(encoded))),
+                Err(error) => failure = Some(format!("{name}: {error}")),
+            }
+            return;
+        }
         match ie.encoded(&value, visited.scope) {
-            Ok(encoded) if same(&encoded) => encoded_ies.push((name, encoded)),
+            Ok(encoded) if same(&encoded) => encoded_ies.push((name, Ok(encoded))),
             Ok(_) => {
                 failure = Some(format!(
                     "{name}: the octets and the value that are written disagree"
@@ -1940,9 +1968,16 @@ fn written<M: Viewed>(original: &M, view: Value, mode: Mode, scope: Scope) -> Re
     if let Some(failure) = failure {
         return Err(failure);
     }
+    // Each IE by its readable form, where octets were written too, or else
+    // as it was encoded.
     for (name, encoded) in encoded_ies {
         if let Some(slot) = message.slot(name) {
-            slot.read(&encoded)?;
+            match encoded {
+                Ok(form) => slot.read(&form)?,
+                Err(ie) => {
+                    slot.put(ie);
+                }
+            }
         }
     }
     checked(message, received, unknown)

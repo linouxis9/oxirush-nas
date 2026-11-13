@@ -787,6 +787,14 @@ impl Ie for N1SmContainer<'_> {
         readable::to_value(&self.written(value, scope)?.0)
     }
 
+    fn encoded_ie(
+        &self,
+        value: &oxirush_utils::tree::Value,
+        scope: view::Scope,
+    ) -> core::result::Result<Box<dyn core::any::Any>, String> {
+        Ok(Box::new(self.written(value, scope)?.0))
+    }
+
     #[cfg(test)]
     fn encoded_value(
         &self,
