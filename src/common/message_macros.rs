@@ -1145,12 +1145,12 @@ macro_rules! nas_messages {
                 }
             }
 
-            /// The name of the variant, as a tree prints it.
+            /// The name of the variant, as the code writes it.
             #[cfg(feature = "tree")]
             pub(crate) fn variant_name(&self) -> &'static str {
                 match self {
-                    $(Self::$variant(_) => $crate::common::names::name!(stringify!($variant)),)+
-                    $($(Self::$svariant(_) => $crate::common::names::name!(stringify!($svariant)),)+)*
+                    $(Self::$variant(_) => stringify!($variant),)+
+                    $($(Self::$svariant(_) => stringify!($svariant),)+)*
                 }
             }
 

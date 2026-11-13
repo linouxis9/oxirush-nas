@@ -459,8 +459,8 @@ pub(crate) trait Viewed: Clone + PartialEq + Readable {
     /// serde form `ciphered`.
     fn set_protection(&mut self, header: &Value, ciphered: Option<&Value>) -> Result<(), String>;
 
-    /// The name of the variant of the message struct, as the readable serde
-    /// form prints it: `None` for what has no message struct.
+    /// The name of the variant of the message struct, as the code writes it:
+    /// `None` for what has no message struct.
     fn variant_name(&self) -> Option<&'static str>;
 
     /// The variants of the enum that hold a plain message.
@@ -1190,7 +1190,7 @@ pub(crate) fn from_view<M: Viewed>(
             continue;
         };
         // The message struct that `kind` names, and not the first of the enum.
-        if (blank.variant_name()).is_some_and(|name| same_name(name, &printed(kind))) {
+        if (blank.variant_name()).is_some_and(|name| same_name(&printed(name), &printed(kind))) {
             return written(&blank.prepared(entries), view, true, scope);
         }
     }
