@@ -1940,19 +1940,48 @@ impl<T: Decoded, F: Readable + Clone + PartialEq> Coded<T, F> {
 
     /// The value of `ie` ([`Self::value`]) and its readable form.
     fn read(&self, ie: &T) -> Option<(F, Value)> {
-        let decoded = (self.decode)(ie)?;
-        let tree = readable::to_value(&decoded).ok()?;
-        let value: F = readable::from_value(&tree).ok()?;
-        let again = (self.encode)(ie, value.clone()).ok()?;
-        (again == *ie || self.reads(&again, &value)).then_some((value, tree))
+        self.read_back(ie, (self.decode)(ie)?)
     }
 
-    /// Whether `ie` has the value `value`: the same value, or one of the same
-    /// readable form.
+    /// The value that `decoded`, the decoded value of `ie`, reads as from
+    /// its readable form, and that form, where encoding the value over `ie`
+    /// gives an IE that reads as it.
+    fn read_back(&self, ie: &T, decoded: F) -> Option<(F, Value)> {
+        let tree = readable::to_value(&decoded).ok()?;
+        let value: F = readable::from_value(&tree).ok()?;
+        self.writes_back(ie, &value).then_some((value, tree))
+    }
+
+    /// Whether encoding `value` over `ie` gives an IE that reads as it.
+    fn writes_back(&self, ie: &T, value: &F) -> bool {
+        let Ok(again) = (self.encode)(ie, value.clone()) else {
+            return false;
+        };
+        again == *ie || self.reads(&again, value)
+    }
+
+    /// Whether `ie` has the value `value`, which was read from a readable
+    /// form: the same value, or one of the same readable form.
     fn reads(&self, ie: &T, value: &F) -> bool {
-        match self.value(ie) {
-            Some(read) if read == *value => true,
-            Some(read) => readable::to_value(&read).ok() == readable::to_value(value).ok(),
+        let Some(decoded) = (self.decode)(ie) else {
+            return false;
+        };
+        // A value read from a readable form shows a form that reads as it
+        // again: an IE that decodes to it reads as it without reading it.
+        if decoded == *value {
+            let reads = self.writes_back(ie, value);
+            debug_assert_eq!(reads, self.reads_back(ie, decoded, value));
+            return reads;
+        }
+        self.reads_back(ie, decoded, value)
+    }
+
+    /// Whether `ie`, which decodes to `decoded`, has the value `value`, read
+    /// back from the readable form of `decoded`.
+    fn reads_back(&self, ie: &T, decoded: F, value: &F) -> bool {
+        match self.read_back(ie, decoded) {
+            Some((read, _)) if read == *value => true,
+            Some((read, _)) => readable::to_value(&read).ok() == readable::to_value(value).ok(),
             None => false,
         }
     }
