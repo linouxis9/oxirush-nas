@@ -332,12 +332,12 @@ impl Members {
 
     /// The member `name` of the struct, with its value.
     pub(crate) fn put<T: Readable>(&mut self, name: &'static str, value: &T) {
-        self.members.insert(name.into(), value.shown(name));
+        self.members.push(name.into(), value.shown(name));
     }
 
     /// The member `name` of the struct, with the value `shown` in its form.
     pub(crate) fn put_shown(&mut self, name: &'static str, shown: Value) {
-        self.members.insert(name.into(), shown);
+        self.members.push(name.into(), shown);
     }
 
     pub(crate) fn finish(self) -> Value {

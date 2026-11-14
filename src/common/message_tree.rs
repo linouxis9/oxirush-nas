@@ -2007,10 +2007,12 @@ impl<T: Decoded, F: Readable + Clone + PartialEq> Coded<T, F> {
     pub(crate) fn shown(&self, ie: &T, by_value: fn(&T) -> bool, scope: Scope) -> Option<Value> {
         let (value, tree) = self.read(ie)?;
         let new = (self.encode)(&T::unwritten(), value.clone()).ok()?;
-        let back = match by_value(ie) || by_value(&new) {
-            false => new == *ie,
-            true => self.reads(&new, &value) && new.meant(scope) == ie.meant(scope),
-        };
+        // The IE itself has the value that was read of it, and means what it
+        // means.
+        let back = new == *ie
+            || ((by_value(ie) || by_value(&new))
+                && self.reads(&new, &value)
+                && new.meant(scope) == ie.meant(scope));
         back.then_some(tree)
     }
 
@@ -2913,7 +2915,7 @@ macro_rules! built_ie {
                         let $key: $ty = $crate::common::message_tree::built_ie!(@get ie, $key $(, $get)?)?;
                         let member = $crate::common::readable::to_value(&$key).ok()?;
                         let name = $crate::common::names::name!(stringify!($key));
-                        members.insert(name.into(), member);
+                        members.push(name.into(), member);
                     )+
                     let from: fn(
                         $($ty),+
@@ -2959,7 +2961,7 @@ macro_rules! built_ie {
                             .ok_or(concat!(stringify!($key), " is not written"))?,
                     };
                     let name = $crate::common::names::name!(stringify!($key));
-                    members.insert(name.into(), to_value(&$key)?);
+                    members.push(name.into(), to_value(&$key)?);
                 )+
                 let from: fn(
                     $($ty),+
