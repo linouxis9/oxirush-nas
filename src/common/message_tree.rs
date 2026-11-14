@@ -1923,13 +1923,28 @@ pub(crate) struct Coded<T, F> {
 }
 
 impl<T: Decoded, F: Readable + Clone + PartialEq> Coded<T, F> {
-    /// The value of the octets of `ie`, where encoding it over `ie` gives an
-    /// IE that reads as it: octets that `decode` reads and `encode` does not
-    /// write have no value.
+    /// The value of the octets of `ie`, as its readable form reads it, where
+    /// encoding it over `ie` gives an IE that reads as it: octets that
+    /// `decode` reads and `encode` does not write have no value. The
+    /// readable form may say less than the decoded value, as a timer in a
+    /// list is its seconds whatever unit counts them, and a tree writes the
+    /// value of its readable form.
     pub(crate) fn value(&self, ie: &T) -> Option<F> {
-        let value = (self.decode)(ie)?;
+        self.read(ie).map(|(value, _)| value)
+    }
+
+    /// The readable form of the value of `ie` ([`Self::value`]).
+    pub(crate) fn tree(&self, ie: &T) -> Option<Value> {
+        self.read(ie).map(|(_, tree)| tree)
+    }
+
+    /// The value of `ie` ([`Self::value`]) and its readable form.
+    fn read(&self, ie: &T) -> Option<(F, Value)> {
+        let decoded = (self.decode)(ie)?;
+        let tree = readable::to_value(&decoded).ok()?;
+        let value: F = readable::from_value(&tree).ok()?;
         let again = (self.encode)(ie, value.clone()).ok()?;
-        (again == *ie || self.reads(&again, &value)).then_some(value)
+        (again == *ie || self.reads(&again, &value)).then_some((value, tree))
     }
 
     /// Whether `ie` has the value `value`: the same value, or one of the same
@@ -1947,13 +1962,13 @@ impl<T: Decoded, F: Readable + Clone + PartialEq> Coded<T, F> {
     /// what `ie` means; `by_value` says of an IE whose value says all that
     /// its octets mean without deciding them.
     pub(crate) fn shown(&self, ie: &T, by_value: fn(&T) -> bool, scope: Scope) -> Option<Value> {
-        let value = self.value(ie)?;
+        let (value, tree) = self.read(ie)?;
         let new = (self.encode)(&T::unwritten(), value.clone()).ok()?;
         let back = match by_value(ie) || by_value(&new) {
             false => new == *ie,
             true => self.reads(&new, &value) && new.meant(scope) == ie.meant(scope),
         };
-        back.then(|| readable::to_value(&value).ok())?
+        back.then_some(tree)
     }
 
     /// The IE that stands for those that mean what `ie` means, where
@@ -2384,7 +2399,7 @@ macro_rules! decoded_ie {
             }
 
             fn decoded(&self, _: $crate::common::message_tree::Scope) -> Option<oxirush_utils::tree::Value> {
-                $crate::common::readable::to_value(&Self::CODED.value(self)?).ok()
+                Self::CODED.tree(self)
             }
 
             fn with_decoded(

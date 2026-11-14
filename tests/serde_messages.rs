@@ -398,6 +398,31 @@ fn an_ie_that_its_value_does_not_write_back_is_shown_by_its_octets_in_a_containe
     assert!(written.means_the_same(&message));
 }
 
+/// A value whose readable form says less than its octets is shown by its
+/// octets, in a list too: found by the `build_5gs` and `tree_5gs` fuzz
+/// targets. The back-off timer of the partial list of this REGISTRATION
+/// REJECT is thirteen minutes counted in minutes. Its seconds are written in
+/// units of 30 seconds, and the extended rejected NSSAI is compared by its
+/// octets, so the IE is shown by them.
+#[test]
+fn a_timer_in_a_list_that_its_seconds_do_not_write_back_is_shown_by_its_octets() {
+    let message = fgs("7e004403680410ad1111");
+    let tree = message.to_tree();
+    assert_eq!(
+        tree["extended-rejected-nssai"],
+        tree!({"octets": "10ad1111"})
+    );
+    let written = f::Message::from_tree(tree.clone()).unwrap();
+    assert_eq!(written, message);
+    assert_eq!(message.with_tree(tree).unwrap(), message);
+    // The timer in the unit that its seconds are written in is shown by them
+    let minutes = fgs("7e0044036804109a1111").to_tree();
+    assert_eq!(
+        minutes["extended-rejected-nssai"],
+        tree!([{"type-of-list": 1, "back-off-timer": 780, "rejected": [{"cause": 1, "s-nssai": {"sst": 17}}]}])
+    );
+}
+
 /// The second review's messages: each lost something through its tree. The
 /// UMTS algorithms of the two capabilities are members of their values,
 /// and an IE that has more than its value says is shown by its octets: a
