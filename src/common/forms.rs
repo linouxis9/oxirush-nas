@@ -23,6 +23,20 @@
 
 /// A PLMN identity as its text, `208-93`.
 pub(crate) mod plmn {
+    /// What the form takes, of a member `member` of any type.
+    pub(crate) const fn takes_member<S, T>(
+        _member: fn(&S) -> &T,
+    ) -> &'static oxirush_utils::tree::Takes {
+        of(core::marker::PhantomData::<T>)
+    }
+
+    /// What the form takes, of a value of any type.
+    pub(crate) const fn of<T>(
+        _value: core::marker::PhantomData<T>,
+    ) -> &'static oxirush_utils::tree::Takes {
+        &oxirush_utils::tree::Takes::Plmn
+    }
+
     use crate::common::Plmn;
     use crate::common::readable::invalid_type;
     use crate::prelude::*;
@@ -45,6 +59,20 @@ pub(crate) mod plmn {
 
 /// An optional PLMN identity, as its text or `null`.
 pub(crate) mod plmn_option {
+    /// What the form takes, of a member `member` of any type.
+    pub(crate) const fn takes_member<S, T>(
+        _member: fn(&S) -> &T,
+    ) -> &'static oxirush_utils::tree::Takes {
+        of(core::marker::PhantomData::<T>)
+    }
+
+    /// What the form takes, of a value of any type.
+    pub(crate) const fn of<T>(
+        _value: core::marker::PhantomData<T>,
+    ) -> &'static oxirush_utils::tree::Takes {
+        &oxirush_utils::tree::Takes::Plmn
+    }
+
     use crate::common::Plmn;
     use crate::prelude::*;
     use oxirush_utils::tree::Value;
@@ -67,6 +95,20 @@ pub(crate) mod plmn_option {
 
 /// A list of PLMN identities, each as its text.
 pub(crate) mod plmn_list {
+    /// What the form takes, of a member `member` of any type.
+    pub(crate) const fn takes_member<S, T>(
+        _member: fn(&S) -> &T,
+    ) -> &'static oxirush_utils::tree::Takes {
+        of(core::marker::PhantomData::<T>)
+    }
+
+    /// What the form takes, of a value of any type.
+    pub(crate) const fn of<T>(
+        _value: core::marker::PhantomData<T>,
+    ) -> &'static oxirush_utils::tree::Takes {
+        &oxirush_utils::tree::Takes::List(&oxirush_utils::tree::Takes::Plmn)
+    }
+
     use crate::common::Plmn;
     use crate::common::readable::invalid_type;
     use crate::prelude::*;
@@ -92,6 +134,26 @@ pub(crate) mod plmn_list {
 
 /// A tracking area identity of either system, `{"plmn": "208-93", "tac": 1}`.
 pub(crate) mod tai {
+    /// What the form takes, of a member `member` of any type.
+    pub(crate) const fn takes_member<S, T>(
+        _member: fn(&S) -> &T,
+    ) -> &'static oxirush_utils::tree::Takes {
+        of(core::marker::PhantomData::<T>)
+    }
+
+    /// What the form takes, of a value of any type.
+    pub(crate) const fn of<T>(
+        _value: core::marker::PhantomData<T>,
+    ) -> &'static oxirush_utils::tree::Takes {
+        &oxirush_utils::tree::Takes::Members(
+            None,
+            &[
+                ("plmn", &oxirush_utils::tree::Takes::Plmn),
+                ("tac", &oxirush_utils::tree::Takes::Number(u32::MAX as u64)),
+            ],
+        )
+    }
+
     use crate::common::TaiParts;
     use crate::common::readable::{Members, member, members};
     use crate::prelude::*;
@@ -122,6 +184,26 @@ pub(crate) mod tai {
 
 /// A list of tracking area identities.
 pub(crate) mod tai_list {
+    /// What the form takes, of a member `member` of any type.
+    pub(crate) const fn takes_member<S, T>(
+        _member: fn(&S) -> &T,
+    ) -> &'static oxirush_utils::tree::Takes {
+        of(core::marker::PhantomData::<T>)
+    }
+
+    /// What the form takes, of a value of any type.
+    pub(crate) const fn of<T>(
+        _value: core::marker::PhantomData<T>,
+    ) -> &'static oxirush_utils::tree::Takes {
+        &oxirush_utils::tree::Takes::List(&oxirush_utils::tree::Takes::Members(
+            None,
+            &[
+                ("plmn", &oxirush_utils::tree::Takes::Plmn),
+                ("tac", &oxirush_utils::tree::Takes::Number(u32::MAX as u64)),
+            ],
+        ))
+    }
+
     use crate::common::TaiParts;
     use crate::common::readable::invalid_type;
     use crate::prelude::*;
@@ -147,6 +229,20 @@ pub(crate) mod tai_list {
 /// Octets in hexadecimal, also when there are none: a list of no octets
 /// would be shown as an empty list.
 pub(crate) mod hexadecimal {
+    /// What the form takes, of a member `member` of any type.
+    pub(crate) const fn takes_member<S, T>(
+        _member: fn(&S) -> &T,
+    ) -> &'static oxirush_utils::tree::Takes {
+        of(core::marker::PhantomData::<T>)
+    }
+
+    /// What the form takes, of a value of any type.
+    pub(crate) const fn of<T>(
+        _value: core::marker::PhantomData<T>,
+    ) -> &'static oxirush_utils::tree::Takes {
+        &oxirush_utils::tree::Takes::Octets(None)
+    }
+
     use crate::common::readable::Readable;
     use crate::prelude::*;
     use oxirush_utils::tree::Value;
@@ -166,6 +262,20 @@ pub(crate) mod hexadecimal {
 
 /// [`hexadecimal`] for octets that may be absent.
 pub(crate) mod hexadecimal_if_any {
+    /// What the form takes, of a member `member` of any type.
+    pub(crate) const fn takes_member<S, T>(
+        _member: fn(&S) -> &T,
+    ) -> &'static oxirush_utils::tree::Takes {
+        of(core::marker::PhantomData::<T>)
+    }
+
+    /// What the form takes, of a value of any type.
+    pub(crate) const fn of<T>(
+        _value: core::marker::PhantomData<T>,
+    ) -> &'static oxirush_utils::tree::Takes {
+        &oxirush_utils::tree::Takes::Octets(None)
+    }
+
     use crate::common::readable::Readable;
     use crate::prelude::*;
     use oxirush_utils::tree::Value;
@@ -189,6 +299,21 @@ pub(crate) mod hexadecimal_if_any {
 /// An IE that a value holds, as the tree of a message shows it: its value
 /// where that writes it back, or its octets.
 pub(crate) mod tree {
+    /// What the form of a member `member` of the IE type `T` takes: what the
+    /// value of the IE takes.
+    pub(crate) const fn takes_member<S, T: crate::common::message_tree::IeTakes>(
+        _member: fn(&S) -> &T,
+    ) -> &'static oxirush_utils::tree::Takes {
+        T::IE_TAKES
+    }
+
+    /// What the value of the IE type `T` takes.
+    pub(crate) const fn of<T: crate::common::message_tree::IeTakes>(
+        _value: core::marker::PhantomData<T>,
+    ) -> &'static oxirush_utils::tree::Takes {
+        T::IE_TAKES
+    }
+
     use crate::prelude::*;
     use oxirush_utils::tree::Tree;
     use oxirush_utils::tree::Value;
@@ -208,6 +333,14 @@ pub(crate) mod tree {
 
 /// [`tree`] for an IE that may be absent, `null` then.
 pub(crate) mod tree_option {
+    /// What the form of a member `member` of an IE type `T` that may be
+    /// absent takes: what the value of the IE takes.
+    pub(crate) const fn takes_member<S, T: crate::common::message_tree::IeTakes>(
+        _member: fn(&S) -> &Option<T>,
+    ) -> &'static oxirush_utils::tree::Takes {
+        T::IE_TAKES
+    }
+
     use crate::prelude::*;
     use oxirush_utils::tree::Tree;
     use oxirush_utils::tree::Value;
@@ -235,6 +368,12 @@ macro_rules! ie_octets {
     ($($form:ident: $ie:ty),+ $(,)?) => {$(
         pub(crate) mod $form {
             use crate::prelude::*;
+
+            /// What the form of a member takes: what the value of the IE takes.
+            pub(crate) const fn takes_member<S, T>(_member: fn(&S) -> &T) -> &'static oxirush_utils::tree::Takes {
+                <$ie as crate::common::message_tree::IeTakes>::IE_TAKES
+            }
+
             use oxirush_utils::tree::Tree;
             use oxirush_utils::tree::Value;
 

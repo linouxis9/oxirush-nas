@@ -248,6 +248,9 @@ macro_rules! nas_ie_flags {
     (@named $name:ident { $($flag:ident)* }) => {
         #[cfg(feature = "tree")]
         impl crate::common::message_tree::Flags for $name {
+            const FLAG_TAKES: &'static [(&'static str, &'static oxirush_utils::tree::Takes)] =
+                &[$((crate::common::names::name!(stringify!($flag)), &oxirush_utils::tree::Takes::Flag)),*];
+
             fn flags(&self) -> Vec<(&'static str, bool)> {
                 vec![$((crate::common::names::name!(stringify!($flag)), self.$flag())),*]
             }

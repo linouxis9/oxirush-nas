@@ -109,3 +109,8 @@ path = "fuzz_targets/paths_eps.rs"
 test = false
 doc = false
 bench = false
+
+# tree::Takes of oxirush-utils is not released yet: every crate of the build takes
+# oxirush-utils from this revision until its next release.
+[patch.crates-io]
+oxirush-utils = { git = "https://github.com/linouxis9/oxirush-utils", rev = "1a15076068b91a67a3e74b2b3cd01c5482765f11" }

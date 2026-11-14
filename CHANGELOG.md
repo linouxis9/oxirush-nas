@@ -6,6 +6,13 @@ All notable changes to `oxirush-nas` are recorded here.
 
 ### Added
 
+- `ies()` of each message type (`GmmMessageType`, `GsmMessageType`,
+  `EmmMessageType`, `EsmMessageType`) gives the rows of the table of its
+  message, `IeRow`: the name of each IE as the tree prints it, its IEI, whether
+  it is mandatory, its length in the message, and what its value takes in the
+  tree, as a `tree::Takes` of oxirush-utils: the names of a coded value, the
+  seconds of a timer or `deactivated`, the entries of a list, the members of a
+  value written by them, the tree of a carried message.
 - `select_in()` of the 5GS and of the EPS `Message` selects in a tree of the
   message that the caller built already, as `select()` does in the one that
   it builds: several selections build the tree once.

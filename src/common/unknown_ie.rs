@@ -202,6 +202,15 @@ impl<'a> Iterator for UnknownIesIter<'a> {
 /// as that of a list of structs.
 #[cfg(feature = "tree")]
 impl crate::common::readable::Readable for UnknownIes {
+    const TAKES: &'static oxirush_utils::tree::Takes =
+        &oxirush_utils::tree::Takes::List(&oxirush_utils::tree::Takes::Members(
+            None,
+            &[
+                ("iei", &oxirush_utils::tree::Takes::Number(255)),
+                ("data", &oxirush_utils::tree::Takes::Octets(None)),
+            ],
+        ));
+
     fn shown(&self, _: &'static str) -> oxirush_utils::tree::Value {
         use crate::common::readable::Members;
         let ies = self.iter().map(|ie| {

@@ -481,6 +481,9 @@ pub use oxirush_utils::identity;
 #[cfg(feature = "tree")]
 pub use oxirush_utils::tree;
 
+#[cfg(feature = "tree")]
+pub use common::message_tree::IeRow;
+
 #[cfg(test)]
 mod tests {
     use super::*;

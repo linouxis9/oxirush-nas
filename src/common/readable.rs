@@ -28,6 +28,7 @@
 
 use crate::prelude::*;
 use core::net::{Ipv4Addr, Ipv6Addr};
+use oxirush_utils::tree::Takes;
 use oxirush_utils::tree::{Map, Value};
 
 /// The letters and the digits of a name, in lower case: those of any way to
@@ -122,6 +123,45 @@ pub(crate) trait Readable: Sized {
     /// The value of a member that is not written, where it may be left out.
     fn missing() -> Option<Self> {
         None
+    }
+
+    /// What its readable form takes, as [`read`](Self::read) reads it.
+    const TAKES: &'static Takes;
+
+    /// Whether it is an octet, which a sequence of them is shown as octets
+    /// of, as [`octet`](Self::octet) gives it.
+    const OCTET: bool = false;
+}
+
+/// What the readable form of a member that `member` reads of `S` takes:
+/// the type of a member of a struct, or of a variant of an enum, which its
+/// name alone does not give.
+pub(crate) const fn takes_of<S, T: Readable>(member: fn(&S) -> &T) -> &'static Takes {
+    let _ = member;
+    T::TAKES
+}
+
+/// What the readable form of a value that `member` returns of `S` takes:
+/// a member of an IE that a getter gives.
+pub(crate) const fn takes_of_value<S, T: Readable>(member: fn(&S) -> T) -> &'static Takes {
+    let _ = member;
+    T::TAKES
+}
+
+/// What a number from `least` to `most` takes.
+const fn number_takes(least: i128, most: i128) -> Takes {
+    match least {
+        0 => Takes::Number(most as u64),
+        _ => Takes::Signed(least as i64, most as i64),
+    }
+}
+
+/// What a sequence of `T` takes: octets for a sequence of octets, of
+/// `octets` where it has a fixed number of them, and a list otherwise.
+const fn sequence_takes<T: Readable>(octets: Option<usize>) -> Takes {
+    match T::OCTET {
+        true => Takes::Octets(octets),
+        false => Takes::List(T::TAKES),
     }
 }
 
@@ -461,6 +501,8 @@ fn whole<T>(
 macro_rules! readable_number {
     ($($ty:ident),+) => {$(
         impl Readable for $ty {
+            const TAKES: &'static Takes = &number_takes($ty::MIN as i128, $ty::MAX as i128);
+
             fn shown(&self, _: &'static str) -> Value {
                 (*self).into()
             }
@@ -480,6 +522,9 @@ macro_rules! readable_number {
 readable_number!(u16, u32, u64, i8, i16, i32, i64);
 
 impl Readable for u8 {
+    const TAKES: &'static Takes = &Takes::Number(255);
+    const OCTET: bool = true;
+
     fn shown(&self, _: &'static str) -> Value {
         (*self).into()
     }
@@ -499,6 +544,8 @@ impl Readable for u8 {
 }
 
 impl Readable for usize {
+    const TAKES: &'static Takes = &Takes::Number(usize::MAX as u64);
+
     fn shown(&self, _: &'static str) -> Value {
         (*self as u64).into()
     }
@@ -514,6 +561,8 @@ impl Readable for usize {
 }
 
 impl Readable for bool {
+    const TAKES: &'static Takes = &Takes::Flag;
+
     fn shown(&self, _: &'static str) -> Value {
         (*self).into()
     }
@@ -526,6 +575,8 @@ impl Readable for bool {
 }
 
 impl Readable for String {
+    const TAKES: &'static Takes = &Takes::Text;
+
     fn shown(&self, _: &'static str) -> Value {
         self.as_str().into()
     }
@@ -536,6 +587,8 @@ impl Readable for String {
 }
 
 impl Readable for Ipv4Addr {
+    const TAKES: &'static Takes = &Takes::Ipv4;
+
     fn shown(&self, _: &'static str) -> Value {
         self.to_string().into()
     }
@@ -548,6 +601,8 @@ impl Readable for Ipv4Addr {
 }
 
 impl Readable for Ipv6Addr {
+    const TAKES: &'static Takes = &Takes::Ipv6;
+
     fn shown(&self, _: &'static str) -> Value {
         self.to_string().into()
     }
@@ -560,6 +615,8 @@ impl Readable for Ipv6Addr {
 }
 
 impl Readable for core::net::IpAddr {
+    const TAKES: &'static Takes = &Takes::OneOf(&[&Takes::Ipv4, &Takes::Ipv6]);
+
     fn shown(&self, _: &'static str) -> Value {
         self.to_string().into()
     }
@@ -571,6 +628,8 @@ impl Readable for core::net::IpAddr {
 }
 
 impl<T: Readable> Readable for Option<T> {
+    const TAKES: &'static Takes = T::TAKES;
+
     fn shown(&self, held: &'static str) -> Value {
         match self {
             Some(value) => value.shown(held),
@@ -591,6 +650,9 @@ impl<T: Readable> Readable for Option<T> {
 }
 
 impl<T: Readable> Readable for Box<T> {
+    const TAKES: &'static Takes = T::TAKES;
+    const OCTET: bool = T::OCTET;
+
     fn shown(&self, held: &'static str) -> Value {
         (**self).shown(held)
     }
@@ -609,6 +671,8 @@ impl<T: Readable> Readable for Box<T> {
 }
 
 impl<T: Readable> Readable for Vec<T> {
+    const TAKES: &'static Takes = &sequence_takes::<T>(None);
+
     fn shown(&self, held: &'static str) -> Value {
         sequence(held, self)
     }
@@ -625,6 +689,8 @@ impl<T: Readable> Readable for Vec<T> {
 }
 
 impl<T: Readable, const N: usize> Readable for [T; N] {
+    const TAKES: &'static Takes = &sequence_takes::<T>(Some(N));
+
     fn shown(&self, held: &'static str) -> Value {
         sequence(held, self)
     }
@@ -642,6 +708,11 @@ impl<T: Readable, const N: usize> Readable for [T; N] {
 }
 
 impl<A: Readable, B: Readable> Readable for (A, B) {
+    const TAKES: &'static Takes = match (A::OCTET, B::OCTET) {
+        (true, true) => &Takes::Octets(Some(2)),
+        _ => &Takes::List(&Takes::OneOf(&[A::TAKES, B::TAKES])),
+    };
+
     fn shown(&self, held: &'static str) -> Value {
         // A pair of octets is the two octets.
         match (self.0.octet(), self.1.octet()) {
@@ -656,6 +727,8 @@ impl<A: Readable, B: Readable> Readable for (A, B) {
 }
 
 impl Readable for crate::common::Octets {
+    const TAKES: &'static Takes = &Takes::Octets(None);
+
     fn shown(&self, held: &'static str) -> Value {
         sequence(held, self.as_slice())
     }
@@ -678,6 +751,13 @@ macro_rules! readable {
     // A struct of named members.
     (struct $name:ident { $($member:ident $(as $form:ident)? $(= $how:ident)?),* $(,)? }) => {
         impl $crate::common::readable::Readable for $name {
+            const TAKES: &'static oxirush_utils::tree::Takes = &oxirush_utils::tree::Takes::Members(None, &[
+                $((
+                    $crate::common::names::name!(stringify!($member)),
+                    $crate::common::readable::readable!(@takes $name, $member $(as $form)? $(= $how)?),
+                ),)*
+            ]);
+
             #[allow(unused_variables)]
             fn shown(&self, held: &'static str) -> oxirush_utils::tree::Value {
                 let mut members = $crate::common::readable::Members::new();
@@ -702,6 +782,10 @@ macro_rules! readable {
     // A struct of one value, which it is shown as.
     (struct $name:ident ($ty:ty $(as $form:ident)? $(,)?)) => {
         impl $crate::common::readable::Readable for $name {
+            const TAKES: &'static oxirush_utils::tree::Takes =
+                $crate::common::readable::readable!(@takes_of [$($form)?] $ty);
+            const OCTET: bool = $crate::common::readable::readable!(@octet_of [$($form)?] $ty);
+
             #[allow(unused_variables)]
             fn shown(&self, held: &'static str) -> oxirush_utils::tree::Value {
                 $crate::common::readable::readable!(@show held, [$($form)?] self.0)
@@ -723,12 +807,12 @@ macro_rules! readable {
     // An enum.
     (enum $name:ident { $($variants:tt)* }) => {
         $crate::common::readable::readable!(@enum $name (contents, held)
-            [] [] [] $($variants)*);
+            [] [] [] [] [] $($variants)*);
     };
 
     // The $variants of an enum, one at a time: what shows each, what reads
     // it by its place, and the names of the $variants.
-    (@enum $name:ident ($contents:ident, $held:ident) [$($show:tt)*] [$($read:tt)*] [$($names:tt)*]
+    (@enum $name:ident ($contents:ident, $held:ident) [$($show:tt)*] [$($read:tt)*] [$($names:tt)*] [$($units:tt)*] [$($forms:tt)*]
         $variant:ident = $rename:literal { $($member:ident $(as $form:ident)?),* $(,)? } $(, $($rest:tt)*)?) => {
         $crate::common::readable::readable!(@enum $name ($contents, $held)
             [$($show)* Self::$variant { $($member),* } => {
@@ -748,9 +832,17 @@ macro_rules! readable {
                 })
             }]
             [$($names)* ($rename)]
+            [$($units)*]
+            [$($forms)* (&oxirush_utils::tree::Takes::Members(None, &[(
+                $crate::common::names::name!($rename),
+                &oxirush_utils::tree::Takes::Members(None, &[$((
+                    $crate::common::names::name!(stringify!($member)),
+                    $crate::common::readable::readable!(@variant $name, $variant, $member $(as $form)?),
+                ),)*]),
+            )]))]
             $($($rest)*)?);
     };
-    (@enum $name:ident ($contents:ident, $held:ident) [$($show:tt)*] [$($read:tt)*] [$($names:tt)*]
+    (@enum $name:ident ($contents:ident, $held:ident) [$($show:tt)*] [$($read:tt)*] [$($names:tt)*] [$($units:tt)*] [$($forms:tt)*]
         $variant:ident { $($member:ident $(as $form:ident)?),* $(,)? } $(, $($rest:tt)*)?) => {
         $crate::common::readable::readable!(@enum $name ($contents, $held)
             [$($show)* Self::$variant { $($member),* } => {
@@ -770,9 +862,17 @@ macro_rules! readable {
                 })
             }]
             [$($names)* (stringify!($variant))]
+            [$($units)*]
+            [$($forms)* (&oxirush_utils::tree::Takes::Members(None, &[(
+                $crate::common::names::name!(stringify!($variant)),
+                &oxirush_utils::tree::Takes::Members(None, &[$((
+                    $crate::common::names::name!(stringify!($member)),
+                    $crate::common::readable::readable!(@variant $name, $variant, $member $(as $form)?),
+                ),)*]),
+            )]))]
             $($($rest)*)?);
     };
-    (@enum $name:ident ($contents:ident, $held:ident) [$($show:tt)*] [$($read:tt)*] [$($names:tt)*]
+    (@enum $name:ident ($contents:ident, $held:ident) [$($show:tt)*] [$($read:tt)*] [$($names:tt)*] [$($units:tt)*] [$($forms:tt)*]
         $variant:ident ($ty:ty $(as $form:ident)? $(,)?) $(, $($rest:tt)*)?) => {
         $crate::common::readable::readable!(@enum $name ($contents, $held)
             [$($show)* Self::$variant(value) => $crate::common::readable::tagged(
@@ -787,9 +887,14 @@ macro_rules! readable {
                 Ok(Self::$variant($crate::common::readable::readable!(@value $contents, $ty $(as $form)?)))
             }]
             [$($names)* (stringify!($variant))]
+            [$($units)*]
+            [$($forms)* (&oxirush_utils::tree::Takes::Members(None, &[(
+                $crate::common::names::name!(stringify!($variant)),
+                $crate::common::readable::readable!(@takes_of [$($form)?] $ty),
+            )]))]
             $($($rest)*)?);
     };
-    (@enum $name:ident ($contents:ident, $held:ident) [$($show:tt)*] [$($read:tt)*] [$($names:tt)*]
+    (@enum $name:ident ($contents:ident, $held:ident) [$($show:tt)*] [$($read:tt)*] [$($names:tt)*] [$($units:tt)*] [$($forms:tt)*]
         $variant:ident $(, $($rest:tt)*)?) => {
         $crate::common::readable::readable!(@enum $name ($contents, $held)
             [$($show)* Self::$variant => oxirush_utils::tree::Value::from(
@@ -800,10 +905,15 @@ macro_rules! readable {
                 Ok(Self::$variant)
             }]
             [$($names)* (stringify!($variant))]
+            [$($units)* ($crate::common::names::name!(stringify!($variant)))]
+            [$($forms)*]
             $($($rest)*)?);
     };
-    (@enum $name:ident ($contents:ident, $held:ident) [$($show:tt)*] [$($read:tt)*] [$(($names:expr))*]) => {
+    (@enum $name:ident ($contents:ident, $held:ident) [$($show:tt)*] [$($read:tt)*] [$(($names:expr))*] [$(($units:expr))*] [$(($forms:expr))*]) => {
         impl $crate::common::readable::Readable for $name {
+            const TAKES: &'static oxirush_utils::tree::Takes =
+                $crate::common::readable::readable!(@one_of [$($units),*] [$($forms),*]);
+
             #[allow(unused_variables)]
             fn shown(&self, $held: &'static str) -> oxirush_utils::tree::Value {
                 match self {
@@ -825,6 +935,54 @@ macro_rules! readable {
         }
     };
 
+    // What an enum takes: the names of its variants of no value, then each
+    // variant of a value, as an object of its name.
+    (@one_of [$($units:expr),+] []) => {
+        &oxirush_utils::tree::Takes::Named(&[$($units),+])
+    };
+    (@one_of [] [$($forms:expr),+]) => {
+        &oxirush_utils::tree::Takes::OneOf(&[$($forms),+])
+    };
+    (@one_of [$($units:expr),+] [$($forms:expr),+]) => {
+        &oxirush_utils::tree::Takes::OneOf(&[&oxirush_utils::tree::Takes::Named(&[$($units),+]), $($forms),+])
+    };
+    // What a member takes: its type's, or its form's. A member that a tree
+    // does not show (`= skip`) takes nothing, and has no arm here.
+    (@takes $name:ident, $member:ident) => {
+        $crate::common::readable::takes_of::<$name, _>(|value| &value.$member)
+    };
+    (@takes $name:ident, $member:ident = default) => {
+        $crate::common::readable::takes_of::<$name, _>(|value| &value.$member)
+    };
+    (@takes $name:ident, $member:ident as $form:ident) => {
+        $crate::common::forms::$form::takes_member::<$name, _>(|value| &value.$member)
+    };
+    (@variant $name:ident, $variant:ident, $member:ident) => {
+        $crate::common::readable::takes_of::<$name, _>(|value| match value {
+            $name::$variant { $member, .. } => $member,
+            #[allow(unreachable_patterns)]
+            _ => unreachable!(),
+        })
+    };
+    (@variant $name:ident, $variant:ident, $member:ident as $form:ident) => {
+        $crate::common::forms::$form::takes_member::<$name, _>(|value| match value {
+            $name::$variant { $member, .. } => $member,
+            #[allow(unreachable_patterns)]
+            _ => unreachable!(),
+        })
+    };
+    (@takes_of [] $ty:ty) => {
+        <$ty as $crate::common::readable::Readable>::TAKES
+    };
+    (@takes_of [$form:ident] $ty:ty) => {
+        $crate::common::forms::$form::of(core::marker::PhantomData::<$ty>)
+    };
+    (@octet_of [] $ty:ty) => {
+        <$ty as $crate::common::readable::Readable>::OCTET
+    };
+    (@octet_of [$form:ident] $ty:ty) => {
+        false
+    };
     // A member of a struct: shown and read, by its form.
     (@put $members:ident, $value:expr, $member:ident) => {
         $members.put($crate::common::names::name!(stringify!($member)), &$value)

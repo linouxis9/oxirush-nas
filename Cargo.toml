@@ -76,3 +76,8 @@ required-features = ["tree"]
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
+
+# tree::Takes of oxirush-utils is not released yet: every crate of the build takes
+# oxirush-utils from this revision until its next release.
+[patch.crates-io]
+oxirush-utils = { git = "https://github.com/linouxis9/oxirush-utils", rev = "1a15076068b91a67a3e74b2b3cd01c5482765f11" }

@@ -6,6 +6,7 @@
 //! file again from the code.
 #![cfg(feature = "tree")]
 
+use oxirush_nas::tree::Takes;
 use oxirush_nas::{DecodeOptions, Direction, nas_5gs, nas_eps};
 
 /// Each message of the fixtures: its name, its system and direction, and its
@@ -128,4 +129,112 @@ fn the_trees_of_the_fixtures_are_those_recorded() {
     for (recorded, made) in recorded.iter().zip(&made) {
         assert_eq!(recorded, made);
     }
+}
+
+/// Whether `value` is one that `takes` says: each member of an object one of
+/// its members, a name one of its names, a number up to its largest.
+fn fits(value: &oxirush_nas::tree::Value, takes: &Takes) -> bool {
+    use oxirush_nas::tree::{Value, same_name};
+    match (takes, value) {
+        (Takes::Flag, Value::Bool(_)) => true,
+        (Takes::Number(most), Value::Number(number)) => number.as_u64().is_some_and(|n| n <= *most),
+        (Takes::Signed(least, most), Value::Number(number)) => number
+            .as_i64()
+            .is_some_and(|n| (*least..=*most).contains(&n)),
+        (Takes::Named(names), Value::String(name)) => {
+            names.iter().any(|known| same_name(known, name))
+        }
+        (Takes::Octets(_), Value::String(_) | Value::Array(_) | Value::Number(_)) => true,
+        (
+            Takes::Text | Takes::Name | Takes::Digits | Takes::Ipv4 | Takes::Ipv6 | Takes::Plmn,
+            Value::String(_),
+        ) => true,
+        (Takes::Message, Value::Object(message)) => message.contains_key("message-type"),
+        (Takes::List(entry), Value::Array(entries)) => {
+            entries.iter().all(|value| fits(value, entry))
+        }
+        (Takes::Members(_, members), Value::Object(written)) => {
+            written.iter().all(|(name, value)| {
+                (members.iter())
+                    .find(|(member, _)| same_name(member, name))
+                    .is_some_and(|(_, takes)| value.is_null() || fits(value, takes))
+            })
+        }
+        (Takes::Members(Some(alone), members), value) => (members.iter())
+            .find(|(member, _)| member == alone)
+            .is_some_and(|(_, takes)| fits(value, takes)),
+        (Takes::OneOf(forms), value) => forms.iter().any(|form| fits(value, form)),
+        _ => false,
+    }
+}
+
+/// Each IE of the tree of each message of the fixtures is a row of the table
+/// of its message, and its value is one that the row says that it takes, or
+/// its octets.
+#[test]
+fn each_ie_of_the_fixtures_takes_what_its_row_says() {
+    use oxirush_nas::IeRow;
+    let mut checked = 0;
+    let mut messages = messages();
+    // An UL NAS TRANSPORT of multiple payloads: a 5GSM message and an SMS.
+    let multiple = hex::decode("7e00670f001602000e211201058001012e0501c1ffff910003020102").unwrap();
+    messages.push((
+        "multiple-payloads".into(),
+        true,
+        Direction::Uplink,
+        multiple,
+    ));
+    let mut entries = 0;
+    for (name, five_gs, direction, octets) in messages {
+        let (rows, tree): (Vec<IeRow>, _) = match five_gs {
+            true => match nas_5gs::Message::decode(&octets) {
+                Ok(message @ nas_5gs::Message::Gmm(..))
+                | Ok(message @ nas_5gs::Message::Gsm(..)) => {
+                    let rows = match &message {
+                        nas_5gs::Message::Gmm(header, _) => header.message_type.ies(),
+                        nas_5gs::Message::Gsm(header, _) => header.message_type.ies(),
+                        _ => unreachable!(),
+                    };
+                    (rows, message.to_tree())
+                }
+                _ => continue,
+            },
+            false => {
+                let options = DecodeOptions::STRICT.with_direction(direction);
+                match nas_eps::Message::decode_with(&octets, options) {
+                    Ok(message @ nas_eps::Message::Emm(..))
+                    | Ok(message @ nas_eps::Message::Esm(..)) => {
+                        let rows = match &message {
+                            nas_eps::Message::Emm(header, _) => header.message_type.ies(),
+                            nas_eps::Message::Esm(header, _) => header.message_type.ies(),
+                            _ => unreachable!(),
+                        };
+                        (rows, message.to_tree())
+                    }
+                    _ => continue,
+                }
+            }
+        };
+        let oxirush_nas::tree::Value::Object(members) = tree else {
+            panic!("{name}")
+        };
+        for (ie, value) in &members {
+            let Some(row) = rows.iter().find(|row| row.name == ie) else {
+                continue;
+            };
+            let octets = value.get("octets").is_some();
+            assert!(
+                octets || fits(value, row.takes),
+                "{name}: {ie} = {value} is not {:?}",
+                row.takes
+            );
+            checked += 1;
+            entries += usize::from(ie == "payload-container" && value.get("entries").is_some());
+        }
+    }
+    assert_eq!(
+        entries, 1,
+        "the entries of a container of multiple payloads"
+    );
+    assert!(checked > 500, "{checked}");
 }

@@ -890,6 +890,20 @@ fn sendable(message: Message) -> Result<Message> {
 }
 
 impl EmmMessageType {
+    /// The rows of the table of the message of this type, mandatory IEs
+    /// first: none for a type that the crate has no message of. A DETACH
+    /// REQUEST has the IEs of the UE's and of the network's.
+    pub fn ies(self) -> Vec<crate::IeRow> {
+        use crate::nas_eps::EmmMessage;
+        match self {
+            Self::DetachRequest => message_tree::ies(
+                &["DetachRequestUeOriginating", "DetachRequestUeTerminated"],
+                EmmMessage::ies_named,
+            ),
+            _ => message_tree::ies(&[&format!("{self:?}")], EmmMessage::ies_named),
+        }
+    }
+
     /// The names of the members that the tree of a message of this type can
     /// have: the fields of its header, then its IEs in the order of the
     /// message, with those that are optional. A type that the crate has no
@@ -912,6 +926,12 @@ impl EmmMessageType {
 }
 
 impl EsmMessageType {
+    /// The rows of the table of the message of this type, mandatory IEs
+    /// first: none for a type that the crate has no message of.
+    pub fn ies(self) -> Vec<crate::IeRow> {
+        message_tree::ies(&[&format!("{self:?}")], EsmMessage::ies_named)
+    }
+
     /// The names of the members that the tree of a message of this type can
     /// have: the fields of its header, then its IEs in the order of the
     /// message, with those that are optional. A type that the crate has no
@@ -941,6 +961,21 @@ use core::net::IpAddr;
 
 // The IEs that TS 24.501 and TS 24.301 have alike.
 shared_ies!();
+
+// The IEs whose tree is their octets alone.
+message_tree::octets_alone!(
+    AdditionalInformation,
+    GenericMessageContainer,
+    HashMme,
+    LcsClientIdentity,
+    LlcServiceAccessPointIdentifier,
+    MessageContainer,
+    MobileStationClassmark3,
+    Nonce,
+    QualityOfService,
+    UeCoarseLocationInformation,
+    UserDataContainer,
+);
 
 /// The EPS bearer identities that an IE has the bits of: 1 to 15.
 fn ebis(bearers: &[u16]) -> core::result::Result<Vec<u8>, ValueError> {

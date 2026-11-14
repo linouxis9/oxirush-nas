@@ -35,6 +35,10 @@ use readable::Readable;
 /// An IE type whose octets have a value: what its typed accessors return,
 /// in the readable form of [`readable`].
 pub(crate) trait Decoded: Readable + Clone + PartialEq + 'static {
+    /// What the value of the IE takes, as [`with_decoded`](Self::with_decoded)
+    /// reads it.
+    const VALUE_TAKES: &'static tree::Takes;
+
     /// The value of the octets in `scope`; `None` when they have none. The
     /// value of a container is the tree of its message.
     fn decoded(&self, scope: Scope) -> Option<Value>;
@@ -952,6 +956,8 @@ fn towards(direction: PcoDirection) -> &'static str {
 macro_rules! configuration_options_ie {
     ($($ie:ty),+ $(,)?) => {$(
         impl $crate::common::message_tree::Decoded for $ie {
+            const VALUE_TAKES: &'static oxirush_utils::tree::Takes = <Vec<$crate::common::message_tree::ConfigurationUnit> as $crate::common::readable::Readable>::TAKES;
+
             fn unwritten() -> Self {
                 <$ie>::blank()
             }
@@ -2109,6 +2115,8 @@ impl<E, N> Code<E, N> {
 }
 
 impl<E: readable::Readable, N: readable::Readable> readable::Readable for Code<E, N> {
+    const TAKES: &'static tree::Takes = &tree::Takes::OneOf(&[E::TAKES, N::TAKES]);
+
     fn shown(&self, held: &'static str) -> Value {
         match self {
             Self::Name(name) => name.shown(held),
@@ -2161,6 +2169,9 @@ pub(crate) fn plmns(texts: &[PlmnText]) -> Vec<Plmn> {
 pub(crate) struct TaiForm<T>(pub(crate) T);
 
 impl<T: crate::common::plmn::TaiParts> readable::Readable for TaiForm<T> {
+    const TAKES: &'static tree::Takes =
+        crate::common::forms::tai::of(core::marker::PhantomData::<T>);
+
     fn shown(&self, _: &'static str) -> Value {
         crate::common::forms::tai::shown(&self.0)
     }
@@ -2185,6 +2196,9 @@ crate::common::readable::readable!(
 
 /// The single-bit flags of an IE type, as `nas_ie_flags!` lists them.
 pub(crate) trait Flags {
+    /// Every flag by its name, each a flag in a tree.
+    const FLAG_TAKES: &'static [(&'static str, &'static tree::Takes)];
+
     /// Every flag by its name.
     fn flags(&self) -> Vec<(&'static str, bool)>;
 
@@ -2193,6 +2207,93 @@ pub(crate) trait Flags {
 
     /// Whether the IE has no octet of flags yet.
     fn is_empty(&self) -> bool;
+}
+
+/// One row of the table of a message (TS 24.501 and TS 24.301 chapter 8): an
+/// IE of the message, as its tree has it.
+///
+/// ```
+/// use oxirush_nas::nas_5gs::GmmMessageType;
+/// use oxirush_nas::tree::Takes;
+///
+/// let accept = GmmMessageType::RegistrationAccept.ies();
+/// let t3512 = accept.iter().find(|ie| ie.name == "t3512-value").unwrap();
+/// assert_eq!((t3512.iei, t3512.mandatory, t3512.length), (&[0x5e][..], false, Some((3, 3))));
+/// // Its seconds, or that it is deactivated.
+/// let Takes::OneOf([Takes::Named(["deactivated"]), Takes::Number(_)]) = t3512.takes else {
+///     panic!("{:?}", t3512.takes);
+/// };
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct IeRow {
+    /// The name of the IE, as the tree of the message prints it.
+    pub name: &'static str,
+    /// The IEI of an optional IE, of each of its forms; none of a mandatory one.
+    pub iei: &'static [u8],
+    /// Whether the IE is mandatory.
+    pub mandatory: bool,
+    /// The smallest and the largest number of octets of the IE in the message,
+    /// its IEI included, where the crate has them: `usize::MAX` for a
+    /// length that the table does not bound.
+    pub length: Option<(usize, usize)>,
+    /// What the value of the IE takes in the tree of the message, beside
+    /// `{"octets": …}`, which every IE takes.
+    pub takes: &'static tree::Takes,
+}
+
+/// The rows of the messages of the variants `kinds`, each IE once.
+pub(crate) fn ies(kinds: &[&str], ies: fn(&str) -> Option<&'static [IeRow]>) -> Vec<IeRow> {
+    let mut rows: Vec<IeRow> = Vec::new();
+    for row in kinds.iter().filter_map(|kind| ies(kind)).flatten() {
+        if !rows.iter().any(|known| known.name == row.name) {
+            rows.push(*row);
+        }
+    }
+    rows
+}
+
+/// What the value of an IE type takes in the tree of a message: the value
+/// of a type whose octets have one ([`Decoded`]), or `{"octets": …}`.
+pub(crate) trait IeTakes {
+    const IE_TAKES: &'static tree::Takes;
+}
+
+impl<T: Decoded> IeTakes for T {
+    const IE_TAKES: &'static tree::Takes = T::VALUE_TAKES;
+}
+
+/// What an IE whose tree is its octets alone takes.
+pub(crate) const OCTETS_ALONE: &tree::Takes =
+    &tree::Takes::Members(None, &[("octets", &tree::Takes::Octets(None))]);
+
+/// [`IeTakes`] of the IE types whose tree is their octets alone.
+macro_rules! octets_alone {
+    ($($ie:ty),+ $(,)?) => {$(
+        impl $crate::common::message_tree::IeTakes for $ie {
+            const IE_TAKES: &'static oxirush_utils::tree::Takes = $crate::common::message_tree::OCTETS_ALONE;
+        }
+    )+};
+}
+
+pub(crate) use octets_alone;
+
+/// The members of `first` then those of `second`, `N` of them: what the
+/// value of an IE of members and flags takes.
+pub(crate) const fn joined<const N: usize>(
+    first: &[(&'static str, &'static tree::Takes)],
+    second: &[(&'static str, &'static tree::Takes)],
+) -> [(&'static str, &'static tree::Takes); N] {
+    let mut all = [("", &tree::Takes::Flag); N];
+    let mut at = 0;
+    while at < first.len() {
+        all[at] = first[at];
+        at += 1;
+    }
+    while at < N {
+        all[at] = second[at - first.len()];
+        at += 1;
+    }
+    all
 }
 
 /// The octets of the flags and the fields of an IE: a half octet is always
@@ -2419,6 +2520,8 @@ macro_rules! decoded_ie {
         }
 
         impl $crate::common::message_tree::Decoded for $ie {
+            const VALUE_TAKES: &'static oxirush_utils::tree::Takes = <$form as $crate::common::readable::Readable>::TAKES;
+
             fn unwritten() -> Self {
                 <$ie>::blank()
             }
@@ -2456,6 +2559,9 @@ macro_rules! decoded_ie {
 macro_rules! code_ie {
     ($ie:ty, $code:ty, $name:expr, $from:expr) => {
         impl $crate::common::message_tree::Decoded for $ie {
+            const VALUE_TAKES: &'static oxirush_utils::tree::Takes =
+                <$crate::common::message_tree::Code<$code> as $crate::common::readable::Readable>::TAKES;
+
             fn unwritten() -> Self {
                 <$ie>::blank()
             }
@@ -2558,6 +2664,8 @@ macro_rules! fields_ie {
         }
 
         impl $crate::common::message_tree::Decoded for $ie {
+            const VALUE_TAKES: &'static oxirush_utils::tree::Takes =
+                $crate::common::message_tree::fields_ie!(@takes $ie { $($key: $get;)* } $($flags)?);
 
             fn unwritten() -> Self {
                 <$ie>::blank()
@@ -2704,6 +2812,19 @@ macro_rules! fields_ie {
             }
         }
     };
+    // What the value takes: each member by what its getter returns, and
+    // after `flags` each flag of the IE.
+    (@takes $ie:ident { $($key:literal: $get:expr;)* } flags) => {
+        &oxirush_utils::tree::Takes::Members(None, &$crate::common::message_tree::joined::<{
+            0 $(+ { let _ = $key; 1 })* + <$ie as $crate::common::message_tree::Flags>::FLAG_TAKES.len()
+        }>(
+            &[$(($key, $crate::common::readable::takes_of_value::<$ie, _>($get)),)*],
+            <$ie as $crate::common::message_tree::Flags>::FLAG_TAKES,
+        ))
+    };
+    (@takes $ie:ident { $($key:literal: $get:expr;)* } $($exact:ident)?) => {
+        &oxirush_utils::tree::Takes::Members(None, &[$(($key, $crate::common::readable::takes_of_value::<$ie, _>($get)),)*])
+    };
     (@flags $ie:ident, $members:ident) => {};
     (@flags $ie:ident, $members:ident, exact) => {};
     (@flags $ie:ident, $members:ident, flags) => {
@@ -2768,6 +2889,9 @@ macro_rules! fields_ie {
 macro_rules! built_ie {
     ($ie:ty, $from:expr, { $($key:ident: $ty:ty $(= $get:expr)?),+ $(,)? }) => {
         impl $crate::common::message_tree::Decoded for $ie {
+            const VALUE_TAKES: &'static oxirush_utils::tree::Takes = &oxirush_utils::tree::Takes::Members(None, &[
+                $(($crate::common::names::name!(stringify!($key)), <$ty as $crate::common::readable::Readable>::TAKES),)+
+            ]);
 
             fn unwritten() -> Self {
                 <$ie>::blank()
@@ -2901,6 +3025,9 @@ macro_rules! listed_ie {
 macro_rules! container_ie {
     ($ie:ty: $message:ty, $decode:expr, $encode:expr) => {
         impl $crate::common::message_tree::Decoded for $ie {
+            const VALUE_TAKES: &'static oxirush_utils::tree::Takes =
+                &oxirush_utils::tree::Takes::Message;
+
             fn unwritten() -> Self {
                 <$ie>::blank()
             }

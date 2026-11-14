@@ -3728,6 +3728,35 @@ pub struct TftPacketFilter {
 /// a 5GS QoS rule are; its contents in hexadecimal where they do not.
 #[cfg(feature = "tree")]
 impl crate::common::readable::Readable for TftPacketFilter {
+    const TAKES: &'static oxirush_utils::tree::Takes = &oxirush_utils::tree::Takes::Members(
+        None,
+        &[
+            (
+                "identifier",
+                <u8 as crate::common::readable::Readable>::TAKES,
+            ),
+            (
+                "direction",
+                &oxirush_utils::tree::Takes::OneOf(&[
+                    <TftPacketFilterDirection as crate::common::readable::Readable>::TAKES,
+                    <u8 as crate::common::readable::Readable>::TAKES,
+                ]),
+            ),
+            (
+                "precedence",
+                <u8 as crate::common::readable::Readable>::TAKES,
+            ),
+            (
+                "components",
+                <Vec<TftPacketFilterComponent> as crate::common::readable::Readable>::TAKES,
+            ),
+            (
+                "contents",
+                crate::common::forms::hexadecimal::of(core::marker::PhantomData::<()>),
+            ),
+        ],
+    );
+
     fn shown(&self, _: &'static str) -> oxirush_utils::tree::Value {
         let mut members = crate::common::readable::Members::new();
         members.put("identifier", &self.identifier);

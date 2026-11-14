@@ -628,6 +628,25 @@ macro_rules! nas_message {
                 $(crate::common::names::name!(stringify!($ofield)),)*
             ];
 
+            /// The rows of the table of the message, in the order of
+            /// [`PRINTED_FIELDS`](Self::PRINTED_FIELDS).
+            pub(crate) const IES: &[crate::IeRow] = &[
+                $(crate::IeRow {
+                    name: crate::common::names::name!(stringify!($mfield)),
+                    iei: &[],
+                    mandatory: true,
+                    length: nas_message!(@length $({wire_len $mmin, $mmax})?),
+                    takes: <$mtype as crate::common::message_tree::IeTakes>::IE_TAKES,
+                },)*
+                $(crate::IeRow {
+                    name: crate::common::names::name!(stringify!($ofield)),
+                    iei: &[$($iei),+],
+                    mandatory: false,
+                    length: nas_message!(@length $({wire_len $omin, $omax})?),
+                    takes: <$otype as crate::common::message_tree::IeTakes>::IE_TAKES,
+                },)*
+            ];
+
             /// The message with none of its optional IEs, and each of its
             /// mandatory IEs without octets, as a tree that describes the
             /// message alone writes it.
@@ -872,6 +891,10 @@ macro_rules! nas_message {
     (@sender_mlength $findings:ident, $encoded:ident, $self:ident, $field:ident
         $(, $attr:ident)?) => {};
 
+    // The length of an IE in the message, its IEI included, where the table
+    // of the message gives it.
+    (@length) => { None };
+    (@length {wire_len $min:expr, $max:expr}) => { Some(($min, $max)) };
     (@sender_olength $findings:ident, $encoded:ident, $self:ident, $field:ident,
         ($($iei:literal)|+) $(, $attr:ident)? {wire_len $min:expr, $max:expr}) => {
         if let Some(value) = &$self.$field {
@@ -1143,6 +1166,17 @@ macro_rules! nas_messages {
                     place += 1;
                 )+)*
                 None
+            }
+
+            /// The rows of the table of the message of the variant that `kind`
+            /// names, mandatory ones first.
+            #[cfg(feature = "tree")]
+            pub(crate) fn ies_named(kind: &str) -> Option<&'static [crate::IeRow]> {
+                const IES: &[&[crate::IeRow]] = &[
+                    $(<$body>::IES,)+ $($(<$sbody>::IES,)+)*
+                ];
+                let at = $crate::common::readable::index_of(Self::VARIANTS, Self::PRINTED, kind)?;
+                Some(IES[at])
             }
 
             /// The names of the IEs of the message of the variant that `kind`

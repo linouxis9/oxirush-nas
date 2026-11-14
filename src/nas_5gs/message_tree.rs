@@ -679,6 +679,12 @@ impl Message {
 }
 
 impl GmmMessageType {
+    /// The rows of the table of the message of this type, mandatory IEs
+    /// first: none for a type that the crate has no message of.
+    pub fn ies(self) -> Vec<crate::IeRow> {
+        message_tree::ies(&[&format!("{self:?}")], GmmMessage::ies_named)
+    }
+
     /// The names of the members that the tree of a message of this type can
     /// have: the fields of its header, then its IEs in the order of the
     /// message, with those that are optional. A type that the crate has no
@@ -693,6 +699,12 @@ impl GmmMessageType {
 }
 
 impl GsmMessageType {
+    /// The rows of the table of the message of this type, mandatory IEs
+    /// first: none for a type that the crate has no message of.
+    pub fn ies(self) -> Vec<crate::IeRow> {
+        message_tree::ies(&[&format!("{self:?}")], GsmMessage::ies_named)
+    }
+
     /// The names of the members that the tree of a message of this type can
     /// have: the fields of its header, then its IEs in the order of the
     /// message, with those that are optional. A type that the crate has no
@@ -723,6 +735,61 @@ use core::net::{Ipv4Addr, Ipv6Addr};
 
 // The IEs that TS 24.501 and TS 24.301 have alike.
 shared_ies!();
+
+// The IEs whose tree is their octets alone.
+message_tree::octets_alone!(
+    crate::common::types::AuthenticationFailureParameter,
+    crate::common::types::AuthenticationParameterAutn,
+    crate::common::types::AuthenticationParameterRand,
+    crate::common::types::AuthenticationResponseParameter,
+    Abba,
+    AdditionalInformation,
+    AtsssContainer,
+    EapMessage,
+    Non3GppDeviceInformation,
+    PortManagementInformationContainer,
+);
+
+/// The payload container takes the tree of the 5GSM message that it carries
+/// as N1 SM information, the entries of multiple payloads, each with the
+/// tree of its 5GSM message or its octets, and its octets otherwise.
+impl message_tree::IeTakes for PayloadContainer {
+    const IE_TAKES: &'static oxirush_utils::tree::Takes = {
+        use crate::nas_5gs::MultiplePayloadEntry;
+        use oxirush_utils::tree::Takes;
+        &Takes::OneOf(&[
+            &Takes::Message,
+            &Takes::Members(
+                None,
+                &[(
+                    "entries",
+                    &Takes::List(&Takes::Members(
+                        None,
+                        &[
+                            (
+                                "payload-container-type",
+                                crate::common::forms::tree::takes_member::<MultiplePayloadEntry, _>(
+                                    |entry| &entry.payload_container_type,
+                                ),
+                            ),
+                            (
+                                "optional-ies",
+                                crate::common::readable::takes_of::<MultiplePayloadEntry, _>(
+                                    |entry| &entry.optional_ies,
+                                ),
+                            ),
+                            (
+                                "contents",
+                                &Takes::OneOf(&[&Takes::Message, message_tree::OCTETS_ALONE]),
+                            ),
+                        ],
+                    )),
+                )],
+            ),
+            message_tree::OCTETS_ALONE,
+        ])
+    };
+}
 
 /// A payload container of the type "N1 SM information": a 5GSM message.
 struct N1SmContainer<'a>(&'a PayloadContainer);
