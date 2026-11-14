@@ -24,6 +24,9 @@
 //! protects. `protect` and `unprotect` are with 128-NIA2 and 128-NEA2, which
 //! are AES; on the inputs of one message of a given size they are also
 //! measured with SNOW 3G (`protect-snow3g`) and with ZUC (`protect-zuc`).
+//! `protect-into` is `protect_into` with AES into a buffer made before the
+//! call, as long as the message, as one that a program uses again for each
+//! message.
 
 use crate::{Messages, Operation, done, prepared};
 use oxirush_nas::Direction;
@@ -177,6 +180,24 @@ impl Protected {
                         let wire = black_box(&protected.wire);
                         move || done(context.unprotect(wire, protected.direction, THREE_GPP))
                     }));
+                    if at == 0 {
+                        operations.push(prepared("protect-into", count, move |at| {
+                            let (mut context, protected) = (context_5gs(algorithm), &protected[at]);
+                            let message = black_box(&messages[protected.at].1);
+                            let mut buffer = Vec::with_capacity(protected.wire.len());
+                            move || {
+                                let (header, direction) = (protected.header, protected.direction);
+                                let made = context.protect_into(
+                                    message,
+                                    header,
+                                    direction,
+                                    THREE_GPP,
+                                    &mut buffer,
+                                );
+                                done((made, buffer));
+                            }
+                        }));
+                    }
                 }
                 (Self::Eps(protected), Messages::Eps(messages)) if at < measured => {
                     let protected = &protected[at];
@@ -196,6 +217,19 @@ impl Protected {
                         let wire = black_box(&protected.wire);
                         move || done(context.unprotect(wire, protected.direction))
                     }));
+                    if at == 0 {
+                        operations.push(prepared("protect-into", count, move |at| {
+                            let (mut context, protected) = (context_eps(algorithm), &protected[at]);
+                            let message = black_box(&messages[protected.at].2);
+                            let mut buffer = Vec::with_capacity(protected.wire.len());
+                            move || {
+                                let (header, direction) = (protected.header, protected.direction);
+                                let made =
+                                    context.protect_into(message, header, direction, &mut buffer);
+                                done((made, buffer));
+                            }
+                        }));
+                    }
                 }
                 _ => {}
             }

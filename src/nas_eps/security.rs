@@ -102,6 +102,11 @@ pub struct Verified<M> {
     pub plain: Vec<u8>,
 }
 
+/// The octets of a protected message before the plain one: the security
+/// header type and the protocol discriminator, the code and the sequence
+/// number.
+const PROTECTED_HEADER: usize = 6;
+
 /// What `error` of the plain message `plain` is once the code of the
 /// message was verified.
 fn refused(error: Error, plain: &[u8]) -> Error {
@@ -113,7 +118,7 @@ fn refused(error: Error, plain: &[u8]) -> Error {
 
 /// Cipher the value of the sole container in a CONTROL PLANE SERVICE REQUEST.
 fn cipher_control_plane_container(
-    payload: &mut Vec<u8>,
+    payload: &mut [u8],
     key: &KNasEnc,
     count: NasCount,
     direction: Direction,
@@ -149,7 +154,9 @@ fn cipher_control_plane_container(
             ));
         }
     }
-    *payload = message.encode()?;
+    // Ciphering keeps the length of the value, and the message encodes to
+    // the octets it was decoded from but for the value
+    payload.copy_from_slice(&message.encode()?);
     Ok(())
 }
 
@@ -685,9 +692,47 @@ impl SecurityContext {
         sht: SecurityHeaderType,
         direction: Direction,
     ) -> Result<Vec<u8>> {
+        let mut out = Vec::with_capacity(PROTECTED_HEADER + Message::ENCODED);
+        self.protect_into(inner, sht, direction, &mut out)?;
+        Ok(out)
+    }
+
+    /// Append the message that [`Self::protect`] returns to `out`, which
+    /// allocates nothing once a buffer that is used again for each message
+    /// is long enough. The message is encoded in its place, and ciphered
+    /// there. After an error, `out` is as it was and the COUNT has not
+    /// advanced.
+    ///
+    /// ```
+    /// use oxirush_nas::identity::Algorithm;
+    /// use oxirush_nas::nas_eps::*;
+    /// use oxirush_nas::Direction;
+    ///
+    /// let (int, enc) = (KNasInt::new(&[0x11; 16]), KNasEnc::new(&[0x22; 16]));
+    /// let (eia, eea) = (Algorithm::Aes, Algorithm::Aes);
+    /// let mut mme = SecurityContext::from_fresh_keys(&int, &enc, eia, eea).unwrap();
+    /// let mut ue = SecurityContext::from_fresh_keys(&int, &enc, eia, eea).unwrap();
+    ///
+    /// // One buffer for the downlink messages of a UE
+    /// let header = SecurityHeaderType::IntegrityProtectedAndCiphered;
+    /// let mut buffer = Vec::with_capacity(1500);
+    /// for cause in [3, 6] {
+    ///     buffer.clear();
+    ///     let status = Message::new_emm(EmmStatus::new(EmmCause::new(cause)));
+    ///     mme.protect_into(&status, header, Direction::Downlink, &mut buffer).unwrap();
+    ///     assert_eq!(ue.unprotect(&buffer, Direction::Downlink).unwrap().message, status);
+    /// }
+    /// ```
+    pub fn protect_into(
+        &mut self,
+        inner: &Message,
+        sht: SecurityHeaderType,
+        direction: Direction,
+        out: &mut Vec<u8>,
+    ) -> Result<()> {
         check_protected(inner, sht, direction)?;
-        let inner_bytes = inner.encode()?;
-        self.protect_envelope(inner_bytes, sht, direction)
+        let write = |out: &mut Vec<u8>| crate::Encode::encode_into(inner, out);
+        self.protect_envelope(out, write, sht, direction)
     }
 
     /// Protect explicitly opaque or malformed inner bytes without codec checks.
@@ -716,7 +761,13 @@ impl SecurityContext {
                 "opaque EPS protection takes a header type that protects".into(),
             ));
         }
-        self.protect_envelope(inner_bytes, sht, direction)
+        let mut out = Vec::with_capacity(PROTECTED_HEADER + inner_bytes.len());
+        let write = |out: &mut Vec<u8>| {
+            out.extend_from_slice(&inner_bytes);
+            Ok(())
+        };
+        self.protect_envelope(&mut out, write, sht, direction)?;
+        Ok(out)
     }
 
     /// The message under its security header `[SHT | PD | MAC | SN]`,
@@ -725,12 +776,13 @@ impl SecurityContext {
     /// ciphered" (TS 24.301 §4.4.5).
     fn protect_envelope(
         &mut self,
-        inner_bytes: Vec<u8>,
+        out: &mut Vec<u8>,
+        write: impl FnOnce(&mut Vec<u8>) -> Result<()>,
         sht: SecurityHeaderType,
         direction: Direction,
-    ) -> Result<Vec<u8>> {
+    ) -> Result<()> {
         let header = [((sht as u8) << 4) | EPS_EMM_PROTOCOL_DISCRIMINATOR];
-        let cipher = |core: &Core<Eps>, count, payload: &mut Vec<u8>| match sht {
+        let cipher = |core: &Core<Eps>, count, payload: &mut [u8]| match sht {
             SecurityHeaderType::IntegrityProtectedAndCiphered
             | SecurityHeaderType::IntegrityProtectedAndCipheredWithNewEpsSecurityContext => {
                 core.cipher(count, (), direction, payload);
@@ -742,7 +794,7 @@ impl SecurityContext {
             }
             _ => Ok(()),
         };
-        self.core.seal(&header, inner_bytes, direction, (), cipher)
+        self.core.seal(out, &header, write, direction, (), cipher)
     }
 
     /// Protect the data container of an EMM TRANSPORT (TS 24.301 §4.4.5).
@@ -760,13 +812,20 @@ impl SecurityContext {
             ));
         }
         // The complete data container is ciphered as one unit
-        let payload = data_container.map_or_else(Vec::new, <[u8]>::to_vec);
-        let cipher = |core: &Core<Eps>, count, payload: &mut Vec<u8>| {
+        let payload = data_container.unwrap_or_default();
+        let mut out = Vec::with_capacity(PROTECTED_HEADER + payload.len());
+        let write = |out: &mut Vec<u8>| {
+            out.extend_from_slice(payload);
+            Ok(())
+        };
+        let cipher = |core: &Core<Eps>, count, payload: &mut [u8]| {
             core.cipher(count, (), direction, payload);
             Ok(())
         };
         // The security header type 1011 of an EMM TRANSPORT
-        self.core.seal(&[0xb7], payload, direction, (), cipher)
+        self.core
+            .seal(&mut out, &[0xb7], write, direction, (), cipher)?;
+        Ok(out)
     }
 
     /// Verify, decipher, and decode an inbound EPS NAS message.
@@ -937,6 +996,43 @@ mod tests {
         ControlPlaneServiceType, EmmCause, EsmMessageContainer, KeySetIdentifier, MessageContainer,
         PdnType, RequestType, SecurityAlgorithms, UeSecurityCapability,
     };
+
+    /// `protect_into` appends what `protect` returns. A message that does not
+    /// encode leaves the buffer as it was and takes no COUNT.
+    #[test]
+    fn protect_into_appends_the_message_or_leaves_the_buffer_and_the_count() {
+        let mut context = SecurityContext::from_fresh_keys(
+            &KNasInt::new(&[0x11; 16]),
+            &KNasEnc::new(&[0x22; 16]),
+            Algorithm::Aes,
+            Algorithm::Aes,
+        )
+        .unwrap();
+        let downlink = Direction::Downlink;
+        let sht = SecurityHeaderType::IntegrityProtectedAndCiphered;
+        let message = Message::new_emm(EmmStatus::new(EmmCause::new(3)));
+        let expected = (context.clone()).protect(&message, sht, downlink);
+        let mut buffer = vec![1, 2, 3];
+        (context.protect_into(&message, sht, downlink, &mut buffer)).unwrap();
+        assert_eq!(buffer[..3], [1, 2, 3]);
+        assert_eq!(buffer[3..], expected.unwrap());
+        assert_eq!(context.nas_count(downlink), Some(count(1)));
+
+        // A header whose message type is not that of the message
+        let Message::Emm(mut header, inner) = message else {
+            unreachable!()
+        };
+        header.message_type = crate::nas_eps::EmmMessageType::AttachAccept;
+        let mismatched = Message::Emm(header, inner);
+        let mut buffer = vec![1, 2, 3];
+        let refused = context.protect_into(&mismatched, sht, downlink, &mut buffer);
+        assert!(
+            matches!(refused, Err(Error::EncodingError(_))),
+            "{refused:?}"
+        );
+        assert_eq!(buffer, [1, 2, 3]);
+        assert_eq!(context.nas_count(downlink), Some(count(1)));
+    }
 
     #[test]
     fn security_mode_requires_its_header_and_direction() {

@@ -2377,7 +2377,7 @@ impl Message {
 
     /// What a message is first given to be encoded in: most signalling
     /// messages are shorter, and one that is longer takes more.
-    const ENCODED: usize = 64;
+    pub(crate) const ENCODED: usize = 64;
 }
 
 /// The system and the header of a message, then the message.

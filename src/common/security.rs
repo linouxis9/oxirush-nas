@@ -480,31 +480,39 @@ impl<S: System> Core<S> {
         }
     }
 
-    /// The message of `prefix`, then the code, the sequence number and
-    /// `payload`, protected with the next COUNT of the direction: `cipher`
-    /// ciphers the payload first, if it is to be, and the code is that of
-    /// the sequence number and of what follows it (TS 33.501 §6.4.3.1, TS
-    /// 33.401 §8.1.1). The COUNT advances once the message is made.
+    /// Append to `out` the message of `header`, then the code, the sequence
+    /// number and the payload that `write` appends, protected with the next
+    /// COUNT of the direction: `cipher` ciphers the payload first, if it is
+    /// to be, and the code is that of the sequence number and of what
+    /// follows it (TS 33.501 §6.4.3.1, TS 33.401 §8.1.1). The COUNT advances
+    /// once the message is made. After an error, `out` is as it was and the
+    /// COUNT has not advanced.
     pub(crate) fn seal(
         &mut self,
-        prefix: &[u8],
-        mut payload: Vec<u8>,
+        out: &mut Vec<u8>,
+        header: &[u8],
+        write: impl FnOnce(&mut Vec<u8>) -> Result<(), Error>,
         direction: Direction,
         connection: S::Connection,
-        cipher: impl FnOnce(&Self, NasCount, &mut Vec<u8>) -> Result<(), Error>,
-    ) -> Result<Vec<u8>, Error> {
-        let count = self.count(direction, connection).to_send()?;
-        cipher(self, count, &mut payload)?;
-        let mut message = Vec::with_capacity(prefix.len() + 5 + payload.len());
-        message.extend_from_slice(prefix);
-        message.extend_from_slice(&[0; 4]);
-        message.push(count.sequence_number());
-        message.extend_from_slice(&payload);
-        let at = prefix.len();
-        let mac = self.mac(count, connection, direction, &message[at + 4..]);
-        message[at..at + 4].copy_from_slice(&mac.to_be_bytes());
-        self.advance(direction, connection, count);
-        Ok(message)
+        cipher: impl FnOnce(&Self, NasCount, &mut [u8]) -> Result<(), Error>,
+    ) -> Result<(), Error> {
+        let start = out.len();
+        out.extend_from_slice(header);
+        out.extend_from_slice(&[0; 5]);
+        let made = write(out).and_then(|()| {
+            let count = self.count(direction, connection).to_send()?;
+            let sealed = &mut out[start + header.len()..];
+            cipher(self, count, &mut sealed[5..])?;
+            sealed[4] = count.sequence_number();
+            let mac = self.mac(count, connection, direction, &sealed[4..]);
+            sealed[..4].copy_from_slice(&mac.to_be_bytes());
+            self.advance(direction, connection, count);
+            Ok(())
+        });
+        if made.is_err() {
+            out.truncate(start);
+        }
+        made
     }
 
     /// Verify a received message whose code is after the `prefix` octets of

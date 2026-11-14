@@ -4,7 +4,19 @@ All notable changes to `oxirush-nas` are recorded here.
 
 ## Unreleased
 
+### Added
+
+- `protect_into()` of the 5GS and of the EPS `SecurityContext` appends the
+  protected message to a buffer, which allocates nothing once a buffer that
+  is used again is long enough: the message is encoded in its place and
+  ciphered there. With AES, a REGISTRATION ACCEPT of 247 octets is protected
+  in 420 ns, where `protect()` took 522 ns.
+
 ### Changed
+
+- `protect()` is written on `protect_into()`, and has one allocation and
+  one copy of the message fewer: 476 ns for that REGISTRATION ACCEPT, three
+  allocations where it had four.
 
 - `to_tree()`, `from_tree()`, `with_tree()`, `select()` and `means_the_same()`
   of a 5GS and of an EPS message are five to fifteen times as fast, with a

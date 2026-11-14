@@ -182,6 +182,11 @@ enum InitialForm {
 /// them, its non-cleartext IEs (TS 24.501 §4.4.6 b) 2) ii), §9.11.3.33).
 const CPSR_CLEARTEXT: usize = 4;
 
+/// The octets of a protected message before the plain one: the extended
+/// protocol discriminator, the security header type, the code and the
+/// sequence number.
+const PROTECTED_HEADER: usize = 7;
+
 /// How the initial NAS message `message` is sent. The cleartext IEs are
 /// those that the clause lists for each of the four messages; every other
 /// IE, and an IE that the message table does not have, is ciphered.
@@ -702,9 +707,49 @@ impl SecurityContext {
         direction: Direction,
         connection: NasConnection,
     ) -> Result<Vec<u8>> {
+        let mut out = Vec::with_capacity(PROTECTED_HEADER + Message::ENCODED);
+        self.protect_into(inner, sht, direction, connection, &mut out)?;
+        Ok(out)
+    }
+
+    /// Append the message that [`Self::protect`] returns to `out`, which
+    /// allocates nothing once a buffer that is used again for each message
+    /// is long enough. The message is encoded in its place, and ciphered
+    /// there. After an error, `out` is as it was and the COUNT has not
+    /// advanced.
+    ///
+    /// ```
+    /// use oxirush_nas::identity::Algorithm;
+    /// use oxirush_nas::nas_5gs::*;
+    /// use oxirush_nas::Direction;
+    ///
+    /// let kamf = KAmf::new(&[0x11; 32]);
+    /// let (nia, nea) = (Algorithm::Aes, Algorithm::Aes);
+    /// let mut amf = SecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
+    /// let mut ue = SecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
+    ///
+    /// // One buffer for the downlink messages of a UE
+    /// let header = SecurityHeaderType::IntegrityProtectedAndCiphered;
+    /// let access = NasConnection::ThreeGpp;
+    /// let mut buffer = Vec::with_capacity(1500);
+    /// for cause in [GmmCauseValue::Congestion, GmmCauseValue::PlmnNotAllowed] {
+    ///     buffer.clear();
+    ///     let status = Message::new_5gmm(GmmStatus::new(GmmCause::from_cause(cause)));
+    ///     amf.protect_into(&status, header, Direction::Downlink, access, &mut buffer).unwrap();
+    ///     assert_eq!(ue.unprotect(&buffer, Direction::Downlink, access).unwrap().message, status);
+    /// }
+    /// ```
+    pub fn protect_into(
+        &mut self,
+        inner: &Message,
+        sht: SecurityHeaderType,
+        direction: Direction,
+        connection: NasConnection,
+        out: &mut Vec<u8>,
+    ) -> Result<()> {
         check_protected(inner, sht, direction)?;
-        let inner_bytes = inner.encode()?;
-        self.protect_envelope(inner_bytes, sht, direction, connection)
+        let write = |out: &mut Vec<u8>| crate::Encode::encode_into(inner, out);
+        self.protect_envelope(out, write, sht, direction, connection)
     }
 
     /// Protect an initial NAS message as a UE that has this security
@@ -941,31 +986,38 @@ impl SecurityContext {
                 "opaque 5GS protection takes a header type that protects".into(),
             ));
         }
-        self.protect_envelope(inner_bytes, sht, direction, connection)
+        let mut out = Vec::with_capacity(PROTECTED_HEADER + inner_bytes.len());
+        let write = |out: &mut Vec<u8>| {
+            out.extend_from_slice(&inner_bytes);
+            Ok(())
+        };
+        self.protect_envelope(&mut out, write, sht, direction, connection)?;
+        Ok(out)
     }
 
     /// The message under its security header `[EPD | SHT | MAC | SN]`,
     /// ciphered for the header types that cipher (TS 33.501 §6.4.3.1).
     fn protect_envelope(
         &mut self,
-        inner_bytes: Vec<u8>,
+        out: &mut Vec<u8>,
+        write: impl FnOnce(&mut Vec<u8>) -> Result<()>,
         sht: SecurityHeaderType,
         direction: Direction,
         connection: NasConnection,
-    ) -> Result<Vec<u8>> {
+    ) -> Result<()> {
         let ciphers = matches!(
             sht,
             SecurityHeaderType::IntegrityProtectedAndCiphered
                 | SecurityHeaderType::IntegrityProtectedAndCipheredWithNewFiveGNasSecurityContext
         );
         let header = [EXTENDED_PROTOCOL_DISCRIMINATOR_5GMM, sht as u8];
-        let cipher = |core: &Core<FiveGs>, count, payload: &mut Vec<u8>| {
+        let cipher = |core: &Core<FiveGs>, count, payload: &mut [u8]| {
             if ciphers {
                 core.cipher(count, connection, direction, payload);
             }
             Ok(())
         };
-        (self.core).seal(&header, inner_bytes, direction, connection, cipher)
+        (self.core).seal(out, &header, write, direction, connection, cipher)
     }
 
     /// Unprotect an inbound security-protected NAS message.
@@ -1165,9 +1217,15 @@ impl SecurityContext {
         check_eps_mobility_request(eps_plain)?;
         let (uplink, three_gpp) = (Direction::Uplink, NasConnection::ThreeGpp);
         let count = self.core.count(uplink, three_gpp).to_send()?;
-        // The EPS security header: SHT 0001 and the EMM discriminator
-        let plain = eps_plain.to_vec();
-        let out = (self.core).seal(&[0x17], plain, uplink, three_gpp, |_, _, _| Ok(()))?;
+        // The EPS security header: SHT 0001 and the EMM discriminator, then
+        // the code and the sequence number
+        let mut out = Vec::with_capacity(6 + eps_plain.len());
+        let write = |out: &mut Vec<u8>| {
+            out.extend_from_slice(eps_plain);
+            Ok(())
+        };
+        let plain = |_: &_, _, _: &mut [u8]| Ok(());
+        (self.core).seal(&mut out, &[0x17], write, uplink, three_gpp, plain)?;
         Ok((out, count))
     }
 
@@ -1393,6 +1451,44 @@ mod tests {
     /// A NAS COUNT of a message.
     fn count(count: u32) -> NasCount {
         NasCount::new(count).unwrap()
+    }
+
+    /// `protect_into` appends what `protect` returns. A message that does not
+    /// encode leaves the buffer as it was and takes no COUNT.
+    #[test]
+    fn protect_into_appends_the_message_or_leaves_the_buffer_and_the_count() {
+        let mut context = SecurityContext::from_fresh_keys(
+            &KNasInt::new(&[0x11; 16]),
+            &KNasEnc::new(&[0x22; 16]),
+            Algorithm::Aes,
+            Algorithm::Aes,
+        )
+        .unwrap();
+        let (downlink, access) = (Direction::Downlink, NasConnection::ThreeGpp);
+        let sht = SecurityHeaderType::IntegrityProtectedAndCiphered;
+        let cause = crate::nas_5gs::GmmCause::from_cause(crate::nas_5gs::GmmCauseValue::Congestion);
+        let message = Message::new_5gmm(crate::nas_5gs::GmmStatus::new(cause));
+        let expected = (context.clone()).protect(&message, sht, downlink, access);
+        let mut buffer = vec![1, 2, 3];
+        (context.protect_into(&message, sht, downlink, access, &mut buffer)).unwrap();
+        assert_eq!(buffer[..3], [1, 2, 3]);
+        assert_eq!(buffer[3..], expected.unwrap());
+        assert_eq!(context.nas_count(downlink, access), Some(count(1)));
+
+        // A header whose message type is not that of the message
+        let Message::Gmm(mut header, inner) = message else {
+            unreachable!()
+        };
+        header.message_type = crate::nas_5gs::GmmMessageType::RegistrationAccept;
+        let mismatched = Message::Gmm(header, inner);
+        let mut buffer = vec![1, 2, 3];
+        let refused = context.protect_into(&mismatched, sht, downlink, access, &mut buffer);
+        assert!(
+            matches!(refused, Err(Error::EncodingError(_))),
+            "{refused:?}"
+        );
+        assert_eq!(buffer, [1, 2, 3]);
+        assert_eq!(context.nas_count(downlink, access), Some(count(1)));
     }
 
     #[test]

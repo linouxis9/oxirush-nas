@@ -2767,7 +2767,7 @@ impl Message {
 
     /// What a message is first given to be encoded in: most signalling
     /// messages are shorter, and one that is longer takes more.
-    const ENCODED: usize = 64;
+    pub(crate) const ENCODED: usize = 64;
 
     /// The message that TS 24.301 clause 7 has a receiver answer with, to
     /// `octets` that [`Self::decode`] refused with `error`. `direction` is
