@@ -760,9 +760,35 @@ impl Message {
         &self,
         path: &str,
     ) -> core::result::Result<Vec<oxirush_utils::tree::Value>, oxirush_utils::tree::Error> {
-        crate::paths::of_message(&self.to_tree(), path, |ie| {
-            message_tree::ie_octets(self, ie)
-        })
+        self.select_in(&self.to_tree(), path)
+    }
+
+    /// [`Self::select`] in `tree`, the [tree](Self::to_tree) of the message
+    /// that the caller built already: several selections in one message
+    /// build its tree once.
+    ///
+    /// ```
+    /// use oxirush_nas::nas_eps::Message;
+    /// use oxirush_nas::tree;
+    ///
+    /// // ATTACH REJECT with EMM cause #3
+    /// let reject = Message::decode(&[0x07, 0x44, 0x03]).unwrap();
+    /// let tree = reject.to_tree();
+    /// assert_eq!(reject.select_in(&tree, "/nas/emm-cause")?, [tree!("illegal-ue")]);
+    /// assert_eq!(reject.select_in(&tree, "/nas/emm-cause/octets")?, [tree!("03")]);
+    /// # Ok::<(), tree::Error>(())
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// Those of [`Self::select`]. A tree that is not that of the message
+    /// selects what it has, and the octets of the message.
+    pub fn select_in(
+        &self,
+        tree: &oxirush_utils::tree::Value,
+        path: &str,
+    ) -> core::result::Result<Vec<oxirush_utils::tree::Value>, oxirush_utils::tree::Error> {
+        crate::paths::of_message(tree, path, |ie| message_tree::ie_octets(self, ie))
     }
 
     /// The message that an edited tree of this one writes: this message, with

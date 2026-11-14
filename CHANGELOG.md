@@ -6,6 +6,9 @@ All notable changes to `oxirush-nas` are recorded here.
 
 ### Added
 
+- `select_in()` of the 5GS and of the EPS `Message` selects in a tree of the
+  message that the caller built already, as `select()` does in the one that
+  it builds: several selections build the tree once.
 - `protect_into()` of the 5GS and of the EPS `SecurityContext` appends the
   protected message to a buffer, which allocates nothing once a buffer that
   is used again is long enough: the message is encoded in its place and
