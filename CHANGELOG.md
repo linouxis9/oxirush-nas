@@ -45,6 +45,12 @@ All notable changes to `oxirush-nas` are recorded here.
 
 ### Fixed
 
+- `validate()` of a 5GS message says once each of the lengths of the ABBA,
+  RAND, AUTN, AUTS, the UE security capability, the replayed one and the
+  session AMBR, which the message structs said a second time in words of
+  their own ("ABBA must be at least 2 bytes"). The `validate()` of a 5GS
+  message struct starts from the rules of the IEs of its fields, as an EPS
+  one does, so the struct alone has those findings too.
 - `validate()` says the length of an IE once. A value that the clause of
   its IE finds too short or too long had a second finding from the table of
   its message, the same range with the octets of the IEI and of the length:

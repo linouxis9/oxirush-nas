@@ -395,8 +395,6 @@ pub(crate) trait MessageBody: crate::common::Encode + crate::common::Validate {
     fn unknown_ies(&self) -> &UnknownIes;
     /// Findings on optional IEs that were ignored during decoding.
     fn ie_order_findings(&self) -> Vec<ValidationError>;
-    /// Order findings followed by the sender check findings.
-    fn ie_findings(&self) -> Vec<ValidationError>;
     /// Visit the IEs that the message has, for its tree.
     #[cfg(feature = "tree")]
     fn ies(&self, scope: crate::common::view::Scope, visit: &mut crate::common::view::Visit<'_>);
@@ -564,13 +562,6 @@ macro_rules! nas_message {
                 )
             }
 
-            /// Order findings followed by the sender check findings.
-            pub(crate) fn ie_findings(&self) -> Vec<crate::common::ValidationError> {
-                let mut findings = self.ie_order_findings();
-                findings.extend(self.sender_check_findings());
-                findings
-            }
-
             /// The findings of the sender rules of the IE types of the
             /// fields ([`IeRules`](crate::common::IeRules)).
             pub(crate) fn sender_check_findings(&self) -> Vec<crate::common::ValidationError> {
@@ -582,15 +573,16 @@ macro_rules! nas_message {
                 // one buffer, one after the other.
                 #[allow(unused_mut, unused_variables)]
                 let mut encoded = Vec::<u8>::new();
-                // The fields whose length the rule of their IE type has
-                // found at fault: the table has the same length with the
-                // octets of the IEI and of the length, and does not say it
-                // again.
+                // The fields that the rule of their IE type has found at
+                // fault: the table has the same length with the octets of
+                // the IEI and of the length, which the rule says or holds,
+                // and does not say it again.
                 #[allow(unused_mut, unused_variables)]
                 let mut said = Vec::<&'static str>::new();
                 $(
                     if let Some(rule) = self.$mfield.sender_fault() {
                         findings.push(invalid_ie(stringify!($mfield), rule));
+                        said.push(stringify!($mfield));
                     } else if let Some(rule) = self.$mfield.sender_length_fault() {
                         findings.push(invalid_ie(stringify!($mfield), &rule));
                         said.push(stringify!($mfield));
@@ -600,6 +592,7 @@ macro_rules! nas_message {
                     if let Some(value) = &self.$ofield {
                         if let Some(rule) = value.sender_fault() {
                             findings.push(invalid_ie(stringify!($ofield), rule));
+                            said.push(stringify!($ofield));
                         } else if let Some(rule) = value.sender_length_fault() {
                             findings.push(invalid_ie(stringify!($ofield), &rule));
                             said.push(stringify!($ofield));
@@ -645,9 +638,6 @@ macro_rules! nas_message {
             }
             fn ie_order_findings(&self) -> Vec<crate::common::ValidationError> {
                 Self::ie_order_findings(self)
-            }
-            fn ie_findings(&self) -> Vec<crate::common::ValidationError> {
-                Self::ie_findings(self)
             }
             #[cfg(feature = "tree")]
             #[allow(unused_variables, unused_mut, unused_assignments)]

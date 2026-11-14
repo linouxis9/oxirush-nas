@@ -232,6 +232,77 @@ fn a_length_that_an_ie_breaks_is_said_by_its_clause_alone() {
     }
 }
 
+/// The seven lengths that the clause of an IE gives (ABBA, RAND, AUTN, AUTS,
+/// the UE security capability, the replayed one and the session AMBR) are
+/// each said once by a message, and by its struct alone too.
+#[test]
+fn the_length_of_an_ie_of_an_authentication_or_a_session_is_said_once() {
+    let once = |errors: Vec<ValidationError>, field: &str| {
+        assert_eq!(of(&errors, field).len(), 1, "{field}: {errors:?}");
+    };
+    let mut request = AuthenticationRequest::new(KeySetIdentifier::new(0), Abba::new(vec![0]));
+    request.authentication_parameter_rand = Some(AuthenticationParameterRand::new(vec![0; 15]));
+    request.authentication_parameter_autn = Some(AuthenticationParameterAutn::new(vec![0; 17]));
+    for field in [
+        "abba",
+        "authentication_parameter_rand",
+        "authentication_parameter_autn",
+    ] {
+        once(request.validate(), field);
+        once(
+            GmmMessage::AuthenticationRequest(Box::new(request.clone())).validate(),
+            field,
+        );
+    }
+
+    let mut failure = AuthenticationFailure::new(GmmCause::new(0x15));
+    failure.authentication_failure_parameter =
+        Some(AuthenticationFailureParameter::new(vec![0; 13]));
+    let field = "authentication_failure_parameter";
+    once(failure.validate(), field);
+    once(
+        GmmMessage::AuthenticationFailure(Box::new(failure)).validate(),
+        field,
+    );
+
+    let mut registration = RegistrationRequest::new(
+        RegistrationType::new(0x09),
+        KeySetIdentifier::new(7),
+        MobileIdentity::new(vec![
+            0x01, 0x02, 0xf8, 0x39, 0xf0, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
+        ]),
+    );
+    registration.ue_security_capability = Some(UeSecurityCapability::new(vec![0xe0]));
+    let field = "ue_security_capability";
+    once(registration.validate(), field);
+    once(
+        GmmMessage::RegistrationRequest(Box::new(registration)).validate(),
+        field,
+    );
+
+    let mut command = security_mode_command();
+    command.replayed_ue_security_capabilities = UeSecurityCapability::new(vec![0xe0]);
+    let field = "replayed_ue_security_capabilities";
+    once(command.validate(), field);
+    once(
+        GmmMessage::SecurityModeCommand(Box::new(command)).validate(),
+        field,
+    );
+
+    let accept = PduSessionEstablishmentAccept::new(
+        PduSessionType::new(1),
+        SscMode::new(1),
+        QosRules::new(vec![0x01, 0x00, 0x06, 0x31, 0x01, 0x01, 0xff, 0x01, 0x01]),
+        SessionAmbr::new(vec![0x06, 0x00, 0x01, 0x06, 0x00]),
+    );
+    let field = "session_ambr";
+    once(accept.validate(), field);
+    once(
+        GsmMessage::PduSessionEstablishmentAccept(Box::new(accept)).validate(),
+        field,
+    );
+}
+
 #[test]
 fn replayed_ue_security_capabilities_have_two_octets_at_least() {
     let mut command = security_mode_command();

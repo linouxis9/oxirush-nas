@@ -578,7 +578,7 @@ impl Validate for GmmMessage {
         with_optional_ie_checks(
             body.validate(),
             unknown,
-            body.ie_findings(),
+            body.ie_order_findings(),
             UNKNOWN_TLVE_START,
         )
     }
@@ -591,7 +591,7 @@ impl Validate for GsmMessage {
         with_optional_ie_checks(
             body.validate(),
             unknown,
-            body.ie_findings(),
+            body.ie_order_findings(),
             UNKNOWN_TLVE_START,
         )
     }
@@ -602,7 +602,7 @@ macro_rules! impl_validate_empty {
         $(
             impl Validate for $name {
                 fn validate(&self) -> Vec<ValidationError> {
-                    Vec::new()
+                    self.sender_check_findings()
                 }
             }
         )+
@@ -614,7 +614,7 @@ macro_rules! impl_validate_mandatory_eap {
         $(
             impl Validate for $name {
                 fn validate(&self) -> Vec<ValidationError> {
-                    let mut errors = Vec::new();
+                    let mut errors = self.sender_check_findings();
                     push_ie_strict_result(&mut errors, "eap_message", self.eap_message.validate_strict());
                     $(push_optional_epco(&mut errors, self.$epco.as_ref());)?
                     errors
@@ -629,7 +629,7 @@ macro_rules! impl_validate_optional_eap {
         $(
             impl Validate for $name {
                 fn validate(&self) -> Vec<ValidationError> {
-                    let mut errors = Vec::new();
+                    let mut errors = self.sender_check_findings();
                     push_optional_eap(&mut errors, self.eap_message.as_ref());
                     $(push_optional_epco(&mut errors, self.$epco.as_ref());)?
                     errors
@@ -644,7 +644,7 @@ macro_rules! impl_validate_snssai_eap {
         $(
             impl Validate for $name {
                 fn validate(&self) -> Vec<ValidationError> {
-                    let mut errors = Vec::new();
+                    let mut errors = self.sender_check_findings();
                     if self.s_nssai.value.len() > 4 || self.s_nssai.parse().is_none() {
                         errors.push(ValidationError {
                             severity: Severity::Error,
@@ -665,7 +665,7 @@ macro_rules! impl_validate_optional_epco {
         $(
             impl Validate for $name {
                 fn validate(&self) -> Vec<ValidationError> {
-                    let mut errors = Vec::new();
+                    let mut errors = self.sender_check_findings();
                     push_optional_epco(&mut errors, self.extended_protocol_configuration_options.as_ref());
                     errors
                 }
@@ -803,7 +803,7 @@ fn push_optional_epco(
 
 impl Validate for RegistrationRequest {
     fn validate(&self) -> Vec<ValidationError> {
-        let mut errs = Vec::new();
+        let mut errs = self.sender_check_findings();
 
         // Registration type must be 1-7
         let reg_type = self.fgs_registration_type.value & 0x07;
@@ -848,17 +848,6 @@ impl Validate for RegistrationRequest {
             });
         }
 
-        // UE security capability minimum 2 bytes
-        if let Some(ref cap) = self.ue_security_capability
-            && cap.value.len() < 2
-        {
-            errs.push(ValidationError {
-                severity: Severity::Error,
-                field: "ue_security_capability",
-                message: format!("Must be at least 2 bytes (EA+IA), got {}", cap.value.len()),
-            });
-        }
-
         if let Some(capability) = &self.fgmm_capability {
             push_ie_strict_result(&mut errs, "fgmm_capability", capability.validate_strict());
         }
@@ -898,7 +887,7 @@ impl Validate for RegistrationRequest {
 
 impl Validate for RegistrationAccept {
     fn validate(&self) -> Vec<ValidationError> {
-        let mut errs = Vec::new();
+        let mut errs = self.sender_check_findings();
         push_optional_eap(&mut errs, self.eap_message.as_ref());
 
         // Registration result must not be empty
@@ -934,7 +923,7 @@ impl Validate for RegistrationAccept {
 
 impl Validate for RegistrationReject {
     fn validate(&self) -> Vec<ValidationError> {
-        let mut errs = Vec::new();
+        let mut errs = self.sender_check_findings();
         push_optional_eap(&mut errs, self.eap_message.as_ref());
         if GmmCause::new(self.fgmm_cause.value).cause().is_none() {
             errs.push(ValidationError {
@@ -952,7 +941,7 @@ impl Validate for RegistrationReject {
 
 impl Validate for ConfigurationUpdateCommand {
     fn validate(&self) -> Vec<ValidationError> {
-        let mut errs = Vec::new();
+        let mut errs = self.sender_check_findings();
         if let Some(container) = &self.service_level_aa_container {
             push_ie_strict_result(
                 &mut errs,
@@ -969,42 +958,8 @@ impl Validate for ConfigurationUpdateCommand {
 
 impl Validate for AuthenticationRequest {
     fn validate(&self) -> Vec<ValidationError> {
-        let mut errs = Vec::new();
+        let mut errs = self.sender_check_findings();
         push_optional_eap(&mut errs, self.eap_message.as_ref());
-
-        // ABBA is mandatory (minimum 2 bytes)
-        if self.abba.value.len() < 2 {
-            errs.push(ValidationError {
-                severity: Severity::Error,
-                field: "abba",
-                message: format!(
-                    "ABBA must be at least 2 bytes, got {}",
-                    self.abba.value.len()
-                ),
-            });
-        }
-
-        // RAND must be exactly 16 bytes if present
-        if let Some(ref rand) = self.authentication_parameter_rand
-            && rand.value.len() != 16
-        {
-            errs.push(ValidationError {
-                severity: Severity::Error,
-                field: "authentication_parameter_rand",
-                message: format!("RAND must be 16 bytes, got {}", rand.value.len()),
-            });
-        }
-
-        // AUTN must be exactly 16 bytes if present
-        if let Some(ref autn) = self.authentication_parameter_autn
-            && autn.value.len() != 16
-        {
-            errs.push(ValidationError {
-                severity: Severity::Error,
-                field: "authentication_parameter_autn",
-                message: format!("AUTN must be 16 bytes, got {}", autn.value.len()),
-            });
-        }
 
         let has_rand = self.authentication_parameter_rand.is_some();
         let has_autn = self.authentication_parameter_autn.is_some();
@@ -1030,25 +985,15 @@ impl Validate for AuthenticationRequest {
 
 impl Validate for AuthenticationFailure {
     fn validate(&self) -> Vec<ValidationError> {
-        let mut errs = Vec::new();
+        let mut errs = self.sender_check_findings();
 
         // If cause is SynchFailure (0x15), AUTS must be present
-        if self.fgmm_cause.value == 0x15 {
-            if self.authentication_failure_parameter.is_none() {
-                errs.push(ValidationError {
-                    severity: Severity::Error,
-                    field: "authentication_failure_parameter",
-                    message: "AUTS is required when cause is SynchFailure (0x15)".into(),
-                });
-            } else if let Some(ref auts) = self.authentication_failure_parameter
-                && auts.value.len() != 14
-            {
-                errs.push(ValidationError {
-                    severity: Severity::Error,
-                    field: "authentication_failure_parameter",
-                    message: format!("AUTS must be 14 bytes, got {}", auts.value.len()),
-                });
-            }
+        if self.fgmm_cause.value == 0x15 && self.authentication_failure_parameter.is_none() {
+            errs.push(ValidationError {
+                severity: Severity::Error,
+                field: "authentication_failure_parameter",
+                message: "AUTS is required when cause is SynchFailure (0x15)".into(),
+            });
         }
 
         errs
@@ -1057,7 +1002,7 @@ impl Validate for AuthenticationFailure {
 
 impl Validate for SecurityModeCommand {
     fn validate(&self) -> Vec<ValidationError> {
-        let mut errs = Vec::new();
+        let mut errs = self.sender_check_findings();
         push_optional_eap(&mut errs, self.eap_message.as_ref());
 
         let sa = &self.selected_nas_security_algorithms;
@@ -1091,25 +1036,13 @@ impl Validate for SecurityModeCommand {
             });
         }
 
-        // Replayed UE security capability minimum 2 bytes
-        if self.replayed_ue_security_capabilities.value.len() < 2 {
-            errs.push(ValidationError {
-                severity: Severity::Error,
-                field: "replayed_ue_security_capabilities",
-                message: format!(
-                    "Must be at least 2 bytes, got {}",
-                    self.replayed_ue_security_capabilities.value.len()
-                ),
-            });
-        }
-
         errs
     }
 }
 
 impl Validate for SecurityModeComplete {
     fn validate(&self) -> Vec<ValidationError> {
-        let mut errors = Vec::new();
+        let mut errors = self.sender_check_findings();
         // NAS message container should be present for initial registration
         // (contains the initial RegistrationRequest), but it's technically optional
         if self
@@ -1142,7 +1075,7 @@ impl Validate for SecurityModeComplete {
 
 impl Validate for IdentityRequest {
     fn validate(&self) -> Vec<ValidationError> {
-        let mut errs = Vec::new();
+        let mut errs = self.sender_check_findings();
         if self.identity_type.value & 0xF8 != 0 {
             errs.push(ValidationError {
                 severity: Severity::Error,
@@ -1164,7 +1097,7 @@ impl Validate for IdentityRequest {
 
 impl Validate for IdentityResponse {
     fn validate(&self) -> Vec<ValidationError> {
-        let mut errs = Vec::new();
+        let mut errs = self.sender_check_findings();
         if self.mobile_identity.value.is_empty() {
             errs.push(ValidationError {
                 severity: Severity::Error,
@@ -1189,7 +1122,7 @@ impl Validate for IdentityResponse {
 
 impl Validate for ServiceRequest {
     fn validate(&self) -> Vec<ValidationError> {
-        let mut errs = Vec::new();
+        let mut errs = self.sender_check_findings();
         if ServiceTypeValue::try_from(self.service_type.service_type_raw() & 0x0F)
             .ok()
             .is_none()
@@ -1216,7 +1149,7 @@ impl Validate for ServiceRequest {
 
 impl Validate for UlNasTransport {
     fn validate(&self) -> Vec<ValidationError> {
-        let mut errs = Vec::new();
+        let mut errs = self.sender_check_findings();
 
         push_payload_container_type(&mut errs, Some(&self.payload_container_type));
 
@@ -1274,7 +1207,7 @@ impl Validate for UlNasTransport {
 
 impl Validate for DlNasTransport {
     fn validate(&self) -> Vec<ValidationError> {
-        let mut errs = Vec::new();
+        let mut errs = self.sender_check_findings();
 
         push_payload_container_type(&mut errs, Some(&self.payload_container_type));
 
@@ -1328,7 +1261,7 @@ impl Validate for DlNasTransport {
 
 impl Validate for ControlPlaneServiceRequest {
     fn validate(&self) -> Vec<ValidationError> {
-        let mut errs = Vec::new();
+        let mut errs = self.sender_check_findings();
         push_payload_container_type(&mut errs, self.payload_container_type.as_ref());
 
         if self.ciot_small_data_container.is_some()
@@ -1387,7 +1320,7 @@ impl Validate for ControlPlaneServiceRequest {
 
 impl Validate for PduSessionEstablishmentRequest {
     fn validate(&self) -> Vec<ValidationError> {
-        let mut errs = Vec::new();
+        let mut errs = self.sender_check_findings();
         push_optional_epco(
             &mut errs,
             self.extended_protocol_configuration_options.as_ref(),
@@ -1452,7 +1385,7 @@ impl Validate for PduSessionEstablishmentRequest {
 
 impl Validate for PduSessionEstablishmentAccept {
     fn validate(&self) -> Vec<ValidationError> {
-        let mut errs = Vec::new();
+        let mut errs = self.sender_check_findings();
         if !self.selected_pdu_session_type.is_well_formed() {
             errs.push(ValidationError {
                 severity: Severity::Error,
@@ -1503,18 +1436,6 @@ impl Validate for PduSessionEstablishmentAccept {
             self.authorized_qos_rules.validate_strict(),
         );
 
-        // Session-AMBR must be 6 bytes
-        if self.session_ambr.value.len() != 6 {
-            errs.push(ValidationError {
-                severity: Severity::Error,
-                field: "session_ambr",
-                message: format!(
-                    "Session-AMBR must be 6 bytes, got {}",
-                    self.session_ambr.value.len()
-                ),
-            });
-        }
-
         if let Some(container) = &self.service_level_aa_container {
             push_ie_strict_result(
                 &mut errs,
@@ -1529,7 +1450,7 @@ impl Validate for PduSessionEstablishmentAccept {
 
 impl Validate for PduSessionEstablishmentReject {
     fn validate(&self) -> Vec<ValidationError> {
-        let mut errs = Vec::new();
+        let mut errs = self.sender_check_findings();
         push_optional_epco(
             &mut errs,
             self.extended_protocol_configuration_options.as_ref(),
@@ -1555,7 +1476,7 @@ impl Validate for PduSessionEstablishmentReject {
 
 impl Validate for PduSessionModificationRequest {
     fn validate(&self) -> Vec<ValidationError> {
-        let mut errs = Vec::new();
+        let mut errs = self.sender_check_findings();
         push_optional_epco(
             &mut errs,
             self.extended_protocol_configuration_options.as_ref(),
@@ -1601,7 +1522,7 @@ impl Validate for PduSessionModificationRequest {
 
 impl Validate for PduSessionModificationCommand {
     fn validate(&self) -> Vec<ValidationError> {
-        let mut errs = Vec::new();
+        let mut errs = self.sender_check_findings();
         push_optional_epco(
             &mut errs,
             self.extended_protocol_configuration_options.as_ref(),
@@ -1622,7 +1543,7 @@ impl Validate for PduSessionModificationCommand {
 
 impl Validate for PduSessionReleaseCommand {
     fn validate(&self) -> Vec<ValidationError> {
-        let mut errs = Vec::new();
+        let mut errs = self.sender_check_findings();
         push_optional_epco(
             &mut errs,
             self.extended_protocol_configuration_options.as_ref(),
@@ -1641,7 +1562,7 @@ impl Validate for PduSessionReleaseCommand {
 
 impl Validate for ServiceLevelAuthenticationCommand {
     fn validate(&self) -> Vec<ValidationError> {
-        let mut errs = Vec::new();
+        let mut errs = self.sender_check_findings();
         if self.service_level_aa_container.value.len() < 3 {
             errs.push(ValidationError {
                 severity: Severity::Error,
@@ -1660,7 +1581,7 @@ impl Validate for ServiceLevelAuthenticationCommand {
 
 impl Validate for ServiceLevelAuthenticationComplete {
     fn validate(&self) -> Vec<ValidationError> {
-        let mut errs = Vec::new();
+        let mut errs = self.sender_check_findings();
         if self.service_level_aa_container.value.len() < 3 {
             errs.push(ValidationError {
                 severity: Severity::Error,
@@ -1679,21 +1600,21 @@ impl Validate for ServiceLevelAuthenticationComplete {
 
 impl Validate for RelayKeyRequest {
     fn validate(&self) -> Vec<ValidationError> {
-        if self.relay_key_request_parameters.parse().is_some() {
-            Vec::new()
-        } else {
-            vec![ValidationError {
+        let mut errors = self.sender_check_findings();
+        if self.relay_key_request_parameters.parse().is_none() {
+            errors.push(ValidationError {
                 severity: Severity::Error,
                 field: "relay_key_request_parameters",
                 message: "Mandatory relay key request parameters require at least 20 octets".into(),
-            }]
+            });
         }
+        errors
     }
 }
 
 impl Validate for RelayKeyAccept {
     fn validate(&self) -> Vec<ValidationError> {
-        let mut errors = Vec::new();
+        let mut errors = self.sender_check_findings();
         if self.relay_key_response_parameters.parse().is_none() {
             errors.push(ValidationError {
                 severity: Severity::Error,
@@ -1709,7 +1630,7 @@ impl Validate for RelayKeyAccept {
 
 impl Validate for NotificationResponse {
     fn validate(&self) -> Vec<ValidationError> {
-        let mut errors = Vec::new();
+        let mut errors = self.sender_check_findings();
         if let Some(status) = &self.pdu_session_status
             && !(2..=32).contains(&status.value.len())
         {
@@ -1725,7 +1646,7 @@ impl Validate for NotificationResponse {
 
 impl Validate for RemoteUeReport {
     fn validate(&self) -> Vec<ValidationError> {
-        let mut errors = Vec::new();
+        let mut errors = self.sender_check_findings();
         for (field, list) in [
             (
                 "remote_ue_context_connected",
@@ -1750,7 +1671,7 @@ impl Validate for RemoteUeReport {
 
 impl Validate for PduSessionModificationComplete {
     fn validate(&self) -> Vec<ValidationError> {
-        let mut errors = Vec::new();
+        let mut errors = self.sender_check_findings();
         if self.fgsm_cause.is_some() {
             errors.push(ValidationError {
                 severity: Severity::Error,
@@ -1779,7 +1700,7 @@ impl Validate for PduSessionModificationComplete {
 
 impl Validate for DeregistrationRequestUeOriginating {
     fn validate(&self) -> Vec<ValidationError> {
-        let mut errs = Vec::new();
+        let mut errs = self.sender_check_findings();
 
         if self.de_registration_type.access_type().is_none() {
             errs.push(ValidationError {
@@ -1806,7 +1727,7 @@ impl Validate for DeregistrationRequestUeOriginating {
 
 impl Validate for DeregistrationRequestUeTerminated {
     fn validate(&self) -> Vec<ValidationError> {
-        let mut errs = Vec::new();
+        let mut errs = self.sender_check_findings();
 
         if self.de_registration_type.access_type().is_none() {
             errs.push(ValidationError {
@@ -1825,7 +1746,7 @@ impl Validate for DeregistrationRequestUeTerminated {
 
 impl Validate for Notification {
     fn validate(&self) -> Vec<ValidationError> {
-        let mut errs = Vec::new();
+        let mut errs = self.sender_check_findings();
 
         if !self.access_type.is_well_formed() {
             errs.push(ValidationError {
@@ -1844,7 +1765,7 @@ impl Validate for Notification {
 
 impl Validate for RegistrationComplete {
     fn validate(&self) -> Vec<ValidationError> {
-        let mut errors = Vec::new();
+        let mut errors = self.sender_check_findings();
         if let Some(container) = &self.sor_transparent_container {
             push_sor_direction(
                 &mut errors,
@@ -2295,7 +2216,10 @@ mod tests {
         let msg = RegistrationRequest::new(
             RegistrationType::new(0x09), // FOR=1, initial
             KeySetIdentifier::new(7),
-            MobileIdentity::new(vec![0x01, 0x02, 0x03, 0x04, 0x05]), // SUCI
+            // A SUCI of the null scheme
+            MobileIdentity::new(vec![
+                0x01, 0x02, 0xf8, 0x39, 0xf0, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
+            ]),
         );
         let errs = msg.validate();
         assert!(errs.is_empty(), "Unexpected errors: {errs:?}");
