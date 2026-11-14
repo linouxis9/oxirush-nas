@@ -450,6 +450,26 @@ impl SecurityContext {
         self.core.count(direction, ()).get()
     }
 
+    /// Set the next NAS COUNT of a direction, as [`Self::restore_from_kasme`]
+    /// does for a context that it derives anew: `None` when every COUNT of
+    /// the direction was used. The keys, the other COUNT and the replay
+    /// window of the other direction stay; the window of this one takes the
+    /// COUNTs below as accepted.
+    ///
+    /// ```
+    /// use oxirush_nas::identity::Algorithm;
+    /// use oxirush_nas::nas_eps::*;
+    /// use oxirush_nas::{Direction, NasCount};
+    ///
+    /// let kasme = KAsme::new(&[0x11; 32]);
+    /// let mut ue = SecurityContext::from_fresh_kasme(&kasme, Algorithm::Aes, Algorithm::Aes).unwrap();
+    /// ue.set_nas_count(Direction::Uplink, Some(NasCount::new(7).unwrap()));
+    /// assert_eq!(ue.nas_count(Direction::Uplink), NasCount::new(7).ok());
+    /// ```
+    pub fn set_nas_count(&mut self, direction: Direction, count: Option<NasCount>) {
+        *self.core.count_mut(direction, ()) = NextCount::of(count);
+    }
+
     /// How many COUNTs below the highest that the context accepted in a
     /// direction its replay window holds: 0, the default, for none.
     pub fn replay_window(&self) -> u8 {
