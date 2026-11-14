@@ -22,6 +22,9 @@ All notable changes to `oxirush-nas` are recorded here.
   another security header with "an EMM TRANSPORT has the security header type
   `security-header-for-the-emm-transport-message`, and a message under
   another one is written with `from_tree`".
+- The examples of the README and of the documentation show what they give
+  with `assert_eq!`, which the documentation tests check, and the package of
+  `readme/`, which compared what each printed with the text under it, goes.
 
 ### Removed
 

@@ -16,36 +16,40 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Decode a REGISTRATION REQUEST
     let bytes = hex::decode("7e004179000d0102f8390000000000000010022e08a020000000000000")?;
     let msg = Message::decode(&bytes)?;
-    println!("{msg}");
+    assert_eq!(
+        msg.to_string(),
+        "5GMM RegistrationRequest (5gs-registration-type: {registration-type: initial-registration, \
+         follow-on-request: true}, ngksi: no key, 5gs-mobile-identity: \
+         suci-0-208-93-0000-0-0-0000000120, ue-security-capability: EA0 EA2 / IA2)"
+    );
 
     // Read its IEs through typed accessors
     if let Message::Gmm(_, GmmMessage::RegistrationRequest(reg)) = &msg {
         let kind = reg.fgs_registration_type.registration_type().ok_or("a reserved type")?;
         let plmn = reg.fgs_mobile_identity.plmn().ok_or("no PLMN")?;
-        println!("{kind:?} in MCC {}, MNC {}", plmn.mcc(), plmn.mnc());
+        assert_eq!(kind, RegistrationTypeValue::InitialRegistration);
+        assert_eq!((plmn.mcc(), plmn.mnc()), ("208", "93"));
     }
 
     // `validate()` finds nothing wrong, and it encodes back to the same octets
-    println!("{} findings, same octets: {}", msg.validate().len(), msg.encode()? == bytes);
+    assert!(msg.validate().is_empty());
+    assert_eq!(msg.encode()?, bytes);
 
     // The answer, a REGISTRATION REJECT with cause #22 and T3346 of ten minutes:
     // `new()` takes the mandatory IEs, and `with_*()` adds the others
     let cause = GmmCause::from_cause(GmmCauseValue::Congestion);
     let t3346 = GprsTimer2::from_seconds(600)?;
     let answer = Message::new_5gmm(RegistrationReject::new(cause).with_t3346_value(t3346));
-    println!("{answer}: {}", hex::encode(answer.encode()?));
+    assert_eq!(
+        answer.to_string(),
+        "5GMM RegistrationReject (5gmm-cause: #22 (Congestion), t3346-value: 10 min)"
+    );
+    assert_eq!(hex::encode(answer.encode()?), "7e0044165f012a");
     Ok(())
 }
 ```
 
-```text
-5GMM RegistrationRequest (5gs-registration-type: {registration-type: initial-registration, follow-on-request: true}, ngksi: no key, 5gs-mobile-identity: suci-0-208-93-0000-0-0-0000000120, ue-security-capability: EA0 EA2 / IA2)
-InitialRegistration in MCC 208, MNC 93
-0 findings, same octets: true
-5GMM RegistrationReject (5gmm-cause: #22 (Congestion), t3346-value: 10 min): 7e0044165f012a
-```
-
-Each example is followed by its output.
+Each example shows what it gives with `assert_eq!`, and runs as a test of the crate.
 
 ## Installation
 
@@ -105,13 +109,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // REGISTRATION REQUEST, plain. Its SUCI has the null scheme: the SUPI is in it
     let received = hex::decode("7e004179000d0102f8390000000000000010022e08a020000000000000")?;
     let registration = Message::decode(&received)?;
-    println!("UE  {registration}");
     let Message::Gmm(_, GmmMessage::RegistrationRequest(request)) = &registration else {
         unreachable!()
     };
     let Some(Suci::Imsi(suci)) = request.fgs_mobile_identity.as_suci() else { unreachable!() };
     let supi = Supi::from(suci.imsi().ok_or("an MSIN that is concealed")?);
-    println!("AMF {supi}");
+    assert_eq!(supi.to_string(), "imsi-208930000000120");
 
     // AUTHENTICATION REQUEST: a challenge of MILENAGE, under ngKSI 0
     let rand = Rand::from_slice(&hex::decode("23553cbe9637a89d218ae64dae47bf35")?)?;
@@ -125,7 +128,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_authentication_parameter_autn(AuthenticationParameterAutn::from_autn(
             *vector.autn().as_octets(),
         ));
-    println!("AMF {}", Message::new_5gmm(challenge));
+    assert_eq!(
+        Message::new_5gmm(challenge).to_string(),
+        "5GMM AuthenticationRequest (ngksi: 0, abba: 0000, authentication-parameter-rand: \
+         23553cbe9637a89d218ae64dae47bf35, authentication-parameter-autn: \
+         55f328b43577b9b94a9ffac354dfafb3)"
+    );
 
     // The USIM checks the AUTN and answers with RES*
     let usim = subscriber.check_autn(&rand, vector.autn())?;
@@ -142,7 +150,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     let parameter = response.authentication_response_parameter.ok_or("no RES*")?;
     let res_star = ResStar::new(parameter.res_star().ok_or("no RES* of 16 octets")?);
-    println!("UE  RES* accepted: {}", vector.xres_star(sn_name)?.accepts(&res_star));
+    assert!(vector.xres_star(sn_name)?.accepts(&res_star));
     let k_ausf = derive_kausf(vector.ck(), vector.ik(), sn_name, vector.autn())?;
     let k_seaf = derive_kseaf(&k_ausf, sn_name)?;
     let k_amf = derive_kamf(&k_seaf, supi.identity(), &[0, 0])?;
@@ -161,7 +169,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let command = Message::new_5gmm(SecurityModeCommand::new(algorithms, ngksi, capability));
     let header = SecurityHeaderType::IntegrityProtectedWithNewFiveGNasSecurityContext;
     let sent = amf_context.protect(&command, header, Direction::Downlink, access)?;
-    println!("AMF {}", ue_context.unprotect(&sent, Direction::Downlink, access)?.message);
+    assert_eq!(
+        ue_context.unprotect(&sent, Direction::Downlink, access)?.message.to_string(),
+        "5GMM SecurityModeCommand (selected-nas-security-algorithms: NEA2 NIA2, ngksi: 0, \
+         replayed-ue-security-capabilities: EA0 EA2 / IA2)"
+    );
 
     // SECURITY MODE COMPLETE, integrity protected and ciphered, has the whole
     // REGISTRATION REQUEST in its NAS message container
@@ -171,7 +183,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let complete = Message::new_5gmm(complete);
     let sent = ue_context.protect(&complete, header, Direction::Uplink, access)?;
     let verified = amf_context.unprotect(&sent, Direction::Uplink, access)?;
-    println!("UE  {}, NAS COUNT {}", verified.message, verified.count.get());
+    assert_eq!(verified.message, complete);
+    assert_eq!(verified.count.get(), 0);
 
     // REGISTRATION ACCEPT: a 5G-GUTI, two tracking areas and a slice, ciphered
     let plmn = Plmn::new("208", "93")?;
@@ -184,21 +197,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let accept = Message::new_5gmm(accept);
     let header = SecurityHeaderType::IntegrityProtectedAndCiphered;
     let sent = amf_context.protect(&accept, header, Direction::Downlink, access)?;
-    println!("AMF {}", ue_context.unprotect(&sent, Direction::Downlink, access)?.message);
-    println!("    {}", hex::encode(&sent));
+    assert_eq!(
+        ue_context.unprotect(&sent, Direction::Downlink, access)?.message.to_string(),
+        "5GMM RegistrationAccept (5gs-registration-result: {result: 3gpp-access, sms-allowed: \
+         false, nssaa-performed: false, emergency-registered: false, disaster-roaming: false}, \
+         5g-guti: 5g-guti-20893caff8011223344, tai-list: [208-93-000001, 208-93-000002], \
+         allowed-nssai: [1])"
+    );
+    assert_eq!(
+        hex::encode(&sent),
+        "7e02818e2ede0169e2dfa47cf0a4a5ff3e8b5143585d5033635f8eebad491ccf140fb7eaa8bbe3b0d8e5"
+    );
     Ok(())
 }
-```
-
-```text
-UE  5GMM RegistrationRequest (5gs-registration-type: {registration-type: initial-registration, follow-on-request: true}, ngksi: no key, 5gs-mobile-identity: suci-0-208-93-0000-0-0-0000000120, ue-security-capability: EA0 EA2 / IA2)
-AMF imsi-208930000000120
-AMF 5GMM AuthenticationRequest (ngksi: 0, abba: 0000, authentication-parameter-rand: 23553cbe9637a89d218ae64dae47bf35, authentication-parameter-autn: 55f328b43577b9b94a9ffac354dfafb3)
-UE  RES* accepted: true
-AMF 5GMM SecurityModeCommand (selected-nas-security-algorithms: NEA2 NIA2, ngksi: 0, replayed-ue-security-capabilities: EA0 EA2 / IA2)
-UE  5GMM SecurityModeComplete (nas-message-container: 5GMM RegistrationRequest (5gs-registration-type: {registration-type: initial-registration, follow-on-request: true}, ngksi: no key, 5gs-mobile-identity: suci-0-208-93-0000-0-0-0000000120, ue-security-capability: EA0 EA2 / IA2)), NAS COUNT 0
-AMF 5GMM RegistrationAccept (5gs-registration-result: {result: 3gpp-access, sms-allowed: false, nssaa-performed: false, emergency-registered: false, disaster-roaming: false}, 5g-guti: 5g-guti-20893caff8011223344, tai-list: [208-93-000001, 208-93-000002], allowed-nssai: [1])
-    7e02818e2ede0169e2dfa47cf0a4a5ff3e8b5143585d5033635f8eebad491ccf140fb7eaa8bbe3b0d8e5
 ```
 
 The same in EPS, shorter: the MME derives KASME from the vector, and the
@@ -220,7 +231,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // ATTACH REQUEST, plain, with an IMSI
     let attach = Message::decode(&hex::decode("07410108298039000000001002e0e000040201d031")?)?;
-    println!("UE  {attach}");
+    assert_eq!(
+        attach.to_string(),
+        "EMM AttachRequest (eps-attach-type: eps-attach, nas-key-set-identifier: 0, \
+         eps-mobile-identity: imsi-208930000000001, ue-network-capability: EEA0 EEA1 EEA2 / \
+         EIA0 EIA1 EIA2, esm-message-container: ESM (EBI=0, PTI=1) PdnConnectivityRequest \
+         (request-type: initial, pdn-type: ipv4v6))"
+    );
     let Message::Emm(_, EmmMessage::AttachRequest(request)) = &attach else {
         unreachable!()
     };
@@ -235,9 +252,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         AuthenticationParameterRand::from_rand(*rand.as_octets()),
         AuthenticationParameterAutn::from_autn(*vector.autn().as_octets()),
     );
-    println!("MME {}", Message::new_emm(challenge));
+    assert_eq!(
+        Message::new_emm(challenge).to_string(),
+        "EMM AuthenticationRequest (nas-key-set-identifier-asme: 0, \
+         authentication-parameter-rand: 23553cbe9637a89d218ae64dae47bf35, \
+         authentication-parameter-autn: aa689c648350b9b9a4a8043ac07aa7e0)"
+    );
     let usim = subscriber.check_autn(&rand, vector.autn())?;
-    println!("UE  RES accepted: {}", vector.xres().accepts(usim.res()));
+    assert!(vector.xres().accepts(usim.res()));
 
     // KASME, from the CK, the IK and the AUTN of the vector and the serving network
     let kasme = derive_kasme(vector.ck(), vector.ik(), Plmn::new("208", "93")?, vector.autn());
@@ -251,29 +273,31 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let command = Message::new_emm(SecurityModeCommand::new(algorithms, ksi, capability));
     let header = SecurityHeaderType::IntegrityProtectedWithNewEpsSecurityContext;
     let sent = mme_context.protect(&command, header, Direction::Downlink)?;
-    println!("MME {}", ue_context.unprotect(&sent, Direction::Downlink)?.message);
+    assert_eq!(
+        ue_context.unprotect(&sent, Direction::Downlink)?.message.to_string(),
+        "EMM SecurityModeCommand (selected-nas-security-algorithms: EEA2 EIA2, \
+         nas-key-set-identifier: 0, replayed-ue-security-capabilities: EEA0 EEA1 EEA2 / \
+         EIA0 EIA1 EIA2)"
+    );
 
     // SECURITY MODE COMPLETE, then the ATTACH ACCEPT with the default bearer
     let complete = Message::new_emm(SecurityModeComplete::new());
     let header = SecurityHeaderType::IntegrityProtectedAndCipheredWithNewEpsSecurityContext;
     let sent = ue_context.protect(&complete, header, Direction::Uplink)?;
-    println!("UE  {}", mme_context.unprotect(&sent, Direction::Uplink)?.message);
+    assert_eq!(mme_context.unprotect(&sent, Direction::Uplink)?.message, complete);
     let accept = hex::decode("07420121060002f839000100155201c101090908696e7465726e657405010a000001")?;
     let accept = Message::decode(&accept)?;
     let header = SecurityHeaderType::IntegrityProtectedAndCiphered;
     let sent = mme_context.protect(&accept, header, Direction::Downlink)?;
-    println!("MME {}", ue_context.unprotect(&sent, Direction::Downlink)?.message);
+    assert_eq!(
+        ue_context.unprotect(&sent, Direction::Downlink)?.message.to_string(),
+        "EMM AttachAccept (eps-attach-result: eps-only, t3412-value: 1 min, tai-list: \
+         [208-93-0001], esm-message-container: ESM (EBI=5, PTI=1) \
+         ActivateDefaultEpsBearerContextRequest (eps-qos: QCI 9, access-point-name: internet, \
+         pdn-address: IPv4 10.0.0.1))"
+    );
     Ok(())
 }
-```
-
-```text
-UE  EMM AttachRequest (eps-attach-type: eps-attach, nas-key-set-identifier: 0, eps-mobile-identity: imsi-208930000000001, ue-network-capability: EEA0 EEA1 EEA2 / EIA0 EIA1 EIA2, esm-message-container: ESM (EBI=0, PTI=1) PdnConnectivityRequest (request-type: initial, pdn-type: ipv4v6))
-MME EMM AuthenticationRequest (nas-key-set-identifier-asme: 0, authentication-parameter-rand: 23553cbe9637a89d218ae64dae47bf35, authentication-parameter-autn: aa689c648350b9b9a4a8043ac07aa7e0)
-UE  RES accepted: true
-MME EMM SecurityModeCommand (selected-nas-security-algorithms: EEA2 EIA2, nas-key-set-identifier: 0, replayed-ue-security-capabilities: EEA0 EEA1 EEA2 / EIA0 EIA1 EIA2)
-UE  EMM SecurityModeComplete
-MME EMM AttachAccept (eps-attach-result: eps-only, t3412-value: 1 min, tai-list: [208-93-0001], esm-message-container: ESM (EBI=5, PTI=1) ActivateDefaultEpsBearerContextRequest (eps-qos: QCI 9, access-point-name: internet, pdn-address: IPv4 10.0.0.1))
 ```
 
 [`nas_5gs::security`](https://docs.rs/oxirush-nas/latest/oxirush_nas/nas_5gs/security/index.html)
@@ -286,7 +310,9 @@ invalid payload for a negative test with `protect_opaque_payload`.
 Between the RAN and the core, a NAS message is the NAS-PDU of an
 [NGAP](https://github.com/linouxis9/oxirush-ngap) or
 [S1AP](https://github.com/linouxis9/oxirush-s1ap) message: the octets of
-`encode()`, which `decode()` reads back.
+`encode()`, which `decode()` reads back. This block uses oxirush-ngap and
+oxirush-s1ap, which the crate does not depend on: its documentation tests do
+not run it.
 
 ```rust,ignore
 use oxirush_nas::{nas_5gs, nas_eps};
@@ -301,13 +327,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         RAN_UE_NGAP_ID(7u32),
         NAS_PDU(reject.encode()?),
     )?;
-    println!("{}", downlink.to_tree());
+    assert_eq!(
+        downlink.to_tree().to_string(),
+        r#"{"message":"DownlinkNASTransport","ies":[{"AMF-UE-NGAP-ID":1},{"RAN-UE-NGAP-ID":7},{"NAS-PDU":"7e0044165f012a"}]}"#
+    );
 
     // The gNB gives the UE the NAS-PDU, which decodes as the message
     extract_ngap_ies!(downlink, DownlinkNASTransport,
         req nas: NASPDU = NAS_PDU(nas) => nas,
     );
-    println!("{}", nas_5gs::Message::decode(&nas.0)?);
+    assert_eq!(nas_5gs::Message::decode(&nas.0)?, reject);
 
     // The MME: an ATTACH REJECT, cause #3, in a DOWNLINK NAS TRANSPORT of S1AP
     let reject = nas_eps::Message::decode(&[0x07, 0x44, 0x03])?;
@@ -316,15 +345,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         eNB_UE_S1AP_ID(7u32),
         NAS_PDU(reject.encode()?),
     )?;
-    println!("{}", downlink.to_tree());
+    assert_eq!(
+        downlink.to_tree().to_string(),
+        r#"{"message":"DownlinkNASTransport","ies":[{"MME-UE-S1AP-ID":1},{"eNB-UE-S1AP-ID":7},{"NAS-PDU":"074403"}]}"#
+    );
     Ok(())
 }
-```
-
-```text
-{"message":"DownlinkNASTransport","ies":[{"AMF-UE-NGAP-ID":1},{"RAN-UE-NGAP-ID":7},{"NAS-PDU":"7e0044165f012a"}]}
-5GMM RegistrationReject (5gmm-cause: #22 (Congestion), t3346-value: 10 min)
-{"message":"DownlinkNASTransport","ies":[{"MME-UE-S1AP-ID":1},{"eNB-UE-S1AP-ID":7},{"NAS-PDU":"074403"}]}
 ```
 
 ## Change a decoded message
@@ -353,14 +379,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         reject.set_t3502_value(GprsTimer2::from_seconds(720)?);
     }
 
-    println!("{msg}");
+    assert_eq!(
+        msg.to_string(),
+        "5GMM RegistrationReject (5gmm-cause: #3 (Illegal UE), t3502-value: 12 min)"
+    );
     assert_eq!(hex::encode(msg.encode()?), "7e00440316012c");
     Ok(())
 }
-```
-
-```text
-5GMM RegistrationReject (5gmm-cause: #3 (Illegal UE), t3502-value: 12 min)
 ```
 
 ## A 5GSM message in UL NAS TRANSPORT
@@ -385,7 +410,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     .with_request_type(RequestType::from_request_type(RequestTypeValue::InitialRequest))
     .with_dnn(Dnn::from_string("internet")?);
     let octets = Message::new_5gmm(transport).encode()?;
-    println!("{}", hex::encode(&octets));
+    assert_eq!(
+        hex::encode(&octets),
+        "7e00670100062e0501c1ffff120581250908696e7465726e6574"
+    );
 
     // The AMF reads what it routes the container by, and the SMF the message
     let Message::Gmm(_, GmmMessage::UlNasTransport(transport)) =
@@ -396,14 +424,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let kind = transport.payload_container_type.kind();
     assert_eq!(kind, Some(PayloadContainerKind::N1SmInformation));
     assert_eq!(transport.pdu_session_id.map(|id| id.pdu_session_id()), Some(5));
-    println!("{}", transport.payload_container.decode_as_n1_sm_message()?);
+    assert_eq!(transport.payload_container.decode_as_n1_sm_message()?, request);
     Ok(())
 }
-```
-
-```text
-7e00670100062e0501c1ffff120581250908696e7465726e6574
-5GSM (PSI=5, PTI=1) PduSessionEstablishmentRequest (integrity-protection-maximum-data-rate: {ul: full-rate, dl: full-rate})
 ```
 
 ## Validate a message, and answer a faulty one
@@ -422,9 +445,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let msg = Message::decode(&bytes)?;
 
     // What `validate()` finds
-    for finding in msg.validate() {
-        println!("{finding}");
-    }
+    let findings: Vec<String> = msg.validate().iter().map(ToString::to_string).collect();
+    assert_eq!(
+        findings,
+        [
+            "[Error] unknown_ies: IEI 0x5f was ignored as repeated",
+            "[Error] unknown_ies: Unknown IEI 0x04 is encoded as comprehension required",
+        ]
+    );
 
     // Both are kept as they came, and go out again
     assert_eq!(msg.unknown_ies().len(), 2);
@@ -432,11 +460,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     assert_eq!(bytes, msg.encode()?);
     Ok(())
 }
-```
-
-```text
-[Error] unknown_ies: IEI 0x5f was ignored as repeated
-[Error] unknown_ies: Unknown IEI 0x04 is encoded as comprehension required
 ```
 
 `answer_to()` gives the answer that clause 7 of TS 24.501 asks for, to a
@@ -451,21 +474,30 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // REGISTRATION REQUEST whose 5G-GUTI is one octet short
     let octets = hex::decode("7e004179000af202f839cafe001122332e02a020")?;
     let received = Message::decode(&octets);
-    let error = received.clone().err();
-    if let Some(error) = &error {
-        println!("{error}");
-    }
+    let error = received.clone().err().ok_or("the message decodes")?;
+    assert_eq!(
+        error.to_string(),
+        "mandatory IE `5gs-mobile-identity` has a value that is syntactically incorrect: \
+         `5g-guti` has 10 octets, and must have 11"
+    );
 
     // What a network answers: 5GMM STATUS with cause #96
-    if let Some(answer) = Message::answer_to(&octets, &received, Direction::Uplink) {
-        println!("{answer}");
-        assert_eq!(answer.encode()?, [0x7e, 0x00, 0x64, 0x60]);
-    }
+    let answer = Message::answer_to(&octets, &received, Direction::Uplink).ok_or("no answer")?;
+    assert_eq!(
+        answer.to_string(),
+        "5GMM GmmStatus (5gmm-cause: #96 (Invalid mandatory information))"
+    );
+    assert_eq!(answer.encode()?, [0x7e, 0x00, 0x64, 0x60]);
 
     // What the message has, to log it or to treat it all the same
     let (message, faults) = Message::decode_lenient(&octets, oxirush_nas::DecodeOptions::STRICT)?;
-    assert_eq!(faults.first(), error.as_ref());
-    println!("{message}");
+    assert_eq!(faults.first(), Some(&error));
+    assert_eq!(
+        message.to_string(),
+        "5GMM RegistrationRequest (5gs-registration-type: {registration-type: initial-registration, \
+         follow-on-request: true}, ngksi: no key, 5gs-mobile-identity: 5G-GUTI \
+         (f202f839cafe00112233), ue-security-capability: EA0 EA2 / IA2)"
+    );
 
     // A message that is too short is ignored: no answer
     let short = [0x7e, 0x00];
@@ -473,12 +505,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     assert!(Message::answer_to(&short, &received, Direction::Uplink).is_none());
     Ok(())
 }
-```
-
-```text
-mandatory IE `5gs-mobile-identity` has a value that is syntactically incorrect: `5g-guti` has 10 octets, and must have 11
-5GMM GmmStatus (5gmm-cause: #96 (Invalid mandatory information))
-5GMM RegistrationRequest (5gs-registration-type: {registration-type: initial-registration, follow-on-request: true}, ngksi: no key, 5gs-mobile-identity: 5G-GUTI (f202f839cafe00112233), ue-security-capability: EA0 EA2 / IA2)
 ```
 
 ## A message as JSON
@@ -498,7 +524,10 @@ use oxirush_nas::tree;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // REGISTRATION REJECT: cause #22 and a T3346 value of ten minutes
     let reject = Message::decode(&hex::decode("7e0044165f012a")?)?;
-    println!("{}", reject.to_tree());
+    assert_eq!(
+        reject.to_tree(),
+        tree!({"message-type": "registration-reject", "5gmm-cause": "congestion", "t3346-value": 600})
+    );
 
     // An IE is changed by its value, one comes in by its octets, and one goes out
     let mut tree = reject.to_tree();
@@ -506,7 +535,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     tree["t3502-value"] = tree!({"octets": "2c"});
     tree.as_object_mut().unwrap().shift_remove("t3346-value");
     let edited = reject.with_tree(tree)?;
-    println!("{}", edited.to_tree());
+    assert_eq!(
+        edited.to_tree(),
+        tree!({"message-type": "registration-reject", "5gmm-cause": "illegal-ue", "t3502-value": 720})
+    );
 
     // A message written from its tree
     let status = tree!({"message-type": "5gmm-status", "5gmm-cause": "congestion"});
@@ -514,11 +546,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     assert_eq!(status.encode()?, [0x7e, 0x00, 0x64, 0x16]);
     Ok(())
 }
-```
-
-```text
-{"message-type":"registration-reject","5gmm-cause":"congestion","t3346-value":600}
-{"message-type":"registration-reject","5gmm-cause":"illegal-ue","t3502-value":720}
 ```
 
 One IE alone is a tree too, the one that a message shows of it: `to_tree()`
@@ -544,11 +571,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut tree = accept.to_tree();
 
     // A value by its path, and each entry of a list with `*`
-    for path in ["/nas/5g-guti/guti/plmn", "/NAS/Allowed NSSAI/*/SST"] {
-        for value in paths::select(&tree, path)? {
-            println!("{value}");
-        }
-    }
+    assert_eq!(paths::select(&tree, "/nas/5g-guti/guti/plmn")?, [&tree!("208-93")]);
+    assert_eq!(paths::select(&tree, "/NAS/Allowed NSSAI/*/SST")?, [&tree!(1)]);
 
     // A value is set at its path, an optional IE added by its value, and an
     // entry put at the end of a list (`-`)
@@ -556,29 +580,28 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     paths::set(&mut tree, "/nas/t3512-value", tree!(3600))?;
     paths::insert(&mut tree, "/nas/allowed-nssai/-", tree!({"sst": 2}))?;
     let edited = accept.with_tree(tree)?;
-    println!("{}", hex::encode(edited.encode()?));
+    assert_eq!(
+        hex::encode(edited.encode()?),
+        "7e0042010177000bf202f839010042deadbeef1504010101025e0106"
+    );
 
     // The octets of an IE, as the message has them
-    println!("{}", accept.select("/nas/5g-guti/octets")?[0]);
+    assert_eq!(accept.select("/nas/5g-guti/octets")?, [tree!("f202f83901004211223344")]);
 
     // A name that the message does not have is an error, and so is `value`
     // after an IE, which the tree does not have
-    for wrong in ["/nas/t3512", "/nas/5g-guti/value/guti/tmsi"] {
-        if let Err(error) = paths::select(&accept.to_tree(), wrong) {
-            println!("{error}");
-        }
-    }
+    let error = |path| paths::select(&accept.to_tree(), path).map(|_| ()).unwrap_err().to_string();
+    assert_eq!(
+        error("/nas/t3512"),
+        "`t3512` is no IE of a message `registration-accept`, at /nas/t3512"
+    );
+    assert_eq!(
+        error("/nas/5g-guti/value/guti/tmsi"),
+        "a path is the tree's names joined: write `/nas/5g-guti/guti/tmsi`, \
+         at /nas/5g-guti/value/guti/tmsi"
+    );
     Ok(())
 }
-```
-
-```text
-"208-93"
-1
-7e0042010177000bf202f839010042deadbeef1504010101025e0106
-"f202f83901004211223344"
-`t3512` is no IE of a message `registration-accept`, at /nas/t3512
-a path is the tree's names joined: write `/nas/5g-guti/guti/tmsi`, at /nas/5g-guti/value/guti/tmsi
 ```
 
 `paths::paths` gives each value of a tree with the path that selects it.
@@ -654,9 +677,9 @@ build. Twelve fuzz targets decode, edit and build messages, take any path
 of their trees and protect them, for a minute each at each commit, an hour
 each day but Sunday and four hours on Tuesday. `examples/` has six programs, each for 5GS and for EPS.
 
-Each Rust block of this page is checked with what it prints, by the
-package of [`readme/`](readme/), which has oxirush-ngap and oxirush-s1ap
-for the block that uses them.
+Each Rust block of this page runs as a documentation test, which checks
+what it shows with `assert_eq!`, but for the block of NGAP and S1AP: the
+crate does not depend on those two.
 [The documentation](https://docs.rs/oxirush-nas) has what the crate covers,
 the rules of the receiver and the sender, the versions of the
 specifications, and the tests. In a clone,

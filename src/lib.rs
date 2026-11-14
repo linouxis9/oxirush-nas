@@ -33,7 +33,13 @@
 //!     // Decode a REGISTRATION REQUEST
 //!     let bytes = hex::decode("7e004179000d0102f8390000000000000010022e08a020000000000000")?;
 //!     let msg = Message::decode(&bytes)?;
-//!     println!("{msg}");
+//!     # #[cfg(feature = "tree")]
+//!     assert_eq!(
+//!         msg.to_string(),
+//!         "5GMM RegistrationRequest (5gs-registration-type: {registration-type: \
+//!          initial-registration, follow-on-request: true}, ngksi: no key, 5gs-mobile-identity: \
+//!          suci-0-208-93-0000-0-0-0000000120, ue-security-capability: EA0 EA2 / IA2)"
+//!     );
 //!
 //!     // Read its IEs through typed accessors
 //!     if let Message::Gmm(_, GmmMessage::RegistrationRequest(reg)) = &msg {
@@ -44,9 +50,8 @@
 //!         assert_eq!(identity.identity_type(), Some(MobileIdentityType5gs::Suci));
 //!
 //!         // The PLMN identity names the network: a country code and a network code
-//!         if let Some(plmn) = identity.plmn() {
-//!             println!("MCC={}, MNC={}", plmn.mcc(), plmn.mnc());
-//!         }
+//!         let plmn = identity.plmn().ok_or("no PLMN")?;
+//!         assert_eq!((plmn.mcc(), plmn.mnc()), ("208", "93"));
 //!     }
 //!
 //!     // It passes every check that can be made on a single message, and encodes
@@ -60,7 +65,10 @@
 //!     let t3346 = GprsTimer2::from_seconds(600)?;
 //!     let reject = RegistrationReject::new(cause).with_t3346_value(t3346);
 //!     let answer = Message::new_5gmm(reject);
-//!     println!("{answer}");
+//!     assert_eq!(
+//!         answer.to_string(),
+//!         "5GMM RegistrationReject (5gmm-cause: #22 (Congestion), t3346-value: 10 min)"
+//!     );
 //!
 //!     // Encode it
 //!     assert_eq!(hex::encode(answer.encode()?), "7e0044165f012a");
@@ -68,13 +76,8 @@
 //! }
 //! ```
 //!
-//! ```text
-//! 5GMM RegistrationRequest (5gs-registration-type: {registration-type: initial-registration, follow-on-request: true}, ngksi: no key, 5gs-mobile-identity: suci-0-208-93-0000-0-0-0000000120, ue-security-capability: EA0 EA2 / IA2)
-//! MCC=208, MNC=93
-//! 5GMM RegistrationReject (5gmm-cause: #22 (Congestion), t3346-value: 10 min)
-//! ```
-//!
-//! Each example is followed by its output.
+//! Each example shows what it gives with `assert_eq!`, and runs as a test of
+//! the crate.
 //!
 //! [`nas_eps::Message`] has the same interface for EPS:
 //! `Message::decode(&octets)`, `message.encode()`. The octets of a
@@ -85,7 +88,7 @@
 //! # Tasks
 //!
 //! The [README](https://github.com/linouxis9/oxirush-nas#readme) has an
-//! example of each, with what it prints.
+//! example of each, with what it gives.
 //!
 //! | Task | Items |
 //! |------|-------|
@@ -134,8 +137,18 @@
 //!     .with_allowed_nssai(Nssai::from_snssais(&slices).unwrap());
 //! let accept = Message::new_5gmm(accept);
 //! let octets = accept.encode().unwrap();
-//! println!("{}", hex::encode(&octets));
-//! println!("{accept}");
+//! assert_eq!(
+//!     hex::encode(&octets),
+//!     "7e0042010177000bf202f839caff8011223344540a0102f839000001000002150701010401010203"
+//! );
+//! # #[cfg(feature = "tree")]
+//! assert_eq!(
+//!     accept.to_string(),
+//!     "5GMM RegistrationAccept (5gs-registration-result: {result: 3gpp-access, sms-allowed: \
+//!      false, nssaa-performed: false, emergency-registered: false, disaster-roaming: false}, \
+//!      5g-guti: 5g-guti-20893caff8011223344, tai-list: [208-93-000001, 208-93-000002], \
+//!      allowed-nssai: [1, 1/010203])"
+//! );
 //!
 //! // The other end reads them
 //! let Message::Gmm(_, GmmMessage::RegistrationAccept(read)) =
@@ -147,11 +160,6 @@
 //! assert_eq!(read.tai_list.unwrap().entries()[0].tacs(), tacs);
 //! let slices = read.allowed_nssai.unwrap().parse_allowed();
 //! assert_eq!((slices[1].sst, slices[1].sd), (1, Some([1, 2, 3])));
-//! ```
-//!
-//! ```text
-//! 7e0042010177000bf202f839caff8011223344540a0102f839000001000002150701010401010203
-//! 5GMM RegistrationAccept (5gs-registration-result: {result: 3gpp-access, sms-allowed: false, nssaa-performed: false, emergency-registered: false, disaster-roaming: false}, 5g-guti: 5g-guti-20893caff8011223344, tai-list: [208-93-000001, 208-93-000002], allowed-nssai: [1, 1/010203])
 //! ```
 //!
 //! # Protect and unprotect
@@ -325,7 +333,7 @@
 //! | One constructed 5GS REGISTRATION REQUEST that carries a protected EPS ATTACH REQUEST | It round-trips. |
 //! | An embedded EPS corpus: the NAS PDUs of two S1AP-carried attach attempts | They round-trip octet for octet. Their envelopes use EEA0, so the inner messages are decoded too and, with `security`, the HashMME of the SECURITY MODE COMMAND is checked against the ATTACH REQUEST. |
 //! | `tests/fixtures`: 105 5GS and 97 EPS messages, at least one of each 5GMM, 5GSM, EMM and ESM message type of the codec | Each decodes, has no `validate()` error and encodes to its octets. Through its tree, which is its serde form, each is a message that means the same (`means_the_same()`), and 183 of the 202 have the same octets. |
-//! | The Rust blocks of the README, of this page and of the pages of [`paths`], [`nas_eps`] and the two `security` modules | They compile and run as documentation tests, with the `tree` and `security` features, and the package of `readme/` compares what each prints with the output shown under it. |
+//! | The Rust blocks of the README, of this page and of the pages of [`paths`], [`nas_eps`] and the two `security` modules | They compile and run as documentation tests, with the `tree` and `security` features, and show what they give with `assert_eq!`. The README block of NGAP and S1AP alone does not run: the crate does not depend on those crates. |
 //!
 //! ```sh
 //! cargo test --all-features            # everything

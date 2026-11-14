@@ -33,11 +33,10 @@
 //!
 //! // 5GMM STATUS, cause #22
 //! let status = Message::decode(&[0x7e, 0x00, 0x64, 0x16]).unwrap();
-//! println!("{}", status.to_tree());
-//! ```
-//!
-//! ```text
-//! {"message-type":"5gmm-status","5gmm-cause":"congestion"}
+//! assert_eq!(
+//!     status.to_tree().to_string(),
+//!     r#"{"message-type":"5gmm-status","5gmm-cause":"congestion"}"#
+//! );
 //! ```
 //!
 //! The [README](https://github.com/linouxis9/oxirush-nas#a-message-as-json)
@@ -73,11 +72,10 @@
 //! // The 5GMM cause has no length: it is one octet
 //! let mut tree = reject.to_tree();
 //! tree["5gmm-cause"] = tree!({"octets": "ffff"});
-//! println!("{}", reject.with_tree(tree).unwrap_err());
-//! ```
-//!
-//! ```text
-//! cannot encode: 5gmm-cause: "ffff" is not one octet
+//! assert_eq!(
+//!     reject.with_tree(tree).unwrap_err().to_string(),
+//!     r#"cannot encode: 5gmm-cause: "ffff" is not one octet"#
+//! );
 //! ```
 //!
 //! ## Write a message from its name
@@ -106,16 +104,18 @@
 //!
 //! // A mandatory IE that is left out is an error
 //! let tree = tree!({"message-type": "registration-reject"});
-//! println!("{}", Message::from_tree(tree).unwrap_err());
+//! assert_eq!(
+//!     Message::from_tree(tree).unwrap_err().to_string(),
+//!     "cannot encode: `5gmm-cause` is not written"
+//! );
 //!
 //! // A value that its IE cannot carry says the member and the limit
 //! let tree = tree!({"message-type": "service-accept", "pdu-session-status": [5, 16]});
-//! println!("{}", Message::from_tree(tree).unwrap_err());
-//! ```
-//!
-//! ```text
-//! cannot encode: `5gmm-cause` is not written
-//! cannot encode: pdu-session-status: entry 1: `pdu-session-identity` is 16, and must be 1 to 15
+//! assert_eq!(
+//!     Message::from_tree(tree).unwrap_err().to_string(),
+//!     "cannot encode: pdu-session-status: entry 1: `pdu-session-identity` is 16, and must be \
+//!      1 to 15"
+//! );
 //! ```
 //!
 //! ## The message in a container
@@ -127,7 +127,16 @@
 //! // ATTACH REQUEST with a PDN CONNECTIVITY REQUEST in its ESM message container
 //! let bytes = hex::decode("07410108298039000000001002e0e000040201d031").unwrap();
 //! let attach = Message::decode(&bytes).unwrap();
-//! println!("{:#}", attach.to_tree()["esm-message-container"]);
+//! assert_eq!(
+//!     attach.to_tree()["esm-message-container"],
+//!     tree!({
+//!         "eps-bearer-identity": 0,
+//!         "procedure-transaction-identity": 1,
+//!         "message-type": "pdn-connectivity-request",
+//!         "request-type": "initial",
+//!         "pdn-type": "ipv4v6",
+//!     })
+//! );
 //!
 //! // The value of the container is the tree of its message
 //! let mut tree = attach.to_tree();
@@ -137,16 +146,6 @@
 //!     hex::encode(edited.encode().unwrap()),
 //!     "07410108298039000000001002e0e000040201d021"
 //! );
-//! ```
-//!
-//! ```text
-//! {
-//!   "eps-bearer-identity": 0,
-//!   "procedure-transaction-identity": 1,
-//!   "message-type": "pdn-connectivity-request",
-//!   "request-type": "initial",
-//!   "pdn-type": "ipv4v6"
-//! }
 //! ```
 //!
 //! ## One IE alone
@@ -165,23 +164,28 @@
 //! // The NASC of an NGAP HANDOVER REQUEST from EPS
 //! let octets = hex::decode("0102030422290000").unwrap();
 //! let nasc = S1ModeToN1ModeNasTransparentContainer::new(octets);
-//! println!("{}", nasc.to_tree());
+//! assert_eq!(
+//!     nasc.to_tree(),
+//!     tree!({
+//!         "message-authentication-code": 16909060,
+//!         "selected-nas-security-algorithms": {"ciphering": "nea2", "integrity": "nia2"},
+//!         "ncc": 2,
+//!         "ngksi": {"mapped": 1},
+//!     })
+//! );
 //!
 //! // The container that its tree writes, with another NCC
 //! let mut fields = nasc.to_tree();
 //! fields["ncc"] = tree!(3);
 //! let written: S1ModeToN1ModeNasTransparentContainer = tree::from_value(&fields).unwrap();
-//! println!("{}", hex::encode(&written.value));
+//! assert_eq!(hex::encode(&written.value), "0102030422390000");
 //!
 //! // A container of a message is the tree of its message
 //! let container = MessageContainer::new(vec![0x7e, 0x00, 0x64, 0x16]);
-//! println!("{}", container.to_tree());
-//! ```
-//!
-//! ```text
-//! {"message-authentication-code":16909060,"selected-nas-security-algorithms":{"ciphering":"nea2","integrity":"nia2"},"ncc":2,"ngksi":{"mapped":1}}
-//! 0102030422390000
-//! {"message-type":"5gmm-status","5gmm-cause":"congestion"}
+//! assert_eq!(
+//!     container.to_tree(),
+//!     tree!({"message-type": "5gmm-status", "5gmm-cause": "congestion"})
+//! );
 //! ```
 //!
 //! ## The protocol configuration options
@@ -218,21 +222,13 @@
 //!     "5201c101090908696e7465726e657405010a000001271080c023050201000500000d0408080808"
 //! ).unwrap();
 //! let answer = Message::decode(&bytes).unwrap();
-//! println!("{:#}", answer.to_tree()["protocol-configuration-options"]);
-//! ```
-//!
-//! ```text
-//! [
-//!   {
-//!     "container": {
-//!       "identifier": 49187,
-//!       "contents": "0201000500"
-//!     }
-//!   },
-//!   {
-//!     "dns-server-ipv4-address": "8.8.8.8"
-//!   }
-//! ]
+//! assert_eq!(
+//!     answer.to_tree()["protocol-configuration-options"],
+//!     tree!([
+//!         {"container": {"identifier": 49187, "contents": "0201000500"}},
+//!         {"dns-server-ipv4-address": "8.8.8.8"},
+//!     ])
+//! );
 //! ```
 //!
 //! ## Edit a list
@@ -244,7 +240,10 @@
 //! let bytes = hex::decode("7e004201017a0005000211f200").unwrap();
 //! let accept = Message::decode(&bytes).unwrap();
 //! let mut tree = accept.to_tree();
-//! println!("{}", tree["extended-emergency-number-list"]);
+//! assert_eq!(
+//!     tree["extended-emergency-number-list"],
+//!     tree!({"valid-only-in-plmn": false, "numbers": [{"digits": "112", "sub-services": ""}]})
+//! );
 //!
 //! // A number of the police is added at the end of the list
 //! let police = tree!({"digits": "17", "sub-services": "police"});
@@ -255,10 +254,6 @@
 //!     hex::encode(edited.encode().unwrap()),
 //!     "7e004201017a000e000211f200017106f0373b3d2e03"
 //! );
-//! ```
-//!
-//! ```text
-//! {"valid-only-in-plmn":false,"numbers":[{"digits":"112","sub-services":""}]}
 //! ```
 //!
 //! ## A protected message
@@ -273,12 +268,27 @@
 //! // 5GMM STATUS under an integrity protected header
 //! let bytes = hex::decode("7e01e73b901b007e006416").unwrap();
 //! let protected = Message::decode(&bytes).unwrap();
-//! println!("{:#}", protected.to_tree());
+//! assert_eq!(
+//!     protected.to_tree(),
+//!     tree!({
+//!         "security-header": {
+//!             "security-header-type": "integrity-protected",
+//!             "message-authentication-code": 3879440411u32,
+//!             "sequence-number": 0,
+//!         },
+//!         "message-type": "5gmm-status",
+//!         "5gmm-cause": "congestion",
+//!     })
+//! );
 //!
 //! // An edit that leaves the old MAC in the security header is refused
 //! let mut tree = protected.to_tree();
 //! tree["5gmm-cause"] = tree!("illegal-ue");
-//! println!("{}", protected.with_tree(tree.clone()).unwrap_err());
+//! assert_eq!(
+//!     protected.with_tree(tree.clone()).unwrap_err().to_string(),
+//!     "cannot encode: the message authentication code of `security-header` is that of the \
+//!      message as it was: write the code of the edited message, or edit the plain message"
+//! );
 //!
 //! // The tree writes the code of the edited message
 //! tree["security-header"]["message-authentication-code"] = tree!("0x01020304");
@@ -288,21 +298,7 @@
 //! // A message that is ciphered has its octets
 //! let bytes = hex::decode("7e024b708bc300026ff75c").unwrap();
 //! let ciphered = Message::decode(&bytes).unwrap();
-//! println!("{}", ciphered.to_tree()["ciphered-message"]);
-//! ```
-//!
-//! ```text
-//! {
-//!   "security-header": {
-//!     "security-header-type": "integrity-protected",
-//!     "message-authentication-code": 3879440411,
-//!     "sequence-number": 0
-//!   },
-//!   "message-type": "5gmm-status",
-//!   "5gmm-cause": "congestion"
-//! }
-//! cannot encode: the message authentication code of `security-header` is that of the message as it was: write the code of the edited message, or edit the plain message
-//! {"octets":"026ff75c"}
+//! assert_eq!(ciphered.to_tree()["ciphered-message"], tree!({"octets": "026ff75c"}));
 //! ```
 //!
 //! `from_tree()` writes a message under the `security-header` of its tree, with
@@ -319,9 +315,26 @@
 //! let tree = accept.to_tree();
 //!
 //! // Each value with the path that selects it
-//! for (path, value) in paths::paths(&tree) {
-//!     println!("{path} = {value}");
-//! }
+//! let all: Vec<String> = (paths::paths(&tree).into_iter())
+//!     .map(|(path, value)| format!("{path} = {value}"))
+//!     .collect();
+//! assert_eq!(
+//!     all,
+//!     [
+//!         r#"/nas/message-type = "registration-accept""#,
+//!         r#"/nas/5gs-registration-result/result = "3gpp-access""#,
+//!         "/nas/5gs-registration-result/sms-allowed = false",
+//!         "/nas/5gs-registration-result/nssaa-performed = false",
+//!         "/nas/5gs-registration-result/emergency-registered = false",
+//!         "/nas/5gs-registration-result/disaster-roaming = false",
+//!         r#"/nas/5g-guti/guti/plmn = "208-93""#,
+//!         "/nas/5g-guti/guti/amf-region-id = 1",
+//!         "/nas/5g-guti/guti/amf-set-id = 1",
+//!         "/nas/5g-guti/guti/amf-pointer = 2",
+//!         "/nas/5g-guti/guti/tmsi = 287454020",
+//!         "/nas/allowed-nssai/0/sst = 1",
+//!     ]
+//! );
 //!
 //! // A coded value by its name and an identity by its parts
 //! let select = |path| paths::select(&tree, path).unwrap();
@@ -337,21 +350,6 @@
 //!
 //! // A name that the message cannot have is an error
 //! assert!(paths::select(&tree, "/nas/t3512").is_err());
-//! ```
-//!
-//! ```text
-//! /nas/message-type = "registration-accept"
-//! /nas/5gs-registration-result/result = "3gpp-access"
-//! /nas/5gs-registration-result/sms-allowed = false
-//! /nas/5gs-registration-result/nssaa-performed = false
-//! /nas/5gs-registration-result/emergency-registered = false
-//! /nas/5gs-registration-result/disaster-roaming = false
-//! /nas/5g-guti/guti/plmn = "208-93"
-//! /nas/5g-guti/guti/amf-region-id = 1
-//! /nas/5g-guti/guti/amf-set-id = 1
-//! /nas/5g-guti/guti/amf-pointer = 2
-//! /nas/5g-guti/guti/tmsi = 287454020
-//! /nas/allowed-nssai/0/sst = 1
 //! ```
 //!
 //! # Paths

@@ -30,7 +30,14 @@
 //! // Decode an ATTACH REQUEST with an IMSI and a PDN CONNECTIVITY REQUEST
 //! let bytes = hex::decode("07410108298039000000001002e0e000040201d031").unwrap();
 //! let msg = Message::decode(&bytes).unwrap();
-//! println!("{msg}");
+//! # #[cfg(feature = "tree")]
+//! assert_eq!(
+//!     msg.to_string(),
+//!     "EMM AttachRequest (eps-attach-type: eps-attach, nas-key-set-identifier: 0, \
+//!      eps-mobile-identity: imsi-208930000000001, ue-network-capability: EEA0 EEA1 EEA2 / \
+//!      EIA0 EIA1 EIA2, esm-message-container: ESM (EBI=0, PTI=1) PdnConnectivityRequest \
+//!      (request-type: initial, pdn-type: ipv4v6))"
+//! );
 //! assert!(msg.validate().is_empty());
 //!
 //! // Read its IEs, and the ESM message in its container
@@ -40,7 +47,11 @@
 //!     assert!(request.ue_network_capability.supports_eea(2));
 //!
 //!     let esm = request.esm_message_container.decode_as_esm_message().unwrap();
-//!     println!("{esm}");
+//!     # #[cfg(feature = "tree")]
+//!     assert_eq!(
+//!         esm.to_string(),
+//!         "ESM (EBI=0, PTI=1) PdnConnectivityRequest (request-type: initial, pdn-type: ipv4v6)"
+//!     );
 //! }
 //!
 //! // It encodes to the octets that were decoded
@@ -51,11 +62,6 @@
 //! let reject = AttachReject::new(cause);
 //! let answer = Message::new_emm(reject);
 //! assert_eq!(answer.encode().unwrap(), [0x07, 0x44, 0x03]);
-//! ```
-//!
-//! ```text
-//! EMM AttachRequest (eps-attach-type: eps-attach, nas-key-set-identifier: 0, eps-mobile-identity: imsi-208930000000001, ue-network-capability: EEA0 EEA1 EEA2 / EIA0 EIA1 EIA2, esm-message-container: ESM (EBI=0, PTI=1) PdnConnectivityRequest (request-type: initial, pdn-type: ipv4v6))
-//! ESM (EBI=0, PTI=1) PdnConnectivityRequest (request-type: initial, pdn-type: ipv4v6)
 //! ```
 
 pub(crate) mod ie;
