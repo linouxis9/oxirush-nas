@@ -971,7 +971,7 @@ impl MultiplePayloads<'_> {
         let mut members = message_tree::members(item)?.clone();
         let name = (members.keys())
             .find(|name| readable::same_name(name, "contents"))
-            .cloned()
+            .map(str::to_owned)
             .ok_or("`contents` is not written")?;
         let contents = members.shift_remove(&name).unwrap_or_default();
         members.insert("contents".into(), Value::Array(Vec::new()));

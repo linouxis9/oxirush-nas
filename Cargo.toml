@@ -42,7 +42,6 @@ oxirush-utils = { version = "0.2.2", default-features = false, features = ["allo
 # `build_s`, which returns a `Vec`.
 oxirush-security = { version = "0.4.0", default-features = false, features = ["alloc"], optional = true }
 
-
 [dev-dependencies]
 serde_json = "1.0.154"
 hex = "0.4.3"
@@ -77,7 +76,8 @@ required-features = ["tree"]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
-# tree::Takes of oxirush-utils is not released yet: every crate of the build takes
-# oxirush-utils from this revision until its next release.
+# tree::Takes of oxirush-utils, and its trees that hold the names of the crate without
+# copying them, are not released yet: every crate of the build takes oxirush-utils from
+# this revision until its next release.
 [patch.crates-io]
-oxirush-utils = { git = "https://github.com/linouxis9/oxirush-utils", rev = "1a15076068b91a67a3e74b2b3cd01c5482765f11" }
+oxirush-utils = { git = "https://github.com/linouxis9/oxirush-utils", rev = "4eae6c700f102dbf134e47f758e96799bee3f537" }

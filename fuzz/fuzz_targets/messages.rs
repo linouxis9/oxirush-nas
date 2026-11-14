@@ -203,7 +203,7 @@ impl<M: Message> Pool<M> {
         for message in &messages {
             let tree = message.to_tree();
             for (name, value) in tree.as_object().into_iter().flat_map(|tree| tree.iter()) {
-                let seen = values.entry(name.clone()).or_default();
+                let seen = values.entry(name.to_string()).or_default();
                 if !seen.contains(value) {
                     seen.push(value.clone());
                 }
@@ -235,7 +235,7 @@ impl<M: Message> Pool<M> {
 /// Each text in `value`.
 fn texts(value: &Value, names: &mut Vec<String>) {
     match value {
-        Value::String(text) => names.push(text.clone()),
+        Value::String(text) => names.push(text.to_string()),
         Value::Array(entries) => entries.iter().for_each(|entry| texts(entry, names)),
         Value::Object(members) => members.values().for_each(|member| texts(member, names)),
         _ => {}
@@ -276,7 +276,7 @@ impl Leaf {
             Leaf::Unsigned(number) => Value::from(*number),
             Leaf::Signed(number) => Value::from(*number),
             Leaf::Small(number) => Value::from(*number),
-            Leaf::Text(text) => Value::from(text.as_str()),
+            Leaf::Text(text) => Value::from(text.clone()),
             Leaf::Hex(octets) => Value::from(hex(octets)),
             Leaf::Bool(flag) => Value::from(*flag),
             Leaf::Null => Value::Null,

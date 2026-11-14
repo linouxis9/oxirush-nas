@@ -81,7 +81,7 @@ pub fn call<M: Message>(input: Call) {
     let start: String = start.chars().take(usize::from(input.cut)).collect();
     let path = format!("{start}{}", input.extra);
     let value = serde_json::from_slice::<Value>(&input.value)
-        .unwrap_or_else(|_| Value::String(String::from_utf8_lossy(&input.value).into_owned()));
+        .unwrap_or_else(|_| Value::from(String::from_utf8_lossy(&input.value).into_owned()));
 
     // Any path selects, or is refused.
     if let Ok(selected) = paths::select(&tree, &path) {

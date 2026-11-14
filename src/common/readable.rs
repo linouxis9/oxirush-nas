@@ -315,7 +315,7 @@ pub(crate) fn pair_items<A: Readable, B: Readable>(value: &Value) -> Result<(A, 
 
 /// The variant `variant` with what it holds, `contents`.
 pub(crate) fn tagged(variant: &'static str, contents: Value) -> Value {
-    Map::from_iter([(variant.to_owned(), contents)]).into()
+    Map::from_iter([(variant.into(), contents)]).into()
 }
 
 /// The members of a struct, by the names that they print as.
@@ -332,12 +332,12 @@ impl Members {
 
     /// The member `name` of the struct, with its value.
     pub(crate) fn put<T: Readable>(&mut self, name: &'static str, value: &T) {
-        self.members.insert(name.to_owned(), value.shown(name));
+        self.members.insert(name.into(), value.shown(name));
     }
 
     /// The member `name` of the struct, with the value `shown` in its form.
     pub(crate) fn put_shown(&mut self, name: &'static str, shown: Value) {
-        self.members.insert(name.to_owned(), shown);
+        self.members.insert(name.into(), shown);
     }
 
     pub(crate) fn finish(self) -> Value {
@@ -415,7 +415,7 @@ pub(crate) fn variant<'v>(
     variants: &'static [&'static str],
 ) -> Result<(usize, Option<&'v Value>), String> {
     let (name, contents) = match value {
-        Value::String(name) => (name, None),
+        Value::String(name) => (&**name, None),
         Value::Object(members) if members.len() == 1 => {
             let (name, contents) = members.iter().next().expect("one member");
             (name, Some(contents))
@@ -578,7 +578,7 @@ impl Readable for String {
     const TAKES: &'static Takes = &Takes::Text;
 
     fn shown(&self, _: &'static str) -> Value {
-        self.as_str().into()
+        self.clone().into()
     }
 
     fn read(value: &Value) -> Result<Self, String> {

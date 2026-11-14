@@ -175,7 +175,11 @@ fn the_octets_of_an_ie_are_written_as_they_are() {
     );
     // Octets that are no identity have no value, and can be given one.
     assert_eq!(odd.to_tree()["5g-guti"], tree!({"octets": "f2ffffff"}));
-    let imei = |digits: &str| fgs_edited(&odd, |tree| tree["5g-guti"] = tree!({"imei": digits}));
+    let imei = |digits: &str| {
+        fgs_edited(&odd, |tree| {
+            tree["5g-guti"] = tree!({"imei": digits.to_string()})
+        })
+    };
     assert_eq!(
         imei("356938035643809").unwrap(),
         "7e004201017700083b65390853468390"
@@ -187,7 +191,7 @@ fn the_octets_of_an_ie_are_written_as_they_are() {
     let establishment = fgs("2e0501c1ffff");
     let rate = |octets: &str| {
         fgs_edited(&establishment, |tree| {
-            tree["integrity-protection-maximum-data-rate"] = tree!({"octets": octets});
+            tree["integrity-protection-maximum-data-rate"] = tree!({"octets": octets.to_string()});
         })
     };
     assert_eq!(rate("0101"), Ok("2e0501c10101".into()));
@@ -565,8 +569,8 @@ fn an_ie_is_taken_out_and_none_is_made_up() {
         let mut tree = accept.to_tree();
         let known = (tree.as_object().unwrap().keys())
             .find(|known| crate::common::readable::same_name(known, name))
-            .cloned()
-            .unwrap();
+            .unwrap()
+            .to_string();
         let ie = tree.as_object_mut().unwrap().shift_remove(&known).unwrap();
         tree[name] = ie;
         assert_eq!(accept.with_tree(tree.clone()).unwrap(), accept, "{name}");
@@ -1045,7 +1049,7 @@ fn an_optional_ie_that_the_message_does_not_have_is_added() {
         tree.as_object()
             .unwrap()
             .keys()
-            .all(|entry| names.contains(entry))
+            .all(|entry| names.iter().any(|name| name == entry))
     );
     assert_eq!(
         names[..5],
@@ -1155,10 +1159,10 @@ fn every_optional_ie_is_added_from_its_octets() {
         let tree = message.to_tree();
         added += check(absent(&message), |name, octets| {
             let mut tree = tree.clone();
-            tree[name] = tree!({ "octets": octets });
+            tree[name] = tree!({ "octets": octets.to_string() });
             let edited = message.with_tree(tree).ok();
             let selected = edited.map(|edited| edited.select(&format!("/nas/{name}/octets")));
-            selected == Some(Ok(vec![tree!(octets)]))
+            selected == Some(Ok(vec![tree!(octets.to_string())]))
         });
     }
     for (name, wire) in fixtures(include_str!("../tests/fixtures/nas-eps.tsv")) {
@@ -1166,10 +1170,10 @@ fn every_optional_ie_is_added_from_its_octets() {
         let tree = message.to_tree();
         added += check(absent(&message), |name, octets| {
             let mut tree = tree.clone();
-            tree[name] = tree!({ "octets": octets });
+            tree[name] = tree!({ "octets": octets.to_string() });
             let edited = message.with_tree(tree).ok();
             let selected = edited.map(|edited| edited.select(&format!("/nas/{name}/octets")));
-            selected == Some(Ok(vec![tree!(octets)]))
+            selected == Some(Ok(vec![tree!(octets.to_string())]))
         });
     }
     assert!(added > 500, "{added}");
@@ -3148,7 +3152,11 @@ fn nothing_that_is_written_is_cut_or_made_up() {
     // An SD of three octets, written with four: the last was left out.
     // Through an edit, through a tree and through serde
     let accept = fgs("7e0042010115020101");
-    let edited = |sd: &str| fgs_edited(&accept, |tree| tree["allowed-nssai"][0]["sd"] = tree!(sd));
+    let edited = |sd: &str| {
+        fgs_edited(&accept, |tree| {
+            tree["allowed-nssai"][0]["sd"] = tree!(sd.to_string())
+        })
+    };
     assert_eq!(edited("010203").unwrap(), "7e0042010115050401010203");
     assert_eq!(
         edited("01020304"),
@@ -3215,7 +3223,7 @@ fn nothing_that_is_written_is_cut_or_made_up() {
         address(tree!("0a0000")),
         refused("pdn-address: \"0a0000\" is not 4 octets")
     );
-    let identity = |mac: &str| {
+    let identity = |mac: &'static str| {
         fgs_tree(tree!({
             "message-type": "identity-response",
             "mobile-identity": {"mac-address": {"address": mac, "mauri": false}},
@@ -3355,7 +3363,7 @@ fn the_trees_without_octets_are_what_a_context_deciphered() {
         NoOctets,
         Refused,
     }
-    let fgs = |header_type: &str| {
+    let fgs = |header_type: &'static str| {
         let tree = tree!({
             "security-header": {
                 "extended-protocol-discriminator": 126,
@@ -3396,7 +3404,7 @@ fn the_trees_without_octets_are_what_a_context_deciphered() {
         Written::NoOctets
     );
 
-    let eps = |header_type: &str, message: Value| {
+    let eps = |header_type: &'static str, message: Value| {
         let mut tree = message;
         tree["security-header"] = tree!({
             "security-header-type": header_type,

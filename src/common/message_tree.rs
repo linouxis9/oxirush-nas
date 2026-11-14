@@ -27,6 +27,7 @@ use crate::nas_5gs::{
     SNssaiContents, SessionAmbr, SessionAmbrValue,
 };
 use crate::prelude::*;
+use alloc::borrow::Cow;
 use core::any::Any;
 use core::net::{Ipv4Addr, Ipv6Addr};
 use oxirush_utils::tree::{self, ErrorKind, Map, Value};
@@ -877,8 +878,8 @@ impl ConfigurationUnit {
     /// The name of the unit, as a tree prints it.
     fn name(&self) -> String {
         match readable::to_value(self) {
-            Ok(Value::String(name)) => name,
-            Ok(Value::Object(unit)) => unit.keys().next().cloned().unwrap_or_default(),
+            Ok(Value::String(name)) => name.into_owned(),
+            Ok(Value::Object(unit)) => unit.keys().next().map(str::to_string).unwrap_or_default(),
             _ => String::new(),
         }
     }
@@ -1255,7 +1256,7 @@ fn undecided<M: TreeMessage>(header: Value, container: Option<&str>) -> Map {
     fields.retain(|name, value| {
         !given
             .iter()
-            .any(|(field, given)| field == name && given == value)
+            .any(|(field, given)| *field == name && given == value)
     });
     fields
 }
@@ -1286,7 +1287,7 @@ pub(crate) fn tree<M: TreeMessage>(message: &M, scope: Scope) -> Value {
                 || Map::from_iter([("octets".into(), field.octets.hex().into())]).into(),
                 without_absent,
             );
-        tree.insert(field.printed.to_owned(), value);
+        tree.insert(field.printed.into(), value);
     });
     let unknown = message.body().map(|body| body.unknown_ies());
     if let Some(unknown) = unknown.filter(|unknown| !unknown.is_empty()) {
@@ -1334,7 +1335,7 @@ pub(crate) fn protection_of(
         return Ok((None, tree));
     };
     let mut taken = |entry: &str| {
-        let name = (members.keys().find(|name| same_name(name, entry))).cloned()?;
+        let name = (members.keys().find(|name| same_name(name, entry)))?.to_string();
         members.shift_remove(&name)
     };
     let (header, ciphered) = (taken(SECURITY_HEADER), taken(CIPHERED));
@@ -1365,7 +1366,7 @@ pub(crate) fn protection_of(
 /// of `given` that it leaves out, which the system decides.
 pub(crate) fn security_header<H: Readable>(
     header: &Value,
-    given: &[(&str, Value)],
+    given: &[(&'static str, Value)],
 ) -> Result<H, String> {
     let mut header = header.clone();
     if let Value::Object(fields) = &mut header {
@@ -1378,6 +1379,11 @@ pub(crate) fn security_header<H: Readable>(
     readable::from_value(&header).map_err(|error| format!("{SECURITY_HEADER}: {error}"))
 }
 
+/// The members of an edit of a message, by their names as the tree has them:
+/// each with the value that it is written with, or `None` where it is taken
+/// out ([`edits`]).
+pub(crate) type Edits = Vec<(Cow<'static, str>, Option<Value>)>;
+
 /// The members that the tree `tree` writes as an edit of a message of `M`
 /// whose tree is `before`: each member that the tree changes, as the tree
 /// writes it, and `None` for each member that the tree leaves out. A member
@@ -1386,22 +1392,22 @@ pub(crate) fn edits<M: TreeMessage>(
     before: Value,
     tree: Value,
     scope: Scope,
-) -> Result<Vec<(String, Option<Value>)>, String> {
+) -> Result<Edits, String> {
     let (Value::Object(before), Value::Object(members)) = (before, tree) else {
         return Err("a message is written as its IEs by name".into());
     };
     let named = |map: &Map, name: &str| map.keys().any(|key| same_name(key, name));
-    let mut edits = Vec::new();
+    let mut edits: Edits = Vec::new();
     // What the tree leaves out is taken out.
     for name in before.keys() {
         if !named(&members, name) {
-            edits.push((name.clone(), None));
+            edits.push((name.to_string().into(), None));
         }
     }
     // What the tree changes is written by it.
     for (name, mut written) in members {
         let known = before.keys().find(|key| same_name(key, &name));
-        if known.is_some_and(|known| before[known.as_str()] == written) {
+        if known.is_some_and(|known| before[known] == written) {
             continue;
         }
         // A security header has the fields that the system decides, which a
@@ -1432,7 +1438,7 @@ pub(crate) fn edits<M: TreeMessage>(
 /// ([`edits`]).
 pub(crate) fn with_edits<M: TreeMessage>(
     original: &M,
-    edits: Vec<(String, Option<Value>)>,
+    edits: Edits,
     scope: Scope,
 ) -> Result<M, String> {
     // An edit that changes nothing leaves the message as it is.
@@ -1492,7 +1498,7 @@ pub(crate) fn octets_at<M: TreeMessage>(message: &M, names: &[String], scope: Sc
     }
     let header = message.header();
     let fields = header.iter().flat_map(Value::as_object).flatten();
-    entries.extend(fields.map(|(name, _)| (name.as_str(), Entry::Field)));
+    entries.extend(fields.map(|(name, _)| (name, Entry::Field)));
     let mut place = 0;
     message.ies(scope, &mut |field| {
         entries.push((field.printed, Entry::Ie(place)));
@@ -1544,7 +1550,7 @@ pub(crate) fn octets_at<M: TreeMessage>(message: &M, names: &[String], scope: Sc
 /// is one that an edit takes out.
 struct Entries {
     /// Each member by its name, in the order of the tree, until it is taken.
-    members: Vec<(String, Option<Option<Value>>)>,
+    members: Vec<(Cow<'static, str>, Option<Option<Value>>)>,
     /// The first letter of the name of each member and how many letters it
     /// has: names of the same letters have the same.
     shapes: Vec<(Option<u8>, usize)>,
@@ -1568,7 +1574,9 @@ fn shape(name: &str) -> (Option<u8>, usize) {
 impl Entries {
     /// The members `members`; an error names the first member that a later
     /// one names again.
-    fn of(members: impl IntoIterator<Item = (String, Option<Value>)>) -> Result<Self, String> {
+    fn of(
+        members: impl IntoIterator<Item = (Cow<'static, str>, Option<Value>)>,
+    ) -> Result<Self, String> {
         let members: Vec<_> = (members.into_iter())
             .map(|(name, member)| (name, Some(member)))
             .collect();
@@ -1627,7 +1635,7 @@ impl Entries {
     }
 
     /// The name of the first member left, in the order of the letters.
-    fn first(self) -> Option<String> {
+    fn first(self) -> Option<Cow<'static, str>> {
         let left = self
             .members
             .into_iter()
@@ -1746,7 +1754,7 @@ fn written_entries<M: TreeMessage>(
                 *value = named.unwrap_or_else(|| written.clone());
             }
             Some(Err(error)) => failure = Some(format!("{name}: {error}")),
-            None if M::SPARE.contains(&name.as_str()) => {}
+            None if M::SPARE.contains(&name) => {}
             None if alone => failure = Some(format!("`{name}` is not written")),
             _ => failure = Some(format!("`{name}` is the header: it has a `value` alone")),
         }
@@ -2829,7 +2837,7 @@ macro_rules! fields_ie {
     (@flags $ie:ident, $members:ident, exact) => {};
     (@flags $ie:ident, $members:ident, flags) => {
         for (flag, value) in $crate::common::message_tree::Flags::flags($ie) {
-            $members.insert(flag.to_owned(), value.into());
+            $members.insert(flag.into(), value.into());
         }
     };
     (@shown $ie:ident, $members:ident) => {
@@ -2905,7 +2913,7 @@ macro_rules! built_ie {
                         let $key: $ty = $crate::common::message_tree::built_ie!(@get ie, $key $(, $get)?)?;
                         let member = $crate::common::readable::to_value(&$key).ok()?;
                         let name = $crate::common::names::name!(stringify!($key));
-                        members.insert(name.to_owned(), member);
+                        members.insert(name.into(), member);
                     )+
                     let from: fn(
                         $($ty),+
@@ -2951,7 +2959,7 @@ macro_rules! built_ie {
                             .ok_or(concat!(stringify!($key), " is not written"))?,
                     };
                     let name = $crate::common::names::name!(stringify!($key));
-                    members.insert(name.to_owned(), to_value(&$key)?);
+                    members.insert(name.into(), to_value(&$key)?);
                 )+
                 let from: fn(
                     $($ty),+

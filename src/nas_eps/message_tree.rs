@@ -23,6 +23,7 @@ use crate::common::{Error, Result};
 use crate::nas_eps::{EmmMessageType, EsmMessage, EsmMessageType, Message};
 use crate::nas_eps::{EmmTransport, ServiceRequest};
 use crate::prelude::*;
+use alloc::borrow::Cow;
 
 /// Who sends an ESM message, where its type says so (TS 24.301 §8.3): the
 /// units of its protocol configuration options are read by it.
@@ -450,7 +451,7 @@ impl ServiceRequest {
         members.push(("message-authentication-code", tree!({ "octets": code })));
         let members = members
             .into_iter()
-            .map(|(name, value)| (name.to_string(), value));
+            .map(|(name, value)| (name.into(), value));
         tree::Value::from(tree::Map::from_iter(members))
     }
 
@@ -459,7 +460,7 @@ impl ServiceRequest {
     /// is `None` is left out.
     fn written(
         &self,
-        members: impl IntoIterator<Item = (String, Option<oxirush_utils::tree::Value>)>,
+        members: impl IntoIterator<Item = (Cow<'static, str>, Option<oxirush_utils::tree::Value>)>,
         alone: bool,
     ) -> core::result::Result<Self, String> {
         let mut request = self.clone();
@@ -835,8 +836,9 @@ impl Message {
                     .and_then(|members| {
                         let name = members
                             .keys()
-                            .find(|name| same_name(name, "security-header"));
-                        members.shift_remove(&name?.clone())
+                            .find(|name| same_name(name, "security-header"))?
+                            .to_string();
+                        members.shift_remove(&name)
                     })
                     .ok_or_else(|| {
                         Error::EncodingError("`security-header` is not written".into())

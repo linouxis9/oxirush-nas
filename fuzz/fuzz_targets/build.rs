@@ -95,7 +95,7 @@ pub fn build<M: Message>(input: Build) {
                 Value::Object(entry)
             }
         };
-        members.insert(name.clone(), value);
+        members.insert(name.clone().into(), value);
     }
     if let Ok(written_message) = M::from_tree(tree) {
         written(&written_message);

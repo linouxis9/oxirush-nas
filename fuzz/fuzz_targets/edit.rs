@@ -166,7 +166,7 @@ pub fn edit<M: Message>(input: Edits) {
     }
     let keys = (before.as_object().into_iter().chain(after.as_object()))
         .flat_map(|tree| tree.keys())
-        .filter(|key| !edited.contains(key));
+        .filter(|key| !edited.iter().any(|edited| edited == key));
     for key in keys {
         let path = format!("/nas/{key}/octets");
         match (message.select(&path), changed.select(&path)) {

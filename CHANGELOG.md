@@ -35,6 +35,8 @@ All notable changes to `oxirush-nas` are recorded here.
 
 ### Changed
 
+- The tree of a message holds the names of its members and of the variants
+  of its values without copying them, with oxirush-utils at 8f0b227.
 - `protect()` is written on `protect_into()`, and has one allocation and
   one copy of the message fewer: 476 ns for that REGISTRATION ACCEPT, three
   allocations where it had four.

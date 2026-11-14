@@ -124,7 +124,7 @@ fn alone<T: tree::Tree + PartialEq + core::fmt::Debug>(ie: &T, shown: &Value, oc
     assert_eq!(&ie.to_tree(), shown, "{}", T::NAME);
     let written = tree::from_value::<T>(shown).map_err(|error| error.to_string());
     assert_eq!(written.as_ref(), Ok(ie), "{}: {shown}", T::NAME);
-    let written = tree::from_value::<T>(&tree!({ "octets": octets }));
+    let written = tree::from_value::<T>(&tree!({ "octets": octets.to_string() }));
     let written = written.map_err(|error| error.to_string());
     assert_eq!(written.as_ref(), Ok(ie), "{}: {octets}", T::NAME);
 }
@@ -605,7 +605,7 @@ fn each_bit_of_the_capabilities_of_ts_24_301_has_its_member() {
         ],
     ];
     // The value that sets the member `member` alone
-    let value = |member: &str| match member.split_once(' ') {
+    let value = |member: &'static str| match member.split_once(' ') {
         Some((list, algorithm)) => tree!({ list: [algorithm.parse::<u8>().unwrap()] }),
         None => tree!({ member: true }),
     };

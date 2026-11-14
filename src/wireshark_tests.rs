@@ -120,7 +120,9 @@ pub(crate) fn read<M: crate::common::message_tree::TreeMessage>(
     scope: crate::common::message_tree::Scope,
 ) -> crate::tree::Value {
     use crate::tree::{Map, Value};
-    let entry = |member: &str, value: Value| Value::from(Map::from_iter([(member.into(), value)]));
+    let entry = |member: &str, value: Value| {
+        Value::from(Map::from_iter([(member.to_string().into(), value)]))
+    };
     let mut read = Map::new();
     if let Some((header, ciphered)) = message.protection() {
         read.insert("security-header".into(), entry("value", header));
