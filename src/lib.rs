@@ -436,12 +436,12 @@ mod prelude {
 }
 
 mod common;
+#[cfg(all(test, feature = "tree"))]
+mod message_tree_tests;
 pub mod nas_5gs;
 pub mod nas_eps;
 #[cfg(feature = "tree")]
 pub mod paths;
-#[cfg(all(test, feature = "tree"))]
-mod view_tests;
 #[cfg(all(test, feature = "tree"))]
 mod wireshark_tests;
 

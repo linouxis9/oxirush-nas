@@ -1035,9 +1035,9 @@ fn an_optional_ie_that_the_message_does_not_have_is_added() {
 /// octets, and the message then has it with them.
 #[test]
 fn every_optional_ie_is_added_from_its_octets() {
-    use crate::common::view::Viewed;
+    use crate::common::message_tree::TreeMessage;
     /// The optional IEs that `message` does not have.
-    fn absent(message: &impl Viewed) -> Vec<&'static str> {
+    fn absent(message: &impl TreeMessage) -> Vec<&'static str> {
         let mut absent = Vec::new();
         if let Some(body) = message.body() {
             body.absent(&mut |name, _| absent.push(name));
@@ -1264,8 +1264,8 @@ fn a_path_names_an_ie_however_it_is_written_and_what_is_not_there_is_nothing() {
             .iter()
             .any(|(path, _)| path.contains("5gmm-capability") || path.ends_with("/sd"))
     );
-    // A view says what message it is of: the name of an IE that the message
-    // cannot have is refused when it is set, and the view is as it was.
+    // A tree says what message it is of: the name of an IE that the message
+    // cannot have is refused when it is set, and the tree is as it was.
     let mut edited = tree.clone();
     let timer = tree!({"value": 60});
     let error = paths::set(&mut edited, "/nas/t3512-value", timer.clone()).unwrap_err();
@@ -1454,8 +1454,8 @@ fn octets_after_the_name_of_an_ie_are_its_octets() {
     assert_eq!(header.kind(), tree::ErrorKind::Refused);
 }
 
-/// An IE that a view does not name at all is one that its message may have, or is
-/// refused; a view of a message that no type names may have any. An IE taken out keeps
+/// An IE that a tree does not name at all is one that its message may have, or is
+/// refused; a tree of a message that no type names may have any. An IE taken out keeps
 /// its name, as `null`.
 #[test]
 fn an_ie_that_a_tree_does_not_name_is_one_that_its_message_may_have() {
@@ -2079,7 +2079,10 @@ fn a_tree_names_its_message_by_its_name_or_by_its_number() {
     let error = e::Message::from_tree(tree!({"message-type": 0xff})).unwrap_err();
     assert!(error.to_string().contains("no message `255`"), "{error}");
     let error = e::Message::from_tree(tree!({})).unwrap_err().to_string();
-    assert!(error.contains("names the message"), "{error}");
+    assert_eq!(
+        error,
+        "cannot encode: a message is written from a tree whose `message-type` names it"
+    );
 }
 
 /// A REGISTRATION REQUEST whose NAS message container holds another one,
@@ -2303,7 +2306,7 @@ fn protocol_configuration_options_are_units_by_the_direction_of_their_message() 
     assert_eq!(options, &tree!({"octets": "80000d03080808"}));
 }
 
-/// Each unit that the reference of the `view` module lists is written by
+/// Each unit that the reference of the `paths` module lists is written by
 /// its name to its identifier, and read back by that name.
 #[test]
 fn each_unit_of_the_configuration_options_has_its_name() {
@@ -2759,8 +2762,7 @@ fn a_value_that_is_refused_says_what_was_expected() {
 /// What the constructor of an IE refuses says the member, what it was given
 /// and the limit that it breaks, after the path of the IE: a number outside
 /// its range, octets or digits outside their length, entries outside their
-/// number, and members that do not go together, in a tree and in a view of
-/// each protocol.
+/// number, and members that do not go together, in a tree of each protocol.
 #[test]
 fn a_value_that_its_constructor_refuses_says_the_member_and_the_limit() {
     let fgs_tree = |tree: Value| f::Message::from_tree(tree).unwrap_err().to_string();
@@ -3035,7 +3037,7 @@ fn a_value_that_says_nothing_writes_no_message() {
     assert!(trees > 3000, "{trees}");
 }
 
-/// What a tree or a view writes is taken as it is written or is refused:
+/// What a tree writes is taken as it is written or is refused:
 /// octets of another length than their value, a value that writes nothing
 /// of its IE, and a header that the message is not sent with.
 #[test]
@@ -3047,7 +3049,7 @@ fn nothing_that_is_written_is_cut_or_made_up() {
     }
 
     // An SD of three octets, written with four: the last was left out.
-    // Through a view, through a tree and through serde
+    // Through an edit, through a tree and through serde
     let accept = fgs("7e0042010115020101");
     let edited = |sd: &str| fgs_edited(&accept, |tree| tree["allowed-nssai"][0]["sd"] = tree!(sd));
     assert_eq!(edited("010203").unwrap(), "7e0042010115050401010203");

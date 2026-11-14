@@ -17,8 +17,8 @@
 
 //! The tree of a 5GS message and the values of its IEs.
 
+use crate::common::message_tree::{self, Ie, TreeMessage, Visit};
 use crate::common::readable;
-use crate::common::view::{self, Ie, Viewed, Visit};
 use crate::common::{Error, MessageBody, Result};
 use crate::nas_5gs::{GmmMessage, GmmMessageType, GsmMessage, GsmMessageType, Message};
 use crate::prelude::*;
@@ -30,7 +30,7 @@ fn with_ie(
     body: &dyn MessageBody,
     field: &str,
     ie: &dyn Ie,
-    scope: view::Scope,
+    scope: message_tree::Scope,
     visit: &mut Visit<'_>,
 ) {
     body.ies(scope, &mut |visited| {
@@ -39,7 +39,7 @@ fn with_ie(
         } else {
             visited.ie
         };
-        visit(view::Field { ie, ..visited })
+        visit(message_tree::Field { ie, ..visited })
     });
 }
 
@@ -72,8 +72,8 @@ fn sent(message: &GsmMessage) -> Option<PcoDirection> {
     }
 }
 
-impl Viewed for Message {
-    fn ies(&self, scope: view::Scope, visit: &mut Visit<'_>) {
+impl TreeMessage for Message {
+    fn ies(&self, scope: message_tree::Scope, visit: &mut Visit<'_>) {
         let scope = scope.sent_by(match self {
             Self::Gsm(_, message) => sent(message),
             _ => None,
@@ -136,7 +136,7 @@ impl Viewed for Message {
             return None;
         };
         let ciphered = match &**inner {
-            Self::Opaque(octets) => Some(view::octets_shown(octets)),
+            Self::Opaque(octets) => Some(message_tree::octets_shown(octets)),
             _ => None,
         };
         Some((readable::to_value(header).ok()?, ciphered))
@@ -278,9 +278,9 @@ impl Viewed for Message {
         let written = (members.iter())
             .find(|(name, _)| readable::same_name(name, "payload-container-type"))
             .map(|(_, written)| written);
-        if let Some(Ok(written)) =
-            written.map(|value| view::Decoded::with_decoded(kind, value, view::Scope::NONE))
-        {
+        if let Some(Ok(written)) = written.map(|value| {
+            message_tree::Decoded::with_decoded(kind, value, message_tree::Scope::NONE)
+        }) {
             *kind = written;
         }
         self
@@ -291,10 +291,12 @@ impl Message {
     /// The plain message that a tree writes alone, which its `message-type`
     /// names.
     fn plain(tree: oxirush_utils::tree::Value) -> Result<Self> {
-        let (members, named) =
-            view::typed_members::<Self>(tree, view::Scope::NONE).map_err(Error::EncodingError)?;
+        let (members, named) = message_tree::typed_members::<Self>(tree, message_tree::Scope::NONE)
+            .map_err(Error::EncodingError)?;
         let named = named.ok_or_else(|| {
-            Error::EncodingError("the `message-type` of the view names the message".into())
+            Error::EncodingError(
+                "a message is written from a tree whose `message-type` names it".into(),
+            )
         })?;
         let (family, kind) = match message_type_place(&named) {
             Some((0, place)) => (
@@ -308,7 +310,7 @@ impl Message {
             None => return Err(Error::EncodingError(no_message(&named))),
         };
         let kind = kind.ok_or_else(|| Error::EncodingError(format!("no message `{named}`")))?;
-        view::alone(&[family], &kind, members, view::Scope::NONE)
+        message_tree::alone(&[family], &kind, members, message_tree::Scope::NONE)
             .map_err(Error::EncodingError)
             .and_then(sendable)
     }
@@ -387,7 +389,7 @@ fn decided(
         "replayed-nas-message-container",
     ];
     if container.is_some_and(|ie| EPS.iter().any(|eps| readable::same_name(ie, eps))) {
-        return crate::nas_eps::view::decided(None, kind);
+        return crate::nas_eps::message_tree::decided(None, kind);
     }
     // A security protected 5GS NAS message is one of 5GMM (§9.1.1).
     if container.is_some_and(|ie| readable::same_name(ie, "security-header")) {
@@ -397,7 +399,7 @@ fn decided(
         ]);
     }
     let kind = kind.ok_or("the `message-type` of a message names it")?;
-    let kind = &view::type_named::<Message>(kind)?;
+    let kind = &message_tree::type_named::<Message>(kind)?;
     match message_type_place(kind).map(|(family, _)| family) {
         Some(0) => Ok(vec![
             ("extended-protocol-discriminator", tree!(126)),
@@ -420,7 +422,7 @@ pub(crate) fn is_message(kind: &str) -> bool {
 /// The error for `kind`, which names no 5GS message: the EPS message that
 /// it names, or the nearest names.
 fn no_message(kind: &str) -> String {
-    if crate::nas_eps::view::is_message(kind) {
+    if crate::nas_eps::message_tree::is_message(kind) {
         return format!("no 5GS message `{kind}`: it is an EPS message, which `nas_eps` reads");
     }
     let kinds: Vec<&str> = (GmmMessageType::NAMES.iter().chain(GsmMessageType::NAMES))
@@ -448,7 +450,8 @@ impl Message {
     /// assert!(!minutes.means_the_same(&decode("7e0044165f012b")));
     /// ```
     pub fn means_the_same(&self, other: &Self) -> bool {
-        view::meant(self, view::Scope::NONE) == view::meant(other, view::Scope::NONE)
+        message_tree::meant(self, message_tree::Scope::NONE)
+            == message_tree::meant(other, message_tree::Scope::NONE)
     }
 
     /// This message as a tree: its `message-type` and its IEs by name, each
@@ -501,7 +504,7 @@ impl Message {
     /// assert_eq!(Message::from_tree(tree).unwrap(), status);
     /// ```
     pub fn to_tree(&self) -> oxirush_utils::tree::Value {
-        view::tree(self, view::Scope::NONE)
+        message_tree::tree(self, message_tree::Scope::NONE)
     }
 
     /// The message that a tree writes, as [`Self::to_tree`] shows one: its
@@ -528,13 +531,13 @@ impl Message {
     /// which is the message that a security context deciphered and has no
     /// octets before one ciphers it.
     pub fn from_tree(tree: oxirush_utils::tree::Value) -> Result<Self> {
-        let (protection, tree) = view::protection_of(tree).map_err(Error::EncodingError)?;
+        let (protection, tree) = message_tree::protection_of(tree).map_err(Error::EncodingError)?;
         let Some((header, ciphered)) = protection else {
             return Self::plain(tree);
         };
         let given = decided(Some("security-header"), None).map_err(Error::EncodingError)?;
         let header: crate::nas_5gs::SecurityHeader =
-            view::security_header(&header, &given).map_err(Error::EncodingError)?;
+            message_tree::security_header(&header, &given).map_err(Error::EncodingError)?;
         let message = match ciphered {
             Some(octets) => Self::Opaque(octets),
             None => Self::from_tree(tree)?,
@@ -574,7 +577,9 @@ impl Message {
         &self,
         path: &str,
     ) -> core::result::Result<Vec<oxirush_utils::tree::Value>, oxirush_utils::tree::Error> {
-        crate::paths::of_message(&self.to_tree(), path, |ie| view::ie_octets(self, ie))
+        crate::paths::of_message(&self.to_tree(), path, |ie| {
+            message_tree::ie_octets(self, ie)
+        })
     }
 
     /// The message that an edited tree of this one writes: this message, with
@@ -608,10 +613,10 @@ impl Message {
     /// assert_eq!(edited.encode().unwrap(), [0x7e, 0x00, 0x64, 0x03]);
     /// ```
     pub fn with_tree(&self, tree: oxirush_utils::tree::Value) -> Result<Self> {
-        let edits = view::edits::<Self>(self.to_tree(), tree, view::Scope::NONE)
+        let edits = message_tree::edits::<Self>(self.to_tree(), tree, message_tree::Scope::NONE)
             .map_err(Error::EncodingError)?;
-        let edited =
-            view::with_edits(self, edits, view::Scope::NONE).map_err(Error::EncodingError)?;
+        let edited = message_tree::with_edits(self, edits, message_tree::Scope::NONE)
+            .map_err(Error::EncodingError)?;
         // A message that the tree leaves as it is comes back as it is.
         if edited != *self {
             edited.encode()?;
@@ -626,7 +631,7 @@ impl GmmMessageType {
     /// message, with those that are optional. A type that the crate has no
     /// message of has none.
     pub fn names(self) -> Vec<String> {
-        view::names(
+        message_tree::names(
             &GMM_HEADER,
             &[&format!("{self:?}")],
             GmmMessage::fields_named,
@@ -640,7 +645,7 @@ impl GsmMessageType {
     /// message, with those that are optional. A type that the crate has no
     /// message of has none.
     pub fn names(self) -> Vec<String> {
-        view::names(
+        message_tree::names(
             &GSM_HEADER,
             &[&format!("{self:?}")],
             GsmMessage::fields_named,
@@ -653,12 +658,12 @@ impl GsmMessageType {
 // Each is what the typed accessors of the IE return, and is encoded back
 // by the matching constructor or setters.
 
-use crate::common::ts24008::PcoDirection;
-use crate::common::ts24301::KeySetIdentifierValue;
-use crate::common::view::{
+use crate::common::message_tree::{
     Code, built_ie, code_ie, container_ie, decoded_ie, fields_ie, listed_ie, named_ie, numbers,
     octets, shared_ies, timer_ie, write_code,
 };
+use crate::common::ts24008::PcoDirection;
+use crate::common::ts24301::KeySetIdentifierValue;
 use crate::common::{decode_labels, encode_labels, within};
 use crate::nas_5gs::*;
 use core::net::{Ipv4Addr, Ipv6Addr};
@@ -680,36 +685,37 @@ impl N1SmContainer<'_> {
     fn written(
         &self,
         value: &oxirush_utils::tree::Value,
-        scope: view::Scope,
+        scope: message_tree::Scope,
     ) -> core::result::Result<(PayloadContainer, Message), String> {
-        let inside = scope.inside().ok_or(view::Scope::REFUSED)?;
+        let inside = scope.inside().ok_or(message_tree::Scope::REFUSED)?;
         let message = match self.message() {
-            Some(message) => view::edited(&message, value, inside)?,
+            Some(message) => message_tree::edited(&message, value, inside)?,
             // A container without octets carries what the tree names.
-            None if self.0.value.is_empty() => view::contained(value, inside)?,
+            None if self.0.value.is_empty() => message_tree::contained(value, inside)?,
             None => return Err("the octets are not a 5GSM message: write them".into()),
         };
-        let container = PayloadContainer::from_n1_sm_message(&message).map_err(view::unencoded)?;
+        let container =
+            PayloadContainer::from_n1_sm_message(&message).map_err(message_tree::unencoded)?;
         Ok((container, message))
     }
 
     /// The container of the message that stands for those that mean what
     /// the one it carries means.
-    fn meant_container(&self, scope: view::Scope) -> Option<PayloadContainer> {
-        let meant = view::meant(&self.message()?, scope.inside()?);
+    fn meant_container(&self, scope: message_tree::Scope) -> Option<PayloadContainer> {
+        let meant = message_tree::meant(&self.message()?, scope.inside()?);
         PayloadContainer::from_n1_sm_message(&meant).ok()
     }
 }
 
 impl Ie for N1SmContainer<'_> {
-    fn value(&self, scope: view::Scope) -> Option<oxirush_utils::tree::Value> {
-        Some(view::tree(&self.message()?, scope.inside()?))
+    fn value(&self, scope: message_tree::Scope) -> Option<oxirush_utils::tree::Value> {
+        Some(message_tree::tree(&self.message()?, scope.inside()?))
     }
 
     fn encoded_ie(
         &self,
         value: &oxirush_utils::tree::Value,
-        scope: view::Scope,
+        scope: message_tree::Scope,
     ) -> core::result::Result<Box<dyn core::any::Any>, String> {
         Ok(Box::new(self.written(value, scope)?.0))
     }
@@ -718,14 +724,14 @@ impl Ie for N1SmContainer<'_> {
     fn encoded_value(
         &self,
         value: &oxirush_utils::tree::Value,
-        scope: view::Scope,
+        scope: message_tree::Scope,
     ) -> core::result::Result<Option<oxirush_utils::tree::Value>, String> {
         let (_, message) = self.written(value, scope)?;
-        let inside = scope.inside().ok_or(view::Scope::REFUSED)?;
-        Ok(Some(view::tree(&message, inside)))
+        let inside = scope.inside().ok_or(message_tree::Scope::REFUSED)?;
+        Ok(Some(message_tree::tree(&message, inside)))
     }
 
-    fn written_back(&self, value: &oxirush_utils::tree::Value, scope: view::Scope) -> bool {
+    fn written_back(&self, value: &oxirush_utils::tree::Value, scope: message_tree::Scope) -> bool {
         // The container that the tree of the message writes alone carries a
         // message that means what this one means.
         let written = N1SmContainer(&PayloadContainer::blank()).written(value, scope);
@@ -735,17 +741,25 @@ impl Ie for N1SmContainer<'_> {
         meant.is_some() && meant == self.meant_container(scope)
     }
 
-    fn meant(&self, scope: view::Scope) -> Option<Box<dyn core::any::Any>> {
+    fn meant(&self, scope: message_tree::Scope) -> Option<Box<dyn core::any::Any>> {
         let meant = self.meant_container(scope)?;
         (meant != *self.0).then(|| Box::new(meant) as Box<dyn core::any::Any>)
     }
 
-    fn octets_inside(&self, names: &[String], scope: view::Scope) -> Option<view::Found> {
-        Some(view::octets_at(&self.message()?, names, scope.inside()?))
+    fn octets_inside(
+        &self,
+        names: &[String],
+        scope: message_tree::Scope,
+    ) -> Option<message_tree::Found> {
+        Some(message_tree::octets_at(
+            &self.message()?,
+            names,
+            scope.inside()?,
+        ))
     }
 
     #[cfg(test)]
-    fn reading(&self, scope: view::Scope) -> Option<oxirush_utils::tree::Value> {
+    fn reading(&self, scope: message_tree::Scope) -> Option<oxirush_utils::tree::Value> {
         Some(crate::wireshark_tests::read(
             &self.message()?,
             scope.inside()?,
@@ -1324,7 +1338,7 @@ enum SuciForm {
     Imsi {
         plmn: Plmn,
         routing_indicator: String,
-        protection_scheme: view::Code<SchemeName>,
+        protection_scheme: message_tree::Code<SchemeName>,
         home_network_public_key_id: u8,
         msin: Option<String>,
         scheme_output: Option<Vec<u8>>,
@@ -1350,7 +1364,7 @@ impl SuciForm {
                 Self::Imsi {
                     plmn: suci.plmn(),
                     routing_indicator: suci.routing_indicator().to_string(),
-                    protection_scheme: view::Code::of(name, scheme.identifier()),
+                    protection_scheme: message_tree::Code::of(name, scheme.identifier()),
                     home_network_public_key_id: suci.home_network_public_key_identifier(),
                     msin: suci.msin().map(String::from),
                     scheme_output: suci.concealed_output().map(<[u8]>::to_vec),
@@ -1372,10 +1386,10 @@ impl SuciForm {
             } => {
                 let routing_indicator = RoutingIndicator::new(&routing_indicator)?;
                 let scheme = ProtectionScheme::new(match protection_scheme {
-                    view::Code::Name(SchemeName::Null) => 0,
-                    view::Code::Name(SchemeName::ProfileA) => 1,
-                    view::Code::Name(SchemeName::ProfileB) => 2,
-                    view::Code::Number(identifier) => identifier,
+                    message_tree::Code::Name(SchemeName::Null) => 0,
+                    message_tree::Code::Name(SchemeName::ProfileA) => 1,
+                    message_tree::Code::Name(SchemeName::ProfileB) => 2,
+                    message_tree::Code::Number(identifier) => identifier,
                 })?;
                 Suci::Imsi(match (msin, scheme_output) {
                     (Some(msin), None) if scheme.is_null() => {
@@ -1572,8 +1586,8 @@ decoded_ie!(
     }
 );
 decoded_ie!(
-    TrackingAreaIdentity: view::TaiForm<Tai5gs>,
-    |ie| ie.tai().map(view::TaiForm),
+    TrackingAreaIdentity: message_tree::TaiForm<Tai5gs>,
+    |ie| ie.tai().map(message_tree::TaiForm),
     |_, tai| TrackingAreaIdentity::from_plmn_tac(&tai.0.plmn(), tai.0.tac())
 );
 decoded_ie!(
@@ -2110,7 +2124,7 @@ listed_ie!(CipheringKeyData: CipheringDataSet, data_sets, Self::from_data_sets);
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::common::view::tests::{exercise, replace_parts, sweep};
+    use crate::common::message_tree::tests::{exercise, replace_parts, sweep};
 
     #[test]
     fn values_encode_back_and_take_nothing_unchecked() {
@@ -2309,7 +2323,7 @@ impl oxirush_utils::tree::Tree for Message {
         reading: &mut oxirush_utils::tree::Reading,
     ) -> core::result::Result<Self, oxirush_utils::tree::Refused> {
         (Message::from_tree(value.clone())).map_err(|error| {
-            let why = view::unencoded(error);
+            let why = message_tree::unencoded(error);
             reading.refuse(oxirush_utils::tree::ErrorKind::Value, why)
         })
     }

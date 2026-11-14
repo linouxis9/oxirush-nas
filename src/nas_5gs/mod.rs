@@ -22,13 +22,13 @@
 //! [root of the crate](crate).
 
 pub(crate) mod ie;
+#[cfg(feature = "tree")]
+pub(crate) mod message_tree;
 pub(crate) mod message_types;
 pub(crate) mod messages;
 pub(crate) mod payload;
 pub(crate) mod types;
 pub(crate) mod validate;
-#[cfg(feature = "tree")]
-pub(crate) mod view;
 
 #[cfg(feature = "security")]
 pub(crate) mod security;

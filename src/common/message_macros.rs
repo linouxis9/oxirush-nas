@@ -397,7 +397,11 @@ pub(crate) trait MessageBody: crate::common::Encode + crate::common::Validate {
     fn ie_order_findings(&self) -> Vec<ValidationError>;
     /// Visit the IEs that the message has, for its tree.
     #[cfg(feature = "tree")]
-    fn ies(&self, scope: crate::common::view::Scope, visit: &mut crate::common::view::Visit<'_>);
+    fn ies(
+        &self,
+        scope: crate::common::message_tree::Scope,
+        visit: &mut crate::common::message_tree::Visit<'_>,
+    );
     /// Give `visit` the name, as a tree prints it, of each optional IE that
     /// the message does not have, and its place among the IEs of the message.
     #[cfg(feature = "tree")]
@@ -408,7 +412,7 @@ pub(crate) trait MessageBody: crate::common::Encode + crate::common::Validate {
     fn set_unknown(&mut self, unknown_ies: UnknownIes);
     /// The field whose IE prints as `name`, to write it.
     #[cfg(feature = "tree")]
-    fn slot(&mut self, name: &str) -> Option<&mut dyn crate::common::view::Slot>;
+    fn slot(&mut self, name: &str) -> Option<&mut dyn crate::common::message_tree::Slot>;
 }
 
 // ── Macros ─────────────────────────────────────────────────────────────────────
@@ -641,9 +645,9 @@ macro_rules! nas_message {
             }
             #[cfg(feature = "tree")]
             #[allow(unused_variables, unused_mut, unused_assignments)]
-            fn ies(&self, scope: crate::common::view::Scope, visit: &mut crate::common::view::Visit<'_>) {
+            fn ies(&self, scope: crate::common::message_tree::Scope, visit: &mut crate::common::message_tree::Visit<'_>) {
                 #[allow(unused_imports)]
-                use crate::common::view::{DecodedProbe, Field, ViaDecoded, ViaNoDecoded};
+                use crate::common::message_tree::{DecodedProbe, Field, ViaDecoded, ViaNoDecoded};
                 let printed = Self::PRINTED_FIELDS;
                 let mut place = 0;
                 $(
@@ -694,7 +698,7 @@ macro_rules! nas_message {
             }
             #[cfg(feature = "tree")]
             #[allow(unused_variables, unused_mut, unused_assignments)]
-            fn slot(&mut self, name: &str) -> Option<&mut dyn crate::common::view::Slot> {
+            fn slot(&mut self, name: &str) -> Option<&mut dyn crate::common::message_tree::Slot> {
                 let at = Self::PRINTED_FIELDS.iter().position(|printed| *printed == name)?;
                 let mut place = 0;
                 $(

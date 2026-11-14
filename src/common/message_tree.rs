@@ -243,12 +243,12 @@ pub(crate) fn ie_written<T: Valued>(value: &Value, writer: Option<Writer<T>>) ->
 /// writes them. `$blank` is the IE without a value.
 macro_rules! ie_tree {
     ($name:ty, $blank:expr) => {
-        impl $crate::common::view::Valued for $name {
+        impl $crate::common::message_tree::Valued for $name {
             fn blank() -> Self {
                 $blank
             }
 
-            fn octets(&mut self) -> &mut dyn $crate::common::view::Shown {
+            fn octets(&mut self) -> &mut dyn $crate::common::message_tree::Shown {
                 &mut self.value
             }
         }
@@ -258,8 +258,11 @@ macro_rules! ie_tree {
 
             fn to_tree(&self) -> oxirush_utils::tree::Value {
                 #[allow(unused_imports)]
-                use $crate::common::view::{DecodedProbe, ViaDecoded, ViaNoDecoded};
-                $crate::common::view::ie_shown((&DecodedProbe(self)).decoded_ie(), &self.value)
+                use $crate::common::message_tree::{DecodedProbe, ViaDecoded, ViaNoDecoded};
+                $crate::common::message_tree::ie_shown(
+                    (&DecodedProbe(self)).decoded_ie(),
+                    &self.value,
+                )
             }
 
             fn from_tree(
@@ -267,9 +270,9 @@ macro_rules! ie_tree {
                 reading: &mut oxirush_utils::tree::Reading,
             ) -> core::result::Result<Self, oxirush_utils::tree::Refused> {
                 #[allow(unused_imports)]
-                use $crate::common::view::{ViaNoWritten, ViaWritten, WrittenProbe};
+                use $crate::common::message_tree::{ViaNoWritten, ViaWritten, WrittenProbe};
                 let writer = (&WrittenProbe::<Self>(core::marker::PhantomData)).writer();
-                $crate::common::view::ie_written(value, writer)
+                $crate::common::message_tree::ie_written(value, writer)
                     .map_err(|why| reading.refuse(oxirush_utils::tree::ErrorKind::Value, why))
             }
         }
@@ -446,7 +449,7 @@ impl<T: Valued> Slot for Option<T> {
 
 /// A message enum: its header and the IEs of the message struct in it,
 /// read through a security header.
-pub(crate) trait Viewed: Clone + PartialEq {
+pub(crate) trait TreeMessage: Clone + PartialEq {
     /// Visit the IEs that the message struct has, in `scope`.
     fn ies(&self, scope: Scope, visit: &mut Visit<'_>);
 
@@ -948,14 +951,14 @@ fn towards(direction: PcoDirection) -> &'static str {
 /// reason: the direction of a unit, the contents of a container.
 macro_rules! configuration_options_ie {
     ($($ie:ty),+ $(,)?) => {$(
-        impl $crate::common::view::Decoded for $ie {
+        impl $crate::common::message_tree::Decoded for $ie {
             fn unwritten() -> Self {
                 <$ie>::blank()
             }
 
-            fn decoded(&self, scope: $crate::common::view::Scope) -> Option<oxirush_utils::tree::Value> {
+            fn decoded(&self, scope: $crate::common::message_tree::Scope) -> Option<oxirush_utils::tree::Value> {
                 use $crate::common::readable::{from_value, to_value};
-                use $crate::common::view::ConfigurationUnit;
+                use $crate::common::message_tree::ConfigurationUnit;
                 let direction = scope.direction()?;
                 let options = self.pco(direction)?;
                 if <$ie>::from_pco(&options, direction).ok()?.value != self.value {
@@ -971,10 +974,10 @@ macro_rules! configuration_options_ie {
             fn with_decoded(
                 &self,
                 value: &oxirush_utils::tree::Value,
-                scope: $crate::common::view::Scope,
+                scope: $crate::common::message_tree::Scope,
             ) -> core::result::Result<Self, String> {
                 use $crate::common::readable::{from_value, to_value};
-                use $crate::common::view::{ConfigurationUnit, carried};
+                use $crate::common::message_tree::{ConfigurationUnit, carried};
                 let units: Vec<ConfigurationUnit> = from_value(value)?;
                 let written = to_value(&units)?;
                 let (options, direction) = ConfigurationUnit::options(&units, scope)?;
@@ -1122,7 +1125,7 @@ fn written_type(members: &Map) -> Result<Option<&Value>, String> {
 /// `message-type` that names no message of `M`, in the IE `container` or
 /// alone, and the same in the messages of its containers, which are not
 /// more than [`NESTED`] deep.
-fn typed<M: Viewed>(
+fn typed<M: TreeMessage>(
     members: &Map,
     container: Option<&str>,
     scope: Scope,
@@ -1148,7 +1151,7 @@ fn message_of(written: &Value) -> Option<&Map> {
 
 /// The name of the `message-type` `kind` that a tree writes, by its name or
 /// by the number that a message of `M` has a name for.
-pub(crate) fn type_named<M: Viewed>(kind: &Value) -> Result<String, String> {
+pub(crate) fn type_named<M: TreeMessage>(kind: &Value) -> Result<String, String> {
     match kind.as_u64() {
         Some(number) => M::header_name("message-type", number)
             .and_then(|named| named.as_str().map(str::to_string))
@@ -1160,7 +1163,7 @@ pub(crate) fn type_named<M: Viewed>(kind: &Value) -> Result<String, String> {
 /// The members of the tree `tree` of a plain message of `M` that it writes
 /// alone, with what the type of the message decides where the tree leaves
 /// it out, and the name of its `message-type`, if it has one.
-pub(crate) fn typed_members<M: Viewed>(
+pub(crate) fn typed_members<M: TreeMessage>(
     tree: Value,
     scope: Scope,
 ) -> Result<(Map, Option<String>), String> {
@@ -1180,7 +1183,7 @@ pub(crate) fn typed_members<M: Viewed>(
 /// The message of the kind `kind` that the members `members` of a tree
 /// write alone: `kind` names a message struct in one of the variants
 /// `families` of `M`.
-pub(crate) fn alone<M: Viewed>(
+pub(crate) fn alone<M: TreeMessage>(
     families: &[&str],
     kind: &str,
     members: Map,
@@ -1196,12 +1199,16 @@ pub(crate) fn alone<M: Viewed>(
 
 /// The message that the tree `tree` of a container writes alone: its
 /// `message-type` names it.
-pub(crate) fn contained<M: Viewed>(tree: &Value, scope: Scope) -> Result<M, String> {
+pub(crate) fn contained<M: TreeMessage>(tree: &Value, scope: Scope) -> Result<M, String> {
     if message_of(tree).is_none() {
-        return Err("the `message-type` of the view names the message of a container".into());
+        return Err(
+            "the message of a container is written from a tree whose `message-type` names it"
+                .into(),
+        );
     }
     let (members, kind) = typed_members::<M>(tree.clone(), scope)?;
-    let kind = kind.ok_or("the `message-type` of the view names the message of a container")?;
+    let kind = kind
+        .ok_or("the message of a container is written from a tree whose `message-type` names it")?;
     let message: M = alone(M::FAMILIES, &kind, members, scope)?;
     match message.refused_header() {
         Some(refused) => Err(refused),
@@ -1210,7 +1217,7 @@ pub(crate) fn contained<M: Viewed>(tree: &Value, scope: Scope) -> Result<M, Stri
 }
 
 /// `message` as the tree `tree` edits it ([`edits`]).
-pub(crate) fn edited<M: Viewed>(message: &M, tree: &Value, scope: Scope) -> Result<M, String> {
+pub(crate) fn edited<M: TreeMessage>(message: &M, tree: &Value, scope: Scope) -> Result<M, String> {
     let edits = edits::<M>(self::tree(message, scope), tree.clone(), scope)?;
     with_edits(message, edits, scope)
 }
@@ -1234,7 +1241,7 @@ pub(crate) fn without_absent(mut value: Value) -> Value {
 
 /// The fields of the header `header` of a message of `M` that its type
 /// does not decide, in the IE `container` or alone.
-fn undecided<M: Viewed>(header: Value, container: Option<&str>) -> Map {
+fn undecided<M: TreeMessage>(header: Value, container: Option<&str>) -> Map {
     let Value::Object(mut fields) = without_absent(header) else {
         return Map::new();
     };
@@ -1252,7 +1259,7 @@ fn undecided<M: Viewed>(header: Value, container: Option<&str>) -> Map {
 /// ([`Ie::shown_value`]) and by its octets otherwise, then the IEs that its
 /// table has no place for. A tree is one that a message is written from,
 /// and the message that is written means what `message` means ([`meant`]).
-pub(crate) fn tree<M: Viewed>(message: &M, scope: Scope) -> Value {
+pub(crate) fn tree<M: TreeMessage>(message: &M, scope: Scope) -> Value {
     let mut tree = Map::new();
     if let Some((header, ciphered)) = message.protection() {
         let header = undecided::<M>(header, Some(SECURITY_HEADER));
@@ -1289,7 +1296,7 @@ pub(crate) fn tree<M: Viewed>(message: &M, scope: Scope) -> Value {
 /// for. Two messages mean the same when this is the same message for both,
 /// and the message that the tree of a message writes means what the message
 /// means.
-pub(crate) fn meant<M: Viewed>(message: &M, scope: Scope) -> M {
+pub(crate) fn meant<M: TreeMessage>(message: &M, scope: Scope) -> M {
     let mut forms = Vec::new();
     message.ies(scope, &mut |field| {
         if let Some(meant) = field.ie.and_then(|ie| ie.meant(field.scope)) {
@@ -1369,7 +1376,7 @@ pub(crate) fn security_header<H: Readable>(
 /// whose tree is `before`: each member that the tree changes, as the tree
 /// writes it, and `None` for each member that the tree leaves out. A member
 /// that the tree leaves as it is is not one of them.
-pub(crate) fn edits<M: Viewed>(
+pub(crate) fn edits<M: TreeMessage>(
     before: Value,
     tree: Value,
     scope: Scope,
@@ -1417,7 +1424,7 @@ pub(crate) fn edits<M: Viewed>(
 
 /// The message that the members `edits` of the tree of `original` write
 /// ([`edits`]).
-pub(crate) fn with_edits<M: Viewed>(
+pub(crate) fn with_edits<M: TreeMessage>(
     original: &M,
     edits: Vec<(String, Option<Value>)>,
     scope: Scope,
@@ -1450,7 +1457,7 @@ pub(crate) enum Entry {
 /// The octets of the IE that `path` names in `message`, as the message has
 /// them: `/nas`, then an IE, then for a container an IE of its message.
 /// `None` for an optional IE that the message does not have.
-pub(crate) fn ie_octets<M: Viewed>(
+pub(crate) fn ie_octets<M: TreeMessage>(
     message: &M,
     path: &str,
 ) -> Result<Option<Vec<u8>>, tree::Error> {
@@ -1468,7 +1475,7 @@ pub(crate) fn ie_octets<M: Viewed>(
 }
 
 /// [`ie_octets`] in `message`, of the IE that `names` names, in `scope`.
-pub(crate) fn octets_at<M: Viewed>(message: &M, names: &[String], scope: Scope) -> Found {
+pub(crate) fn octets_at<M: TreeMessage>(message: &M, names: &[String], scope: Scope) -> Found {
     let mut entries = message.fields();
     if let Some((_, ciphered)) = message.protection() {
         entries.push((SECURITY_HEADER, Entry::Field));
@@ -1631,13 +1638,18 @@ fn start(letter: Option<&u8>) -> u128 {
 
 /// The message that `members` write: `original` as an edit changes it, or
 /// alone a message that has nothing but what the tree writes.
-fn written<M: Viewed>(original: &M, members: Map, mode: Mode, scope: Scope) -> Result<M, String> {
+fn written<M: TreeMessage>(
+    original: &M,
+    members: Map,
+    mode: Mode,
+    scope: Scope,
+) -> Result<M, String> {
     let entries = Entries::of(members.into_iter().map(|(name, entry)| (name, Some(entry))))?;
     written_entries(original, entries, mode, scope)
 }
 
 /// [`written`] of the members `entries`.
-fn written_entries<M: Viewed>(
+fn written_entries<M: TreeMessage>(
     original: &M,
     mut entries: Entries,
     mode: Mode,
@@ -1860,7 +1872,7 @@ fn written_entries<M: Viewed>(
 /// the tree lists for those that the table has no place for are those of
 /// the message, after the IEs of its table, when they are others than
 /// `received` has.
-fn checked<M: Viewed>(
+fn checked<M: TreeMessage>(
     mut message: M,
     received: &M,
     unknown: Option<crate::common::UnknownIes>,
@@ -2350,7 +2362,7 @@ pub(crate) fn set_flag<T: Flags>(
 /// written.
 macro_rules! decoded_ie {
     ($ie:ty: $form:ty, $decode:expr, $encode:expr) => {
-        $crate::common::view::decoded_ie!($ie: $form, $decode, $encode, meant: |_| false);
+        $crate::common::message_tree::decoded_ie!($ie: $form, $decode, $encode, meant: |_| false);
     };
     // After `meant:`, when the value of an IE says all that its octets mean,
     // though it does not decide them: the IE then stands with all those of
@@ -2358,34 +2370,34 @@ macro_rules! decoded_ie {
     ($ie:ty: $form:ty, $decode:expr, $encode:expr, meant: $meant:expr) => {
         impl $ie {
             /// How the value of the IE is read and written.
-            const CODED: $crate::common::view::Coded<Self, $form> =
-                $crate::common::view::Coded { decode: $decode, encode: $encode };
+            const CODED: $crate::common::message_tree::Coded<Self, $form> =
+                $crate::common::message_tree::Coded { decode: $decode, encode: $encode };
         }
 
-        impl $crate::common::view::Decoded for $ie {
+        impl $crate::common::message_tree::Decoded for $ie {
             fn unwritten() -> Self {
                 <$ie>::blank()
             }
 
-            fn meant(&self, _: $crate::common::view::Scope) -> Self {
+            fn meant(&self, _: $crate::common::message_tree::Scope) -> Self {
                 Self::CODED.meant(self, $meant)
             }
 
-            fn decoded(&self, _: $crate::common::view::Scope) -> Option<oxirush_utils::tree::Value> {
+            fn decoded(&self, _: $crate::common::message_tree::Scope) -> Option<oxirush_utils::tree::Value> {
                 $crate::common::readable::to_value(&Self::CODED.value(self)?).ok()
             }
 
             fn with_decoded(
                 &self,
                 value: &oxirush_utils::tree::Value,
-                scope: $crate::common::view::Scope,
+                scope: $crate::common::message_tree::Scope,
             ) -> core::result::Result<Self, String> {
                 Self::CODED.built(self, value, scope)
             }
 
             fn shown_value(
                 &self,
-                scope: $crate::common::view::Scope,
+                scope: $crate::common::message_tree::Scope,
             ) -> Option<oxirush_utils::tree::Value> {
                 Self::CODED.shown(self, $meant, scope)
             }
@@ -2399,33 +2411,33 @@ macro_rules! decoded_ie {
 /// written is the code, whether it has a name or not.
 macro_rules! code_ie {
     ($ie:ty, $code:ty, $name:expr, $from:expr) => {
-        impl $crate::common::view::Decoded for $ie {
+        impl $crate::common::message_tree::Decoded for $ie {
             fn unwritten() -> Self {
                 <$ie>::blank()
             }
             fn decoded(
                 &self,
-                _: $crate::common::view::Scope,
+                _: $crate::common::message_tree::Scope,
             ) -> Option<oxirush_utils::tree::Value> {
                 let name: fn(&$ie) -> Option<$code> = $name;
                 let from: fn($code) -> $ie = $from;
                 let name = name(self).filter(|code| from(*code).value == self.value);
-                let code = $crate::common::view::Code::of(name, self.value);
+                let code = $crate::common::message_tree::Code::of(name, self.value);
                 $crate::common::readable::to_value(&code).ok()
             }
 
             fn with_decoded(
                 &self,
                 value: &oxirush_utils::tree::Value,
-                scope: $crate::common::view::Scope,
+                scope: $crate::common::message_tree::Scope,
             ) -> core::result::Result<Self, String> {
-                use $crate::common::view::Code;
+                use $crate::common::message_tree::Code;
                 let from: fn($code) -> $ie = $from;
                 match $crate::common::readable::from_value::<Code<$code>>(value)? {
                     Code::Name(code) => {
                         let written =
                             $crate::common::readable::to_value(&Code::<$code>::Name(code))?;
-                        $crate::common::view::carried(from(code), &written, scope)
+                        $crate::common::message_tree::carried(from(code), &written, scope)
                     }
                     Code::Number(number) => {
                         let new = <$ie>::new(number);
@@ -2448,7 +2460,7 @@ macro_rules! code_ie {
 /// those of their name have no value.
 macro_rules! named_ie {
     ($ie:ty, $name:ty, $get:expr, $from:expr) => {
-        $crate::common::view::decoded_ie!(
+        $crate::common::message_tree::decoded_ie!(
             $ie: $name,
             |ie| {
                 let get: fn(&$ie) -> Option<$name> = $get;
@@ -2471,8 +2483,8 @@ macro_rules! named_ie {
 /// that are no digits.
 macro_rules! fields_ie {
     ($ie:ident { $($key:literal: $get:expr, $set:expr;)* } $($flags:ident)?) => {
-        impl $crate::common::view::Fields for $ie {
-            fn octets(&mut self) -> &mut dyn $crate::common::view::FlagOctets {
+        impl $crate::common::message_tree::Fields for $ie {
+            fn octets(&mut self) -> &mut dyn $crate::common::message_tree::FlagOctets {
                 &mut self.value
             }
         }
@@ -2490,28 +2502,28 @@ macro_rules! fields_ie {
                     if built || get(&onto) != member {
                         #[allow(clippy::let_unit_value)]
                         let wrote = set(&mut onto, member.clone());
-                        let exact = $crate::common::view::Wrote::exact(wrote).ok()?;
+                        let exact = $crate::common::message_tree::Wrote::exact(wrote).ok()?;
                         if !exact && get(&onto) != member {
                             return None;
                         }
                     }
                 )*
-                $crate::common::view::fields_ie!(@onto self, onto, built $(, $flags)?);
+                $crate::common::message_tree::fields_ie!(@onto self, onto, built $(, $flags)?);
                 Some(onto)
             }
         }
 
-        impl $crate::common::view::Decoded for $ie {
+        impl $crate::common::message_tree::Decoded for $ie {
 
             fn unwritten() -> Self {
                 <$ie>::blank()
             }
 
-            fn meant(&self, _: $crate::common::view::Scope) -> Self {
-                $crate::common::view::fields_ie!(@meant self $(, $flags)?)
+            fn meant(&self, _: $crate::common::message_tree::Scope) -> Self {
+                $crate::common::message_tree::fields_ie!(@meant self $(, $flags)?)
             }
 
-            fn decoded(&self, _: $crate::common::view::Scope) -> Option<oxirush_utils::tree::Value> {
+            fn decoded(&self, _: $crate::common::message_tree::Scope) -> Option<oxirush_utils::tree::Value> {
                 #[allow(unused_mut)]
                 let mut members = oxirush_utils::tree::Map::new();
                 $(
@@ -2519,15 +2531,15 @@ macro_rules! fields_ie {
                     let member = $crate::common::readable::to_value(&get(self)).ok()?;
                     members.insert($key.into(), member);
                 )*
-                $crate::common::view::fields_ie!(@flags self, members $(, $flags)?);
+                $crate::common::message_tree::fields_ie!(@flags self, members $(, $flags)?);
                 let members: oxirush_utils::tree::Value = members.into();
-                $crate::common::view::fields_ie!(@shown self, members $(, $flags)?)
+                $crate::common::message_tree::fields_ie!(@shown self, members $(, $flags)?)
             }
 
             fn with_decoded(
                 &self,
                 value: &oxirush_utils::tree::Value,
-                _: $crate::common::view::Scope,
+                _: $crate::common::message_tree::Scope,
             ) -> core::result::Result<Self, String> {
                 #[allow(unused_imports)]
                 use $crate::common::readable::{from_value, same_name, to_value};
@@ -2535,8 +2547,8 @@ macro_rules! fields_ie {
                 // An IE without octets is built from the value: a member
                 // that is written has its octet, whatever it is.
                 #[allow(unused_variables)]
-                let built = $crate::common::view::FlagOctets::none(&self.value);
-                for (name, written) in $crate::common::view::members(value)? {
+                let built = $crate::common::message_tree::FlagOctets::none(&self.value);
+                for (name, written) in $crate::common::message_tree::members(value)? {
                     $(
                         if same_name(name, $key) {
                             let get: fn(&Self) -> _ = $get;
@@ -2548,8 +2560,8 @@ macro_rules! fields_ie {
                                 // is checked by what the IE now reads as.
                                 #[allow(clippy::let_unit_value)]
                                 let wrote = set(&mut ie, typed);
-                                let exact = $crate::common::view::Wrote::exact(wrote)
-                                    .map_err($crate::common::view::refused)?;
+                                let exact = $crate::common::message_tree::Wrote::exact(wrote)
+                                    .map_err($crate::common::message_tree::refused)?;
                                 let now = to_value(&get(&ie))?;
                                 if !exact && now != typed_form {
                                     return Err(format!(
@@ -2560,7 +2572,7 @@ macro_rules! fields_ie {
                             continue;
                         }
                     )*
-                    $crate::common::view::fields_ie!(@member self, ie, name, written $(, $flags)?);
+                    $crate::common::message_tree::fields_ie!(@member self, ie, name, written $(, $flags)?);
                 }
                 // An IE that is built has the octets of the members that are
                 // written: a value that writes none says nothing of the IE,
@@ -2569,14 +2581,14 @@ macro_rules! fields_ie {
                 #[allow(unused_imports)]
                 use $crate::common::IeRules;
                 if built {
-                    $crate::common::view::fields_ie!(@shortest ie $(, $flags)?);
+                    $crate::common::message_tree::fields_ie!(@shortest ie $(, $flags)?);
                 }
                 if built
-                    && ($crate::common::view::members(value)?.is_empty()
+                    && ($crate::common::message_tree::members(value)?.is_empty()
                         || !ie.receiver_length_ok())
                 {
-                    let bits = $crate::common::view::Fields::octets(&mut ie).bits();
-                    return Err($crate::common::view::too_short(value, bits / 8));
+                    let bits = $crate::common::message_tree::Fields::octets(&mut ie).bits();
+                    return Err($crate::common::message_tree::too_short(value, bits / 8));
                 }
                 Ok(ie)
             }
@@ -2585,15 +2597,15 @@ macro_rules! fields_ie {
             // members.
             fn shown_value(
                 &self,
-                scope: $crate::common::view::Scope,
+                scope: $crate::common::message_tree::Scope,
             ) -> Option<oxirush_utils::tree::Value> {
                 #[allow(unused_imports)]
                 use $crate::common::IeRules;
-                use $crate::common::view::Decoded;
+                use $crate::common::message_tree::Decoded;
                 let value = Decoded::decoded(self, scope)?;
                 #[allow(unused_mut)]
                 let mut ie = self.members_onto(Self::unwritten(), true)?;
-                $crate::common::view::fields_ie!(@shortest ie $(, $flags)?);
+                $crate::common::message_tree::fields_ie!(@shortest ie $(, $flags)?);
                 let none = value.as_object().is_none_or(oxirush_utils::tree::Map::is_empty);
                 (!none && ie.receiver_length_ok() && Decoded::meant(&ie, scope) == Decoded::meant(self, scope))
                     .then_some(value)
@@ -2606,7 +2618,7 @@ macro_rules! fields_ie {
             /// member: from nothing, and from each octet.
             #[test]
             fn [<$ie:snake _is_built_from_its_value>]() {
-                use $crate::common::view::tests::{Octet, built_from_nothing, built_from_value};
+                use $crate::common::message_tree::tests::{Octet, built_from_nothing, built_from_value};
                 built_from_nothing(<$ie>::blank());
                 for octet in 0..=255_u8 {
                     // The digits of a time are decimal.
@@ -2631,7 +2643,7 @@ macro_rules! fields_ie {
     // says: none of their flags is set.
     (@meant $ie:ident, flags) => {{
         let mut meant = $ie.clone();
-        while $crate::common::view::Fields::octets(&mut meant).shorter(0) {}
+        while $crate::common::message_tree::Fields::octets(&mut meant).shorter(0) {}
         meant
     }};
     (@shortest $ie:ident) => {};
@@ -2642,7 +2654,7 @@ macro_rules! fields_ie {
     // and that has an octet. Every type of flags has such a check.
     (@shortest $ie:ident, flags) => {
         let mut shorter = $ie.clone();
-        while $crate::common::view::Fields::octets(&mut shorter).shorter(1) {
+        while $crate::common::message_tree::Fields::octets(&mut shorter).shorter(1) {
             if shorter.receiver_length_ok() && shorter.sender_ok() {
                 $ie = shorter.clone();
             }
@@ -2651,7 +2663,7 @@ macro_rules! fields_ie {
     (@flags $ie:ident, $members:ident) => {};
     (@flags $ie:ident, $members:ident, exact) => {};
     (@flags $ie:ident, $members:ident, flags) => {
-        for (flag, value) in $crate::common::view::Flags::flags($ie) {
+        for (flag, value) in $crate::common::message_tree::Flags::flags($ie) {
             $members.insert(flag.to_owned(), value.into());
         }
     };
@@ -2665,11 +2677,11 @@ macro_rules! fields_ie {
     // back, in an IE of the same length, have no value.
     (@shown $ie:ident, $members:ident, exact) => {{
         // An IE without octets reads as the zeros that it is built from.
-        if $crate::common::view::FlagOctets::none(&$ie.value) {
+        if $crate::common::message_tree::FlagOctets::none(&$ie.value) {
             return Some($members);
         }
         let mut blank = $ie.clone();
-        let octets = $crate::common::view::Fields::octets(&mut blank);
+        let octets = $crate::common::message_tree::Fields::octets(&mut blank);
         for bit in 0..octets.bits() {
             if octets.bit(bit) {
                 octets.flip(bit);
@@ -2681,11 +2693,11 @@ macro_rules! fields_ie {
     (@onto $from:ident, $onto:ident, $built:ident) => {};
     (@onto $from:ident, $onto:ident, $built:ident, exact) => {};
     (@onto $from:ident, $onto:ident, $built:ident, flags) => {
-        for (flag, on) in $crate::common::view::Flags::flags($from) {
-            let current = $crate::common::view::Flags::flags(&$onto).contains(&(flag, true));
+        for (flag, on) in $crate::common::message_tree::Flags::flags($from) {
+            let current = $crate::common::message_tree::Flags::flags(&$onto).contains(&(flag, true));
             if ($built || current != on)
-                && !($crate::common::view::Flags::set_flag(&mut $onto, flag, on)
-                    && $crate::common::view::Flags::flags(&$onto).contains(&(flag, on)))
+                && !($crate::common::message_tree::Flags::set_flag(&mut $onto, flag, on)
+                    && $crate::common::message_tree::Flags::flags(&$onto).contains(&(flag, on)))
             {
                 return None;
             }
@@ -2699,8 +2711,8 @@ macro_rules! fields_ie {
     };
     (@member $from:ident, $ie:ident, $name:ident, $written:ident, flags) => {
         // An IE without octets is built from the value.
-        let built = $crate::common::view::Flags::is_empty($from);
-        $crate::common::view::set_flag(&mut $ie, $name, $written, built)?
+        let built = $crate::common::message_tree::Flags::is_empty($from);
+        $crate::common::message_tree::set_flag(&mut $ie, $name, $written, built)?
     };
 }
 
@@ -2711,18 +2723,18 @@ macro_rules! fields_ie {
 /// as a tree leaves out a member that a value has not.
 macro_rules! built_ie {
     ($ie:ty, $from:expr, { $($key:ident: $ty:ty $(= $get:expr)?),+ $(,)? }) => {
-        impl $crate::common::view::Decoded for $ie {
+        impl $crate::common::message_tree::Decoded for $ie {
 
             fn unwritten() -> Self {
                 <$ie>::blank()
             }
-            fn decoded(&self, _: $crate::common::view::Scope) -> Option<oxirush_utils::tree::Value> {
+            fn decoded(&self, _: $crate::common::message_tree::Scope) -> Option<oxirush_utils::tree::Value> {
                 // The members that the getters read, and the IE that `$from`
                 // builds of them.
                 let read = |ie: &Self| -> Option<(oxirush_utils::tree::Value, Option<Self>)> {
                     let mut members = oxirush_utils::tree::Map::new();
                     $(
-                        let $key: $ty = $crate::common::view::built_ie!(@get ie, $key $(, $get)?)?;
+                        let $key: $ty = $crate::common::message_tree::built_ie!(@get ie, $key $(, $get)?)?;
                         let member = $crate::common::readable::to_value(&$key).ok()?;
                         let name = $crate::common::names::name!(stringify!($key));
                         members.insert(name.to_owned(), member);
@@ -2746,10 +2758,10 @@ macro_rules! built_ie {
             fn with_decoded(
                 &self,
                 value: &oxirush_utils::tree::Value,
-                scope: $crate::common::view::Scope,
+                scope: $crate::common::message_tree::Scope,
             ) -> core::result::Result<Self, String> {
                 use $crate::common::readable::{from_value, same_name, to_value};
-                let written = $crate::common::view::members(value)?;
+                let written = $crate::common::message_tree::members(value)?;
                 const NAMES: &[&str] = &[$($crate::common::names::name!(stringify!($key))),+];
                 if let Some(name) = (written.keys())
                     .find(|name| !NAMES.iter().any(|known| same_name(known, name)))
@@ -2766,7 +2778,7 @@ macro_rules! built_ie {
                         }
                         // The IE's own, or none where it may have none: a
                         // tree leaves out a member that a value has not
-                        None => $crate::common::view::built_ie!(@get self, $key $(, $get)?)
+                        None => $crate::common::message_tree::built_ie!(@get self, $key $(, $get)?)
                             .or_else(<$ty as $crate::common::readable::Readable>::missing)
                             .ok_or(concat!(stringify!($key), " is not written"))?,
                     };
@@ -2776,8 +2788,8 @@ macro_rules! built_ie {
                 let from: fn(
                     $($ty),+
                 ) -> core::result::Result<Self, $crate::common::ValueError> = $from;
-                let new = from($($key),+).map_err($crate::common::view::refused)?;
-                $crate::common::view::carried(new, &members.into(), scope)
+                let new = from($($key),+).map_err($crate::common::message_tree::refused)?;
+                $crate::common::message_tree::carried(new, &members.into(), scope)
             }
         }
     };
@@ -2794,23 +2806,23 @@ macro_rules! built_ie {
 /// count give, encoded with the unit that holds them.
 macro_rules! timer_ie {
     ($($ie:ty),+ $(,)?) => {$(
-        $crate::common::view::decoded_ie!(
-            $ie: $crate::common::view::Timer,
+        $crate::common::message_tree::decoded_ie!(
+            $ie: $crate::common::message_tree::Timer,
             |ie| {
                 use $crate::common::ts24008::GprsTimerValue;
-                use $crate::common::view::{Code, Deactivated};
+                use $crate::common::message_tree::{Code, Deactivated};
                 Some(match Option::<GprsTimerValue>::from(ie.value())? {
                     GprsTimerValue::Deactivated => Code::Name(Deactivated::Deactivated),
                     GprsTimerValue::Seconds(seconds) => Code::Number(seconds),
                 })
             },
             |_, timer| match timer {
-                $crate::common::view::Code::Name(_) => Ok(<$ie>::deactivated()),
-                $crate::common::view::Code::Number(seconds) => <$ie>::from_seconds(seconds),
+                $crate::common::message_tree::Code::Name(_) => Ok(<$ie>::deactivated()),
+                $crate::common::message_tree::Code::Number(seconds) => <$ie>::from_seconds(seconds),
             },
             // The octet of a timer is its unit and its count, and all that
             // it means is the time that they give.
-            meant: |ie| $crate::common::view::Shown::hex(&ie.value).len() == 2
+            meant: |ie| $crate::common::message_tree::Shown::hex(&ie.value).len() == 2
         );
     )+};
 }
@@ -2820,7 +2832,7 @@ macro_rules! timer_ie {
 /// octets, so that a list cut short has none.
 macro_rules! listed_ie {
     ($ie:ty: $entry:ty, $decode:ident, $encode:expr) => {
-        $crate::common::view::decoded_ie!(
+        $crate::common::message_tree::decoded_ie!(
             $ie: Vec<$entry>,
             |ie| {
                 let encode: fn(
@@ -2844,48 +2856,50 @@ macro_rules! listed_ie {
 /// message.
 macro_rules! container_ie {
     ($ie:ty: $message:ty, $decode:expr, $encode:expr) => {
-        impl $crate::common::view::Decoded for $ie {
+        impl $crate::common::message_tree::Decoded for $ie {
             fn unwritten() -> Self {
                 <$ie>::blank()
             }
 
             fn decoded(
                 &self,
-                scope: $crate::common::view::Scope,
+                scope: $crate::common::message_tree::Scope,
             ) -> Option<oxirush_utils::tree::Value> {
                 let decode: fn(&Self) -> Option<$message> = $decode;
                 let inside = scope.inside()?;
-                Some($crate::common::view::tree(&decode(self)?, inside))
+                Some($crate::common::message_tree::tree(&decode(self)?, inside))
             }
 
             fn with_decoded(
                 &self,
                 value: &oxirush_utils::tree::Value,
-                scope: $crate::common::view::Scope,
+                scope: $crate::common::message_tree::Scope,
             ) -> core::result::Result<Self, String> {
                 let decode: fn(&Self) -> Option<$message> = $decode;
                 let encode: fn(&$message) -> $crate::common::Result<Self> = $encode;
-                let inside = scope.inside().ok_or($crate::common::view::Scope::REFUSED)?;
+                let inside = scope
+                    .inside()
+                    .ok_or($crate::common::message_tree::Scope::REFUSED)?;
                 let message = match decode(self) {
-                    Some(message) => $crate::common::view::edited(&message, value, inside)?,
+                    Some(message) => $crate::common::message_tree::edited(&message, value, inside)?,
                     // A container without octets carries what the tree names.
                     None if self.value.is_empty() => {
-                        $crate::common::view::contained(value, inside)?
+                        $crate::common::message_tree::contained(value, inside)?
                     }
                     None => return Err("the octets are not a plain message: write them".into()),
                 };
-                encode(&message).map_err($crate::common::view::unencoded)
+                encode(&message).map_err($crate::common::message_tree::unencoded)
             }
 
             // The container of the message that stands for those that mean
             // what the one it carries means.
-            fn meant(&self, scope: $crate::common::view::Scope) -> Self {
+            fn meant(&self, scope: $crate::common::message_tree::Scope) -> Self {
                 let decode: fn(&Self) -> Option<$message> = $decode;
                 let encode: fn(&$message) -> $crate::common::Result<Self> = $encode;
                 let Some(inside) = scope.inside() else {
                     return self.clone();
                 };
-                (decode(self).map(|message| $crate::common::view::meant(&message, inside)))
+                (decode(self).map(|message| $crate::common::message_tree::meant(&message, inside)))
                     .and_then(|message| encode(&message).ok())
                     .unwrap_or_else(|| self.clone())
             }
@@ -2893,11 +2907,11 @@ macro_rules! container_ie {
             fn octets_inside(
                 &self,
                 names: &[String],
-                scope: $crate::common::view::Scope,
-            ) -> Option<$crate::common::view::Found> {
+                scope: $crate::common::message_tree::Scope,
+            ) -> Option<$crate::common::message_tree::Found> {
                 let decode: fn(&Self) -> Option<$message> = $decode;
                 let inside = scope.inside()?;
-                Some($crate::common::view::octets_at(
+                Some($crate::common::message_tree::octets_at(
                     &decode(self)?,
                     names,
                     inside,
@@ -2907,7 +2921,7 @@ macro_rules! container_ie {
             #[cfg(test)]
             fn reading(
                 &self,
-                scope: $crate::common::view::Scope,
+                scope: $crate::common::message_tree::Scope,
             ) -> Option<oxirush_utils::tree::Value> {
                 let decode: fn(&Self) -> Option<$message> = $decode;
                 Some($crate::wireshark_tests::read(
@@ -2950,11 +2964,11 @@ pub(crate) use {
 /// reuses, one type for both protocols.
 mod shared_types {
     use super::*;
+    use crate::common::message_tree;
     use crate::common::ts24008::*;
     use crate::common::ts24301::*;
     use crate::common::ts24501::*;
     use crate::common::types::*;
-    use crate::common::view;
 
     /// A network name and whether the country initials are to be added to it.
     #[derive(Clone, PartialEq)]
@@ -3007,13 +3021,13 @@ mod shared_types {
         max_seconds: u64 = |ie| ie.max_seconds(),
     });
     decoded_ie!(
-        PlmnList: Vec<view::PlmnText>,
-        |ie| ie.is_well_formed().then(|| view::plmn_texts(ie.plmns())),
-        |_, plmns| PlmnList::from_plmns(&view::plmns(&plmns))
+        PlmnList: Vec<message_tree::PlmnText>,
+        |ie| ie.is_well_formed().then(|| message_tree::plmn_texts(ie.plmns())),
+        |_, plmns| PlmnList::from_plmns(&message_tree::plmns(&plmns))
     );
     decoded_ie!(
-        PlmnIdentity: view::PlmnText,
-        |ie| ie.plmn().map(view::PlmnText),
+        PlmnIdentity: message_tree::PlmnText,
+        |ie| ie.plmn().map(message_tree::PlmnText),
         |_, plmn| Ok(PlmnIdentity::from_plmn(&plmn.0))
     );
     timer_ie!(GprsTimer);
@@ -3072,10 +3086,10 @@ mod shared_types {
         start_of_period: Option<u32> = |ie| Some(ie.start_of_period()),
     });
     decoded_ie!(
-        ListOfPlmnsToBeUsedInDisasterCondition: Vec<crate::common::view::PlmnText>,
-        |ie| ie.is_well_formed().then(|| crate::common::view::plmn_texts(ie.plmns())),
+        ListOfPlmnsToBeUsedInDisasterCondition: Vec<crate::common::message_tree::PlmnText>,
+        |ie| ie.is_well_formed().then(|| crate::common::message_tree::plmn_texts(ie.plmns())),
         |_, plmns| ListOfPlmnsToBeUsedInDisasterCondition::from_plmns(
-            &crate::common::view::plmns(&plmns)
+            &crate::common::message_tree::plmns(&plmns)
         )
     );
     decoded_ie!(
@@ -3111,9 +3125,9 @@ mod shared_types {
     fields_ie!(MobileStationClassmark2 {} flags);
     fields_ie!(AccessTechnologyUtilizationControl {} flags);
     decoded_ie!(
-        ExtendedEmergencyNumberList: crate::common::view::ExtendedEmergencyNumbers,
+        ExtendedEmergencyNumberList: crate::common::message_tree::ExtendedEmergencyNumbers,
         |ie| {
-            Some(crate::common::view::ExtendedEmergencyNumbers {
+            Some(crate::common::message_tree::ExtendedEmergencyNumbers {
                 valid_only_in_plmn: ie.valid_only_in_plmn()?,
                 numbers: ie.numbers()?,
             })
@@ -3320,7 +3334,7 @@ pub(crate) mod tests {
     }
 
     /// The values of the IEs of `message`.
-    fn values<M: Viewed>(message: &M) -> Vec<Option<Value>> {
+    fn values<M: TreeMessage>(message: &M) -> Vec<Option<Value>> {
         let mut values = Vec::new();
         message.ies(Scope::NONE, &mut |field| {
             values.push(field.ie.and_then(|ie| ie.value(field.scope)));
@@ -3331,7 +3345,7 @@ pub(crate) mod tests {
     /// Encode every value of `message` back: how many IEs it has, how many
     /// have a value, and how many give other octets than they were decoded
     /// from. Each IE that is encoded has the value it was encoded from.
-    fn encode_back<M: Viewed + PartialEq + core::fmt::Debug>(
+    fn encode_back<M: TreeMessage + PartialEq + core::fmt::Debug>(
         message: &M,
         name: &str,
     ) -> [usize; 3] {

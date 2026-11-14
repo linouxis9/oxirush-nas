@@ -115,9 +115,9 @@ fn codes_eps(message: &nas_eps::Message) -> Vec<Value> {
 /// What the crate reads of `message`: each member of its tree as
 /// `{"value": …, "octets": …}`, a field of a header with its value alone,
 /// and `null` for an optional IE that the message does not have.
-pub(crate) fn read<M: crate::common::view::Viewed>(
+pub(crate) fn read<M: crate::common::message_tree::TreeMessage>(
     message: &M,
-    scope: crate::common::view::Scope,
+    scope: crate::common::message_tree::Scope,
 ) -> crate::tree::Value {
     use crate::tree::{Map, Value};
     let entry = |member: &str, value: Value| Value::from(Map::from_iter([(member.into(), value)]));
@@ -145,7 +145,7 @@ pub(crate) fn read<M: crate::common::view::Viewed>(
     if let Some(body) = message.body() {
         body.absent(&mut |name, _| drop(read.insert(name.into(), Value::Null)));
         if !body.unknown_ies().is_empty() {
-            let tree = crate::common::view::tree(message, scope);
+            let tree = crate::common::message_tree::tree(message, scope);
             read.insert(
                 "unknown-ies".into(),
                 entry("value", tree["unknown-ies"].clone()),
@@ -157,10 +157,12 @@ pub(crate) fn read<M: crate::common::view::Viewed>(
 
 /// [`read`] of a message of either system; a message that has no table
 /// has the members of its tree.
-fn reading_of<M: crate::common::view::Viewed + Tree>(message: &M) -> crate::tree::Value {
+fn reading_of<M: crate::common::message_tree::TreeMessage + Tree>(
+    message: &M,
+) -> crate::tree::Value {
     use crate::tree::Value;
     if message.header().is_some() || message.protection().is_some() {
-        return read(message, crate::common::view::Scope::NONE);
+        return read(message, crate::common::message_tree::Scope::NONE);
     }
     let Value::Object(members) = message.tree() else {
         return Value::Null;
@@ -171,7 +173,7 @@ fn reading_of<M: crate::common::view::Viewed + Tree>(message: &M) -> crate::tree
         }
         let path = format!("/nas/{name}");
         let mut entry = oxirush_utils::tree!({ "value": member });
-        if let Ok(Some(octets)) = crate::common::view::ie_octets(message, &path) {
+        if let Ok(Some(octets)) = crate::common::message_tree::ie_octets(message, &path) {
             entry["octets"] = oxirush_utils::tree::hex(&octets).into();
         }
         (name, entry)

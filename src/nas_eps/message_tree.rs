@@ -17,8 +17,8 @@
 
 //! The tree of an EPS message and the values of its IEs.
 
+use crate::common::message_tree::{self, TreeMessage, Visit};
 use crate::common::readable::{from_value, same_name};
-use crate::common::view::{self, Viewed, Visit};
 use crate::common::{Error, Result};
 use crate::nas_eps::{EmmMessageType, EsmMessage, EsmMessageType, Message};
 use crate::nas_eps::{EmmTransport, ServiceRequest};
@@ -58,8 +58,8 @@ fn sent(message: &EsmMessage) -> Option<PcoDirection> {
     }
 }
 
-impl Viewed for Message {
-    fn ies(&self, scope: view::Scope, visit: &mut Visit<'_>) {
+impl TreeMessage for Message {
+    fn ies(&self, scope: message_tree::Scope, visit: &mut Visit<'_>) {
         let scope = scope.sent_by(match self {
             Self::Esm(_, message) => sent(message),
             _ => None,
@@ -109,7 +109,7 @@ impl Viewed for Message {
             return None;
         };
         let ciphered = match &**inner {
-            Self::Opaque(octets) => Some(view::octets_shown(octets)),
+            Self::Opaque(octets) => Some(message_tree::octets_shown(octets)),
             _ => None,
         };
         Some((crate::common::readable::to_value(header).ok()?, ciphered))
@@ -214,8 +214,8 @@ impl Viewed for Message {
         }
     }
 
-    fn fields(&self) -> Vec<(&'static str, view::Entry)> {
-        use view::Entry::{Field, Octets};
+    fn fields(&self) -> Vec<(&'static str, message_tree::Entry)> {
+        use message_tree::Entry::{Field, Octets};
         match self {
             Self::ServiceRequest(request) => vec![
                 ("protocol-discriminator", Field),
@@ -269,15 +269,15 @@ impl Message {
     /// The plain message that a tree writes alone, which its `message-type`
     /// names, or a SERVICE REQUEST, which has none.
     fn plain(tree: oxirush_utils::tree::Value) -> Result<Self> {
-        let (members, named) =
-            view::typed_members::<Self>(tree, view::Scope::NONE).map_err(Error::EncodingError)?;
+        let (members, named) = message_tree::typed_members::<Self>(tree, message_tree::Scope::NONE)
+            .map_err(Error::EncodingError)?;
         let Some(named) = named else {
             if !members
                 .keys()
                 .any(|name| same_name(name, "ksi-and-sequence-number"))
             {
                 return Err(Error::EncodingError(
-                    "the `message-type` of the view names the message".into(),
+                    "a message is written from a tree whose `message-type` names it".into(),
                 ));
             }
             let members = members
@@ -289,7 +289,7 @@ impl Message {
                 .and_then(sendable);
         };
         let alone = |family: &str, kind: &str| {
-            view::alone(&[family], kind, members.clone(), view::Scope::NONE)
+            message_tree::alone(&[family], kind, members.clone(), message_tree::Scope::NONE)
         };
         match message_type_place(&named) {
             Some((0, place)) => match emm_types().nth(place) {
@@ -357,7 +357,7 @@ impl EmmTransport {
         let octets =
             |octets: &[u8]| oxirush_utils::tree!({ "octets": oxirush_utils::tree::hex(octets) });
         let header = crate::common::readable::to_value(&self.security_header);
-        let header = view::without_absent(header.unwrap_or_default());
+        let header = message_tree::without_absent(header.unwrap_or_default());
         let mut tree = oxirush_utils::tree!({ "security-header": header });
         if let Some(ciphered) = &self.protected_payload {
             tree["ciphered-message"] = octets(ciphered);
@@ -379,8 +379,9 @@ impl EmmTransport {
             != crate::nas_eps::SecurityHeaderType::SecurityHeaderForTheEmmTransportMessage
         {
             return Err(
-                "security-header: a message under another header than `emm-transport` is \
-                 written as a tree, or edited with `with_view`"
+                "security-header: an EMM TRANSPORT has the security header type \
+                 `security-header-for-the-emm-transport-message`, and a message under another \
+                 one is written with `from_tree`"
                     .into(),
             );
         }
@@ -517,7 +518,7 @@ impl ServiceRequest {
                 }
                 ("ksi-and-sequence-number", Some(value), None) => {
                     let mut parts = [0_u8; 2];
-                    for (part, written) in view::members(value).map_err(refused)? {
+                    for (part, written) in message_tree::members(value).map_err(refused)? {
                         let known = ["ksi", "sequence-number"];
                         let at = known.iter().position(|known| same_name(known, part));
                         let at = at.ok_or_else(|| refused(format!("no member `{part}`")))?;
@@ -577,7 +578,7 @@ pub(crate) fn decided(
             ),
         ]);
     };
-    let kind = &view::type_named::<Message>(kind)?;
+    let kind = &message_tree::type_named::<Message>(kind)?;
     match message_type_place(kind).map(|(family, _)| family) {
         Some(0) => Ok(vec![
             ("protocol-discriminator", tree!(7)),
@@ -599,7 +600,7 @@ pub(crate) fn is_message(kind: &str) -> bool {
 /// The error for `kind`, which names no EPS message: the 5GS message that
 /// it names, or the nearest names.
 fn no_message(kind: &str) -> String {
-    if crate::nas_5gs::view::is_message(kind) {
+    if crate::nas_5gs::message_tree::is_message(kind) {
         return format!("no EPS message `{kind}`: it is a 5GS message, which `nas_5gs` reads");
     }
     let kinds: Vec<&str> = (EmmMessageType::NAMES.iter().chain(EsmMessageType::NAMES))
@@ -627,7 +628,8 @@ impl Message {
     /// assert!(!minutes.means_the_same(&decode("0744165f012b")));
     /// ```
     pub fn means_the_same(&self, other: &Self) -> bool {
-        view::meant(self, view::Scope::NONE) == view::meant(other, view::Scope::NONE)
+        message_tree::meant(self, message_tree::Scope::NONE)
+            == message_tree::meant(other, message_tree::Scope::NONE)
     }
 
     /// This message as a tree: its `message-type` and its IEs by name, each
@@ -683,7 +685,7 @@ impl Message {
         match self {
             Self::ServiceRequest(request) => request.tree(),
             Self::EmmTransport(transport) => transport.tree(),
-            message => view::tree(message, view::Scope::NONE),
+            message => message_tree::tree(message, message_tree::Scope::NONE),
         }
     }
 
@@ -709,12 +711,12 @@ impl Message {
     /// an EMM TRANSPORT with a `data-container`, which are what a security
     /// context deciphered and have no octets before one ciphers them.
     pub fn from_tree(tree: oxirush_utils::tree::Value) -> Result<Self> {
-        let (protection, tree) = view::protection_of(tree).map_err(Error::EncodingError)?;
+        let (protection, tree) = message_tree::protection_of(tree).map_err(Error::EncodingError)?;
         let Some((header, ciphered)) = protection else {
             return Self::plain(tree);
         };
         let header: crate::nas_eps::SecurityHeader =
-            view::security_header(&header, &[]).map_err(Error::EncodingError)?;
+            message_tree::security_header(&header, &[]).map_err(Error::EncodingError)?;
         // An EMM TRANSPORT is its header and a container.
         if header.security_header_type
             == crate::nas_eps::SecurityHeaderType::SecurityHeaderForTheEmmTransportMessage
@@ -758,7 +760,9 @@ impl Message {
         &self,
         path: &str,
     ) -> core::result::Result<Vec<oxirush_utils::tree::Value>, oxirush_utils::tree::Error> {
-        crate::paths::of_message(&self.to_tree(), path, |ie| view::ie_octets(self, ie))
+        crate::paths::of_message(&self.to_tree(), path, |ie| {
+            message_tree::ie_octets(self, ie)
+        })
     }
 
     /// The message that an edited tree of this one writes: this message, with
@@ -796,7 +800,7 @@ impl Message {
         let edited = match self {
             // A message that has no table: its fields.
             Self::ServiceRequest(request) => {
-                let edits = view::edits::<Self>(before, tree, view::Scope::NONE);
+                let edits = message_tree::edits::<Self>(before, tree, message_tree::Scope::NONE);
                 edits.and_then(|edits| request.written(edits, false).map(Self::ServiceRequest))
             }
             Self::EmmTransport(_) => {
@@ -811,11 +815,14 @@ impl Message {
                     .ok_or_else(|| {
                         Error::EncodingError("`security-header` is not written".into())
                     })?;
-                let header = view::security_header(&header, &[]).map_err(Error::EncodingError)?;
+                let header =
+                    message_tree::security_header(&header, &[]).map_err(Error::EncodingError)?;
                 EmmTransport::of_tree(header, None, &rest).map(Self::EmmTransport)
             }
-            message => view::edits::<Self>(before, tree, view::Scope::NONE)
-                .and_then(|edits| view::with_edits(message, edits, view::Scope::NONE)),
+            message => message_tree::edits::<Self>(before, tree, message_tree::Scope::NONE)
+                .and_then(|edits| {
+                    message_tree::with_edits(message, edits, message_tree::Scope::NONE)
+                }),
         }
         .map_err(Error::EncodingError)?;
         // A message that the tree leaves as it is comes back as it is.
@@ -864,12 +871,12 @@ impl EmmMessageType {
     pub fn names(self) -> Vec<String> {
         use crate::nas_eps::EmmMessage;
         match self {
-            Self::DetachRequest => view::names(
+            Self::DetachRequest => message_tree::names(
                 &EMM_HEADER,
                 &["DetachRequestUeOriginating", "DetachRequestUeTerminated"],
                 EmmMessage::fields_named,
             ),
-            _ => view::names(
+            _ => message_tree::names(
                 &EMM_HEADER,
                 &[&format!("{self:?}")],
                 EmmMessage::fields_named,
@@ -884,7 +891,7 @@ impl EsmMessageType {
     /// message, with those that are optional. A type that the crate has no
     /// message of has none.
     pub fn names(self) -> Vec<String> {
-        view::names(
+        message_tree::names(
             &ESM_HEADER,
             &[&format!("{self:?}")],
             EsmMessage::fields_named,
@@ -897,12 +904,12 @@ impl EsmMessageType {
 // Each is what the typed accessors of the IE return, and is encoded back
 // by the matching constructor or setters.
 
-use crate::common::ts24008::PcoDirection;
-use crate::common::ts24301::KeySetIdentifierValue;
-use crate::common::view::{
+use crate::common::message_tree::{
     Code, built_ie, code_ie, configuration_options_ie, container_ie, decoded_ie, fields_ie,
     named_ie, numbers, octets, shared_ies, timer_ie, write_code,
 };
+use crate::common::ts24008::PcoDirection;
+use crate::common::ts24301::KeySetIdentifierValue;
 use crate::nas_eps::*;
 use core::net::IpAddr;
 
@@ -1405,8 +1412,8 @@ decoded_ie!(
     |_, entries| TrackingAreaIdentityList::from_entries(&entries)
 );
 decoded_ie!(
-    TrackingAreaIdentity: view::TaiForm<TaiEps>,
-    |ie| ie.tai().map(view::TaiForm),
+    TrackingAreaIdentity: message_tree::TaiForm<TaiEps>,
+    |ie| ie.tai().map(message_tree::TaiForm),
     |_, tai| Ok(TrackingAreaIdentity::from_tai(tai.0))
 );
 decoded_ie!(
@@ -1661,7 +1668,7 @@ decoded_ie!(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::common::view::tests::{exercise, replace_parts, sweep};
+    use crate::common::message_tree::tests::{exercise, replace_parts, sweep};
 
     #[test]
     fn values_encode_back_and_take_nothing_unchecked() {
@@ -1840,7 +1847,7 @@ impl oxirush_utils::tree::Tree for Message {
         reading: &mut oxirush_utils::tree::Reading,
     ) -> core::result::Result<Self, oxirush_utils::tree::Refused> {
         (Message::from_tree(value.clone())).map_err(|error| {
-            let why = view::unencoded(error);
+            let why = message_tree::unencoded(error);
             reading.refuse(oxirush_utils::tree::ErrorKind::Value, why)
         })
     }

@@ -923,8 +923,8 @@ pub(crate) fn index_of(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::common::message_tree::{PlmnText, TaiForm};
     use crate::common::names::printed;
-    use crate::common::view::{PlmnText, TaiForm};
     use crate::nas_5gs::*;
     use oxirush_utils::tree;
 

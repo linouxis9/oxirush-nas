@@ -59,7 +59,7 @@ macro_rules! nas_ie_struct {
         #[cfg(feature = "tree")]
         crate::common::readable::readable!(struct $name { value });
         #[cfg(feature = "tree")]
-        crate::common::view::ie_tree!($name, <$name>::blank());
+        crate::common::message_tree::ie_tree!($name, <$name>::blank());
     };
     (@new octets) => {
         /// Build the IE from its value.
@@ -247,7 +247,7 @@ macro_rules! nas_ie_flags {
     // The flags by name, for the value of the IE in a tree.
     (@named $name:ident { $($flag:ident)* }) => {
         #[cfg(feature = "tree")]
-        impl crate::common::view::Flags for $name {
+        impl crate::common::message_tree::Flags for $name {
             fn flags(&self) -> Vec<(&'static str, bool)> {
                 vec![$((crate::common::names::name!(stringify!($flag)), self.$flag())),*]
             }
@@ -263,7 +263,7 @@ macro_rules! nas_ie_flags {
             }
 
             fn is_empty(&self) -> bool {
-                crate::common::view::FlagOctets::none(&self.value)
+                crate::common::message_tree::FlagOctets::none(&self.value)
             }
         }
     };

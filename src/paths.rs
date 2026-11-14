@@ -728,27 +728,27 @@ impl Family for Trees {
 /// Whether a message of the type `kind` can have the IE `name`: one of the messages of
 /// that name has it, or no message has that name.
 fn can_have(kind: &str, name: &str) -> bool {
-    use crate::common::view::names;
+    use crate::common::message_tree::names;
     use crate::{nas_5gs, nas_eps};
     // The protocols have types of the same name, with other IEs.
     let of_the_type = [
         names(
-            &nas_5gs::view::GMM_HEADER,
+            &nas_5gs::message_tree::GMM_HEADER,
             &[kind],
             nas_5gs::GmmMessage::fields_named,
         ),
         names(
-            &nas_5gs::view::GSM_HEADER,
+            &nas_5gs::message_tree::GSM_HEADER,
             &[kind],
             nas_5gs::GsmMessage::fields_named,
         ),
         names(
-            &nas_eps::view::EMM_HEADER,
+            &nas_eps::message_tree::EMM_HEADER,
             &[kind],
             nas_eps::EmmMessage::fields_named,
         ),
         names(
-            &nas_eps::view::ESM_HEADER,
+            &nas_eps::message_tree::ESM_HEADER,
             &[kind],
             nas_eps::EsmMessage::fields_named,
         ),

@@ -226,8 +226,8 @@ macro_rules! ie_rules {
             #[cfg(feature = "tree")]
             {
                 #[allow(unused_imports)]
-                use $crate::common::view::{DecodedProbe, ViaDecoded, ViaNoDecoded};
-                let tree = $crate::common::view::ie_shown((&DecodedProbe(self)).decoded_ie(), &self.value);
+                use $crate::common::message_tree::{DecodedProbe, ViaDecoded, ViaNoDecoded};
+                let tree = $crate::common::message_tree::ie_shown((&DecodedProbe(self)).decoded_ie(), &self.value);
                 $crate::common::display::compact(f, &tree)
             }
             #[cfg(not(feature = "tree"))]

@@ -16,6 +16,12 @@ All notable changes to `oxirush-nas` are recorded here.
   The trees, the messages that they write and the errors are the same, but
   for the message of a container: an edit of its tree edits it as
   `with_tree` edits a message.
+- Two errors no longer name the view that a tree stood under: a tree
+  without a `message-type` is refused with "a message is written from a tree
+  whose `message-type` names it", and a tree that gives an EMM TRANSPORT
+  another security header with "an EMM TRANSPORT has the security header type
+  `security-header-for-the-emm-transport-message`, and a message under
+  another one is written with `from_tree`".
 
 ### Removed
 

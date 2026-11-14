@@ -28,6 +28,8 @@ mod identity;
 mod ie_macros;
 mod labels;
 mod message_macros;
+#[cfg(feature = "tree")]
+pub(crate) mod message_tree;
 pub(crate) mod names;
 mod octets;
 mod plmn;
@@ -42,8 +44,6 @@ pub(crate) mod types;
 mod unknown_ie;
 mod validate;
 mod value;
-#[cfg(feature = "tree")]
-pub(crate) mod view;
 
 pub use codec::{
     Decode, DecodeOptions, Encode, Error, IeFault, IeName, MAX_IE_VALUE_LENGTH, Result,
