@@ -43,6 +43,29 @@ fn with_ie(
     });
 }
 
+/// Visit the IEs of the NAS TRANSPORT `body` in `scope`: the payload container
+/// type `kind` says what its payload container `container` carries.
+fn transported(
+    body: &dyn MessageBody,
+    kind: &crate::nas_5gs::PayloadContainerType,
+    container: &crate::nas_5gs::PayloadContainer,
+    scope: message_tree::Scope,
+    visit: &mut Visit<'_>,
+) {
+    use crate::nas_5gs::PayloadContainerKind as Kind;
+    match kind.kind() {
+        Some(Kind::N1SmInformation) => {
+            let container = N1SmContainer(container);
+            with_ie(body, "payload_container", &container, scope, visit);
+        }
+        Some(Kind::MultiplePayloads) => {
+            let container = MultiplePayloads(container);
+            with_ie(body, "payload_container", &container, scope, visit);
+        }
+        _ => body.ies(scope, visit),
+    }
+}
+
 /// Who sends a 5GSM message, where its type says so (TS 24.501 §8.3): the
 /// units of its protocol configuration options are read by it.
 fn sent(message: &GsmMessage) -> Option<PcoDirection> {
@@ -79,19 +102,20 @@ impl TreeMessage for Message {
             _ => None,
         });
         match self {
-            // The payload container type says what the container carries.
-            Self::Gmm(_, GmmMessage::UlNasTransport(transport))
-                if transport.payload_container_type.is_n1_sm() =>
-            {
-                let container = N1SmContainer(&transport.payload_container);
-                with_ie(&**transport, "payload_container", &container, scope, visit);
-            }
-            Self::Gmm(_, GmmMessage::DlNasTransport(transport))
-                if transport.payload_container_type.is_n1_sm() =>
-            {
-                let container = N1SmContainer(&transport.payload_container);
-                with_ie(&**transport, "payload_container", &container, scope, visit);
-            }
+            Self::Gmm(_, GmmMessage::UlNasTransport(transport)) => transported(
+                &**transport,
+                &transport.payload_container_type,
+                &transport.payload_container,
+                scope,
+                visit,
+            ),
+            Self::Gmm(_, GmmMessage::DlNasTransport(transport)) => transported(
+                &**transport,
+                &transport.payload_container_type,
+                &transport.payload_container,
+                scope,
+                visit,
+            ),
             Self::Gmm(_, message) => message.body().ies(scope, visit),
             Self::Gsm(_, message) => message.body().ies(scope, visit),
             Self::SecurityProtected(_, inner) => inner.ies(scope, visit),
@@ -793,6 +817,184 @@ impl Ie for N1SmContainer<'_> {
             &self.message()?,
             scope.inside()?,
         ))
+    }
+}
+
+/// A payload container of the type "multiple payloads" (TS 24.501
+/// §9.11.3.39): its `entries`, each with its `payload-container-type`, its
+/// `optional-ies` where it has some, and its `contents`. The contents of an
+/// entry of N1 SM information are the tree of its 5GSM message, as the
+/// container of a NAS TRANSPORT of that type has it; those of another type,
+/// or that are no 5GSM message, are their `octets`.
+struct MultiplePayloads<'a>(&'a PayloadContainer);
+
+impl MultiplePayloads<'_> {
+    /// The entries of the container, where they encode back to its octets.
+    fn container(&self) -> Option<MultiplePayloadContainer> {
+        let container = self.0.decode_as_multiple_payload_container().ok()?;
+        (container.encode().ok()?.as_slice() == self.0.value.as_slice()).then_some(container)
+    }
+
+    /// The tree of the container in `scope`.
+    fn tree(&self, scope: message_tree::Scope) -> Option<oxirush_utils::tree::Value> {
+        let mut entries = Vec::new();
+        for entry in self.container()?.entries {
+            let oxirush_utils::tree::Value::Object(mut members) =
+                readable::to_value(&entry).ok()?
+            else {
+                return None;
+            };
+            if entry.optional_ies.is_empty() {
+                members.shift_remove("optional-ies");
+            }
+            let octets = oxirush_utils::tree::hex(&entry.contents);
+            let message = (entry.payload_container_type.is_n1_sm())
+                .then(|| N1SmContainer(&PayloadContainer::new(entry.contents)).value(scope))
+                .flatten();
+            let contents = message.unwrap_or_else(|| oxirush_utils::tree!({ "octets": octets }));
+            members.insert("contents".into(), contents);
+            entries.push(oxirush_utils::tree::Value::from(members));
+        }
+        Some(oxirush_utils::tree!({ "entries": entries }))
+    }
+
+    /// The container that the tree `value` writes in `scope`: an entry at
+    /// the place of one of N1 SM information that the container has edits
+    /// the message of that one.
+    fn written(
+        &self,
+        value: &oxirush_utils::tree::Value,
+        scope: message_tree::Scope,
+    ) -> core::result::Result<PayloadContainer, String> {
+        use oxirush_utils::tree::Value;
+        let had = match self.container() {
+            Some(container) => container.entries,
+            None if self.0.value.is_empty() => Vec::new(),
+            None => {
+                return Err("the octets are not a multiple payloads container: write them".into());
+            }
+        };
+        let members = message_tree::members(value)?;
+        if let Some(name) = (members.keys()).find(|name| !readable::same_name(name, "entries")) {
+            return Err(format!("no member `{name}`, expected entries"));
+        }
+        let Some(Value::Array(items)) = members.values().next() else {
+            return Err("`entries` is the list of the payload container entries".into());
+        };
+        let mut entries = Vec::with_capacity(items.len());
+        for (at, item) in items.iter().enumerate() {
+            let entry = Self::entry(item, had.get(at), scope)
+                .map_err(|error| format!("entry {at}: {error}"))?;
+            entries.push(entry);
+        }
+        PayloadContainer::from_multiple_payload_container(&MultiplePayloadContainer::new(entries))
+            .map_err(message_tree::unencoded)
+    }
+
+    /// The entry that the tree `item` writes in `scope`, over the entry
+    /// `had` at its place.
+    fn entry(
+        item: &oxirush_utils::tree::Value,
+        had: Option<&MultiplePayloadEntry>,
+        scope: message_tree::Scope,
+    ) -> core::result::Result<MultiplePayloadEntry, String> {
+        use oxirush_utils::tree::Value;
+        // The type and the optional IEs as the entry reads them, and the
+        // contents by what the type says.
+        let mut members = message_tree::members(item)?.clone();
+        let name = (members.keys())
+            .find(|name| readable::same_name(name, "contents"))
+            .cloned()
+            .ok_or("`contents` is not written")?;
+        let contents = members.shift_remove(&name).unwrap_or_default();
+        members.insert("contents".into(), Value::Array(Vec::new()));
+        if !(members.keys()).any(|name| readable::same_name(name, "optional-ies")) {
+            members.insert("optional-ies".into(), Value::Array(Vec::new()));
+        }
+        let mut entry: MultiplePayloadEntry = readable::from_value(&members.into())?;
+        let octets = contents.as_object().filter(|contents| contents.len() == 1);
+        entry.contents = match octets.and_then(|octets| octets.get("octets")) {
+            Some(octets) => message_tree::octets_value(octets, 0)?,
+            None if entry.payload_container_type.is_n1_sm() => {
+                let had = had.filter(|had| had.payload_container_type.is_n1_sm());
+                let had =
+                    PayloadContainer::new(had.map(|had| had.contents.clone()).unwrap_or_default());
+                let (written, _) = N1SmContainer(&had)
+                    .written(&contents, scope)
+                    .map_err(|error| format!("contents: {error}"))?;
+                written.value.to_vec()
+            }
+            None => {
+                return Err(
+                    "`contents` of an entry that is not of N1 SM information are its `octets`"
+                        .into(),
+                );
+            }
+        };
+        Ok(entry)
+    }
+
+    /// The container that stands for those that mean what this one means:
+    /// the message of each entry of N1 SM information in the form that
+    /// stands for those that mean what it means.
+    fn meant_container(&self, scope: message_tree::Scope) -> Option<PayloadContainer> {
+        let mut container = self.container()?;
+        for entry in &mut container.entries {
+            let contents = PayloadContainer::new(core::mem::take(&mut entry.contents));
+            let meant = (entry.payload_container_type.is_n1_sm())
+                .then(|| N1SmContainer(&contents).meant_container(scope))
+                .flatten();
+            entry.contents = meant.unwrap_or(contents).value.to_vec();
+        }
+        PayloadContainer::from_multiple_payload_container(&container).ok()
+    }
+}
+
+impl Ie for MultiplePayloads<'_> {
+    fn value(&self, scope: message_tree::Scope) -> Option<oxirush_utils::tree::Value> {
+        self.tree(scope)
+    }
+
+    fn encoded_ie(
+        &self,
+        value: &oxirush_utils::tree::Value,
+        scope: message_tree::Scope,
+    ) -> core::result::Result<Box<dyn core::any::Any>, String> {
+        Ok(Box::new(self.written(value, scope)?))
+    }
+
+    #[cfg(test)]
+    fn encoded_value(
+        &self,
+        value: &oxirush_utils::tree::Value,
+        scope: message_tree::Scope,
+    ) -> core::result::Result<Option<oxirush_utils::tree::Value>, String> {
+        Ok(MultiplePayloads(&self.written(value, scope)?).tree(scope))
+    }
+
+    fn written_back(&self, value: &oxirush_utils::tree::Value, scope: message_tree::Scope) -> bool {
+        // The container that the tree writes alone means what this one means.
+        let written = MultiplePayloads(&PayloadContainer::blank()).written(value, scope);
+        let meant = written
+            .ok()
+            .and_then(|written| MultiplePayloads(&written).meant_container(scope));
+        meant.is_some() && meant == self.meant_container(scope)
+    }
+
+    fn meant(&self, scope: message_tree::Scope) -> Option<Box<dyn core::any::Any>> {
+        let meant = self.meant_container(scope)?;
+        (meant != *self.0).then(|| Box::new(meant) as Box<dyn core::any::Any>)
+    }
+
+    // The paths of a message take the members of a container's value for no
+    // IEs: the octets of an IE in the message of an entry are not selected.
+    fn octets_inside(&self, _: &[String], _: message_tree::Scope) -> Option<message_tree::Found> {
+        None
+    }
+
+    #[cfg(test)]
+    fn reading(&self, scope: message_tree::Scope) -> Option<oxirush_utils::tree::Value> {
+        self.tree(scope)
     }
 }
 

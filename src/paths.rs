@@ -148,6 +148,34 @@
 //! );
 //! ```
 //!
+//! A payload container of multiple payloads is the list of its entries,
+//! and the contents of an entry of N1 SM information the tree of its
+//! message:
+//!
+//! ```rust
+//! use oxirush_nas::nas_5gs::Message;
+//! use oxirush_nas::tree;
+//!
+//! // UL NAS TRANSPORT with one entry: a PDU SESSION ESTABLISHMENT REQUEST of
+//! // PDU session 5
+//! let bytes = hex::decode("7e00670f000e01000b111201052e0501c1ffff91").unwrap();
+//! let transport = Message::decode(&bytes).unwrap();
+//! assert_eq!(
+//!     transport.to_tree()["payload-container"],
+//!     tree!({"entries": [{
+//!         "payload-container-type": "n1-sm-information",
+//!         "optional-ies": [{"pdu-session-id": 5}],
+//!         "contents": {
+//!             "pdu-session-identity": 5,
+//!             "procedure-transaction-identity": 1,
+//!             "message-type": "pdu-session-establishment-request",
+//!             "integrity-protection-maximum-data-rate": {"ul": "full-rate", "dl": "full-rate"},
+//!             "pdu-session-type": "ipv4",
+//!         },
+//!     }]})
+//! );
+//! ```
+//!
 //! ## One IE alone
 //!
 //! An IE type is a [`tree::Tree`]: `to_tree()` gives the tree of one IE

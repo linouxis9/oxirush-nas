@@ -17,6 +17,14 @@ All notable changes to `oxirush-nas` are recorded here.
   is used again is long enough: the message is encoded in its place and
   ciphered there. With AES, a REGISTRATION ACCEPT of 247 octets is protected
   in 420 ns, where `protect()` took 522 ns.
+- A payload container of the type "multiple payloads" (TS 24.501
+  §9.11.3.39) in a UL or DL NAS TRANSPORT has the tree of its `entries`,
+  where it had its octets alone: the `payload-container-type` of each
+  entry, its `optional-ies` where it has some, and its `contents`, which
+  are the tree of its 5GSM message for an entry of N1 SM information and
+  its `octets` otherwise. The tree writes the container, and an edit of
+  the message of an entry edits that message. Octets that are no such
+  container are shown by their octets.
 
 ### Changed
 

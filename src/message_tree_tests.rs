@@ -428,6 +428,103 @@ fn a_container_of_a_message_reads_and_writes_as_its_tree() {
     );
 }
 
+/// A payload container of multiple payloads (TS 24.501 §9.11.3.39) is the tree of its
+/// entries: the contents of an entry of N1 SM information are the tree of its 5GSM
+/// message, and those of another type their octets. The tree writes the container back,
+/// edits it, and writes one alone.
+#[test]
+fn a_multiple_payloads_container_is_the_tree_of_its_entries() {
+    // UL NAS TRANSPORT of two entries: N1 SM information with the PDU session ID 5 and
+    // the request type "initial request", a PDU SESSION ESTABLISHMENT REQUEST; and SMS.
+    let transport = fgs("7e00670f001602000e211201058001012e0501c1ffff910003020102");
+    let request = fgs("2e0501c1ffff91").to_tree();
+    let tree = transport.to_tree();
+    assert_eq!(tree["payload-container-type"], tree!("multiple-payloads"));
+    assert_eq!(
+        tree["payload-container"],
+        tree!({"entries": [
+            {
+                "payload-container-type": "n1-sm-information",
+                "optional-ies": [{"pdu-session-id": 5}, {"request-type": "initial-request"}],
+                "contents": request.clone(),
+            },
+            {"payload-container-type": "sms", "contents": {"octets": "0102"}},
+        ]})
+    );
+    assert_eq!(transport.with_tree(tree.clone()).unwrap(), transport);
+    assert_eq!(f::Message::from_tree(tree).unwrap(), transport);
+    assert_eq!(
+        transport
+            .select("/nas/payload-container/entries/0/contents/pdu-session-type")
+            .unwrap(),
+        [tree!("ipv4")]
+    );
+
+    let edited = fgs_edited(&transport, |tree| {
+        let entries = &mut tree["payload-container"]["entries"];
+        entries[0]["contents"]["pdu-session-type"] = tree!("ipv6");
+        entries[0]["optional-ies"][0]["pdu-session-id"] = tree!(6);
+        entries[1]["contents"] = tree!({"octets": "030405"});
+    });
+    assert_eq!(
+        edited.unwrap(),
+        "7e00670f001702000e211201068001012e0501c1ffff92000402030405"
+    );
+
+    // One alone, from the tree of its entries
+    let alone = tree!({
+        "message-type": "ul-nas-transport",
+        "payload-container-type": "multiple-payloads",
+        "payload-container": {"entries": [
+            {"payload-container-type": "n1-sm-information", "contents": request.clone()},
+        ]},
+    });
+    let alone = f::Message::from_tree(alone).unwrap();
+    assert_eq!(
+        hex::encode(alone.encode().unwrap()),
+        "7e00670f000b010008012e0501c1ffff91"
+    );
+
+    // What an entry cannot carry, and a member that is not one
+    let error = |edit: fn(&mut Value)| fgs_edited(&transport, edit).unwrap_err();
+    let refused = error(|tree| {
+        tree["payload-container"]["entries"][1]["contents"] = fgs("2e0501c1ffff91").to_tree();
+    });
+    assert!(
+        refused.contains(
+            "entry 1: `contents` of an entry that is not of N1 SM information are its `octets`"
+        ),
+        "{refused}"
+    );
+    let refused = error(|tree| {
+        let entry = tree["payload-container"]["entries"][1].as_object_mut();
+        entry.unwrap().shift_remove("contents");
+    });
+    assert!(
+        refused.contains("entry 1: `contents` is not written"),
+        "{refused}"
+    );
+    let refused = error(|tree| tree["payload-container"]["entry"] = tree!([]));
+    assert!(
+        refused.contains("no member `entry`, expected entries"),
+        "{refused}"
+    );
+    let refused = error(|tree| {
+        tree["payload-container"]["entries"][0]["contents"]["pdu-session-type"] = tree!("ipv5");
+    });
+    assert!(
+        refused.contains("entry 0: contents: pdu-session-type: no name `ipv5`"),
+        "{refused}"
+    );
+
+    // Octets that are no such container are shown as they are
+    let short = fgs("7e00670f000101");
+    assert_eq!(
+        short.to_tree()["payload-container"],
+        tree!({"octets": "01"})
+    );
+}
+
 #[test]
 fn an_ie_is_taken_out_and_none_is_made_up() {
     let accept = fgs("7e0042010177000bf202f8390100421122334415020101");
