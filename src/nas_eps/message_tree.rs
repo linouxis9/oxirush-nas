@@ -1601,12 +1601,6 @@ fields_ie!(EpsNetworkFeatureSupport {
             |ie| ie.cs_lcs_raw(),
         );
 } flags);
-fields_ie!(MsNetworkCapability {} flags);
-fields_ie!(AdditionalInformationRequested {} flags);
-fields_ie!(DeviceProperties {} flags);
-fields_ie!(WlanOffloadAcceptability {} flags);
-fields_ie!(NetworkPolicy {} flags);
-fields_ie!(MsNetworkFeatureSupport {} flags);
 
 // The parts of an IE that its constructor takes.
 built_ie!(

@@ -28,6 +28,7 @@
 /// significant) of octet `octet` (0 is the first of the value), `width` of
 /// them, and for a field split over two octets the low part in `next`.
 #[derive(Debug, Clone, Copy)]
+#[cfg_attr(not(feature = "tree"), allow(dead_code))]
 pub(crate) struct Row {
     /// The name of the field as the tree prints it.
     #[cfg(feature = "tree")]
@@ -67,6 +68,7 @@ impl Row {
     }
 
     /// The bits of octet `octet` that the field has.
+    #[cfg(feature = "tree")]
     pub(crate) const fn mask(&self, octet: usize) -> u8 {
         let mut mask = 0;
         if octet == self.octet {
@@ -123,11 +125,13 @@ impl Row {
 }
 
 /// `width` ones from bit `low`.
+#[cfg(feature = "tree")]
 const fn ones(low: u8, width: u8) -> u8 {
     (((1u16 << width) - 1) << (low - 1)) as u8
 }
 
 /// The table of an IE: its fields, and the lengths of its value.
+#[cfg(feature = "tree")]
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct Table {
     pub(crate) rows: &'static [Row],
@@ -135,15 +139,14 @@ pub(crate) struct Table {
     pub(crate) least: usize,
     pub(crate) most: usize,
     /// The least octets of a value that a receiver takes, which a tree shows.
-    #[cfg(feature = "tree")]
     pub(crate) receives: usize,
     /// Whether the octets of the value at its end that are absent or zero
     /// say the same, as they do of flags that a later release adds: none of
     /// their fields is set.
-    #[cfg(feature = "tree")]
     pub(crate) trailing: bool,
 }
 
+#[cfg(feature = "tree")]
 impl Table {
     /// The bits of octet `octet` that a field has.
     pub(crate) fn mask(&self, octet: usize) -> u8 {
@@ -153,17 +156,9 @@ impl Table {
     /// Whether the fields give every bit of `octets` back: no bit that no
     /// field has is set, and the value has a length of the table, or one
     /// whose octets past it are zero where they say nothing.
-    #[cfg(feature = "tree")]
     pub(crate) fn exact(&self, octets: &[u8]) -> bool {
         let length = octets.len() >= self.receives && (self.trailing || octets.len() <= self.most);
         length && (octets.iter().enumerate()).all(|(at, octet)| octet & !self.mask(at) == 0)
-    }
-
-    /// Whether a sender of the release writes `octets`: no spare bit is
-    /// set, and the value has a length of the table.
-    pub(crate) fn spare_bits_are_zero(&self, octets: &[u8]) -> bool {
-        (self.least..=self.most).contains(&octets.len())
-            && (octets.iter().enumerate()).all(|(at, octet)| octet & !self.mask(at) == 0)
     }
 }
 
@@ -334,15 +329,14 @@ macro_rules! field_row {
 /// octets at the end say the same. The tree of the IE comes from the table.
 macro_rules! table_ie {
     ($ie:ty, $storage:ident, $least:literal ..= $most:literal, receives $receives:literal $(, $option:ident)?) => {
+        #[cfg(feature = "tree")]
         impl $ie {
             /// The table of the fields of the IE.
             pub(crate) const TABLE: $crate::common::field_table::Table = $crate::common::field_table::Table {
                 rows: <$ie>::FIELDS,
                 least: $least,
                 most: $most,
-                #[cfg(feature = "tree")]
                 receives: $receives,
-                #[cfg(feature = "tree")]
                 trailing: $crate::common::field_table::table_ie!(@trailing $($option)?),
             };
 

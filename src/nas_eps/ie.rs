@@ -31,6 +31,7 @@
 //! ```
 
 pub(crate) use crate::common::Plmn;
+use crate::common::field_table::field_row;
 use crate::common::{counted, sized, within};
 use crate::nas_eps::*;
 use crate::prelude::*;
@@ -4430,12 +4431,14 @@ impl EpsNetworkFeatureSupport {
     }
 }
 
-crate::common::nas_ie_flags!(ReAttemptIndicator {
-    /// Whether retry in A/Gb, Iu, or N1 mode is forbidden (§9.9.4.13A, bit 1).
-    ratc_not_allowed: 0, 1;
-    /// Whether retry in an equivalent PLMN is forbidden (bit 2).
-    eplmnc_not_allowed: 0, 2;
-});
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl ReAttemptIndicator (value) "10.5.6.5a" octets 1 {
+        ratc_not_allowed "RATC-NOT-ALLOWED": 0 1 1,
+        eplmnc_not_allowed "EPLMNC-NOT-ALLOWED": 0 2 1,
+    }
+}
+crate::common::field_table::table_ie!(ReAttemptIndicator, octets, 1..=1, receives 0, trailing);
 
 impl ReAttemptIndicator {
     /// Build from the two restriction flags with spare bits clear.
@@ -5220,48 +5223,32 @@ impl UeAdditionalSecurityCapability {
 
 // ── MS network capability (TS 24.008 §10.5.5.12) ────────────────────────────
 
-crate::common::nas_ie_flags!(MsNetworkCapability {
-    /// GEA/1 bit as sent (octet 3, bit 8); the MS sets it to 0.
-    gea1: 0, 8;
-    /// Mobile terminated SMS via CS domain (octet 3, bit 7).
-    sm_dedicated: 0, 7;
-    /// Mobile terminated SMS via PS domain (octet 3, bit 6).
-    sm_gprs: 0, 6;
-    /// UCS2 treatment (octet 3, bit 5): `true` means no preference.
-    ucs2: 0, 5;
-    /// SoLSA capability (octet 3, bit 2).
-    solsa: 0, 2;
-    /// R99 or later protocol support (octet 3, bit 1).
-    revision_level_indicator: 0, 1;
-    /// BSS packet flow procedures (octet 4, bit 8).
-    pfc: 1, 8;
-    /// LCS value added location request notification (octet 4, bit 1).
-    lcs_va: 1, 1;
-    /// PS inter-RAT handover from GERAN to UTRAN Iu mode (octet 5, bit 8).
-    ps_ho_utran: 2, 8;
-    /// PS inter-RAT handover from GERAN to E-UTRAN S1 mode (octet 5, bit 7).
-    ps_ho_eutran: 2, 7;
-    /// EMM combined procedures (octet 5, bit 6).
-    emm_combined: 2, 6;
-    /// ISR support (octet 5, bit 5).
-    isr: 2, 5;
-    /// SRVCC to GERAN/UTRAN (octet 5, bit 4).
-    srvcc: 2, 4;
-    /// EPC capability (octet 5, bit 3).
-    epc: 2, 3;
-    /// Notification procedure (octet 5, bit 2).
-    nf: 2, 2;
-    /// GERAN network sharing (octet 5, bit 1).
-    geran_network_sharing: 2, 1;
-    /// User plane integrity protection (octet 6, bit 8).
-    up_integrity_protection: 3, 8;
-    /// ePCO IE indicator (octet 6, bit 3).
-    epco: 3, 3;
-    /// Restriction on use of enhanced coverage (octet 6, bit 2).
-    restrict_ec: 3, 2;
-    /// Dual connectivity of E-UTRA with NR (octet 6, bit 1).
-    dcnr: 3, 1;
-});
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl MsNetworkCapability (value) "10.5.5.12" octets 8 {
+        gea1 "GEA1": 0 8 1,
+        sm_dedicated "SM-DEDICATED": 0 7 1,
+        sm_gprs "SM-GPRS": 0 6 1,
+        ucs2 "UCS2": 0 5 1,
+        solsa "SOLSA": 0 2 1,
+        revision_level_indicator "REVISION-LEVEL-INDICATOR": 0 1 1,
+        pfc "PFC": 1 8 1,
+        lcs_va "LCS-VA": 1 1 1,
+        ps_ho_utran "PS-HO-UTRAN": 2 8 1,
+        ps_ho_eutran "PS-HO-EUTRAN": 2 7 1,
+        emm_combined "EMM-COMBINED": 2 6 1,
+        isr "ISR": 2 5 1,
+        srvcc "SRVCC": 2 4 1,
+        epc "EPC": 2 3 1,
+        nf "NF": 2 2 1,
+        geran_network_sharing "GERAN-NETWORK-SHARING": 2 1 1,
+        up_integrity_protection "UP-INTEGRITY-PROTECTION": 3 8 1,
+        epco "EPCO": 3 3 1,
+        restrict_ec "RESTRICT-EC": 3 2 1,
+        dcnr "DCNR": 3 1 1,
+    }
+}
+crate::common::field_table::table_ie!(MsNetworkCapability, octets, 2..=8, receives 0, trailing);
 
 impl MsNetworkCapability {
     /// SS screening indicator (octet 3, bits 4-3).
@@ -5351,10 +5338,13 @@ impl ReplayedNasMessageContainer {
     }
 }
 
-crate::common::nas_ie_flags!(AdditionalInformationRequested half_octet {
-    /// Ciphering keys for ciphered broadcast assistance data requested (§9.9.3.55, bit 1).
-    cipher_key_data_requested: 1;
-});
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl AdditionalInformationRequested (value) "9.9.3.55" octets 1 {
+        cipher_key_data_requested "CipherKey": 0 1 1,
+    }
+}
+crate::common::field_table::table_ie!(AdditionalInformationRequested, octet, 1..=1, receives 1);
 
 impl AdditionalInformationRequested {
     /// Build with spare bits clear.
@@ -5438,10 +5428,13 @@ impl ConnectivityType {
     }
 }
 
-crate::common::nas_ie_flags!(DeviceProperties half_octet {
-    /// MS configured for NAS signalling low priority (TS 24.008 §10.5.7.8, bit 1).
-    low_priority: 1;
-});
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl DeviceProperties (value) "10.5.7.8" octets 1 {
+        low_priority "Low priority": 0 1 1,
+    }
+}
+crate::common::field_table::table_ie!(DeviceProperties, octet, 1..=1, receives 1);
 
 impl DeviceProperties {
     /// Build with spare bits clear.
@@ -5450,12 +5443,14 @@ impl DeviceProperties {
     }
 }
 
-crate::common::nas_ie_flags!(WlanOffloadAcceptability half_octet {
-    /// Whether WLAN offload is acceptable in S1 mode (TS 24.008 §10.5.6.20).
-    s1_offload_acceptable: 1;
-    /// Whether WLAN offload is acceptable in Iu mode.
-    iu_offload_acceptable: 2;
-});
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl WlanOffloadAcceptability (value) "10.5.6.20" octets 1 {
+        s1_offload_acceptable "E-UTRAN offload acceptability value": 0 1 1,
+        iu_offload_acceptable "UTRAN offload acceptability value": 0 2 1,
+    }
+}
+crate::common::field_table::table_ie!(WlanOffloadAcceptability, octet, 1..=1, receives 1);
 
 impl WlanOffloadAcceptability {
     /// Build from the two access-mode flags with spare bits clear.
@@ -5566,10 +5561,13 @@ impl LcsIndicator {
     }
 }
 
-crate::common::nas_ie_flags!(NetworkPolicy half_octet {
-    /// Unsecured redirection to GERAN or UTRAN not allowed (§9.9.3.52, bit 1).
-    unsecured_redirection_forbidden: 1;
-});
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl NetworkPolicy (value) "9.9.3.52" octets 1 {
+        unsecured_redirection_forbidden "redir-policy": 0 1 1,
+    }
+}
+crate::common::field_table::table_ie!(NetworkPolicy, octet, 1..=1, receives 1);
 
 impl NetworkPolicy {
     /// Build with spare bits clear.
@@ -5715,10 +5713,13 @@ impl CipheringKeySequenceNumber {
     }
 }
 
-crate::common::nas_ie_flags!(MsNetworkFeatureSupport half_octet {
-    /// Extended periodic timers supported (TS 24.008 §10.5.1.15, bit 1).
-    extended_periodic_timers_supported: 1;
-});
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl MsNetworkFeatureSupport (value) "10.5.1.15" octets 1 {
+        extended_periodic_timers_supported "extended periodic timers": 0 1 1,
+    }
+}
+crate::common::field_table::table_ie!(MsNetworkFeatureSupport, octet, 1..=1, receives 1);
 
 impl MsNetworkFeatureSupport {
     /// Build with spare bits clear.

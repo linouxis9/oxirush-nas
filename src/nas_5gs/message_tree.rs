@@ -2114,7 +2114,6 @@ decoded_ie!(
 );
 
 // Capabilities: every flag by its name, and the algorithms by number.
-fields_ie!(GmmCapability {} flags);
 crate::common::nas_ie_flags!(@named NetworkFeatureSupport {
     ims_vops_3gpp ims_vops_n3gpp iwk_n26 mpsi emcn3 mcsi cp_ciot n3_data iphc_cp_ciot up_ciot
     lcs_5g ats_ind ehc_cp_ciot ncr piv rpr pr un_per naps lcs_upp supl rslp mlcsup ef5l

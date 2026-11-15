@@ -149,6 +149,23 @@ impl Octets {
     }
 }
 
+/// The octets of a value whose fields a table lays out: an absent octet reads 0, and
+/// writing one past the end adds octets of 0 up to it.
+impl oxirush_utils::fields::Storage for Octets {
+    #[inline]
+    fn octet(&self, at: usize) -> u8 {
+        self.get(at).copied().unwrap_or(0)
+    }
+
+    #[inline]
+    fn set_octet(&mut self, at: usize, value: u8) {
+        if self.len() <= at {
+            self.resize(at + 1, 0);
+        }
+        self[at] = value;
+    }
+}
+
 impl Default for Octets {
     fn default() -> Self {
         Self::new()

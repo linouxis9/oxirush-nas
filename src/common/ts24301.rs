@@ -26,6 +26,7 @@
 //! and octets beyond those defined are ignored. Sender-side rules are
 //! checked by `is_well_formed()`.
 
+use crate::common::field_table::field_row;
 use crate::common::types::AccessTechnologyUtilizationControl;
 use crate::common::types::AuthenticationResponseParameter;
 use crate::common::types::EpsBearerContextStatus;
@@ -1539,20 +1540,18 @@ impl AccessTechnologyUtilizationControl {
     }
 }
 
-crate::common::nas_ie_flags!(AccessTechnologyUtilizationControl {
-    /// GERAN is restricted (octet 4, bit 1).
-    geran_restricted: 1, 1;
-    /// UTRAN is restricted (octet 4, bit 2).
-    utran_restricted: 1, 2;
-    /// E-UTRAN is restricted (octet 4, bit 3).
-    eutran_restricted: 1, 3;
-    /// NG-RAN is restricted (octet 4, bit 4).
-    ng_ran_restricted: 1, 4;
-    /// Satellite E-UTRAN is restricted (octet 4, bit 5).
-    sat_eutran_restricted: 1, 5;
-    /// Satellite NG-RAN is restricted (octet 4, bit 6).
-    sat_ng_ran_restricted: 1, 6;
-});
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl AccessTechnologyUtilizationControl (value) "9.9.3.3A" octets 3 {
+        geran_restricted "GERAN": 1 1 1,
+        utran_restricted "UTRAN": 1 2 1,
+        eutran_restricted "E-UTRAN": 1 3 1,
+        ng_ran_restricted "NG-RAN": 1 4 1,
+        sat_eutran_restricted "Sat-E-UTRAN": 1 5 1,
+        sat_ng_ran_restricted "Sat-NG-RAN": 1 6 1,
+    }
+}
+crate::common::field_table::table_ie!(AccessTechnologyUtilizationControl, octets, 2..=3, receives 0, trailing);
 
 impl AccessTechnologyUtilizationControl {
     /// Build a restriction list with octets 3 and 4: the bitmap has

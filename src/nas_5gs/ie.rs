@@ -3497,235 +3497,96 @@ const FGMM_CAPABILITY_SPARE_ONLY_START_INDEX: usize = 11;
 
 // Flag accessors: the value octet index (0 is octet 3 on the wire) and
 // the bit as numbered in TS 24.501 §9.11.3.1 (bit 8 is the most significant).
-crate::common::nas_ie_flags!(GmmCapability {
-    // ──────────────────────────────────────────────────────────────────
-    // Octet 3 on the wire (index 0 in `value`) — TS 24.501 §9.11.3.1
-    // Bit 8 = MSB (mask 0x80), Bit 1 = LSB (mask 0x01).
-    // ──────────────────────────────────────────────────────────────────
-
-    /// SGC — Service gap control (octet 3 bit 8, mask 0x80).
-    sgc: 0, 8;
-    /// 5G-IPHC-CP CIoT — IP header compression for CP CIoT (octet 3 bit 7, mask 0x40).
-    iphc_cp_ciot: 0, 7;
-    /// N3 data as sent (octet 3 bit 6, mask 0x20): `true` means N3 data
-    /// transfer is not supported, which [`Self::n3_data`] reads.
-    n3_data_not_supported: 0, 6;
-    /// 5G-CP CIoT — Control plane CIoT 5GS optimisation (octet 3 bit 5, mask 0x10).
-    cp_ciot: 0, 5;
-    /// RestrictEC — Restriction on use of enhanced coverage (octet 3 bit 4, mask 0x08).
-    restrict_ec: 0, 4;
-    /// LPP — LTE Positioning Protocol capability (octet 3 bit 3, mask 0x04).
-    lpp: 0, 3;
-    /// HO attach (octet 3 bit 2, mask 0x02).
-    ho_attach: 0, 2;
-    /// S1 mode — EPC NAS supported (octet 3 bit 1, mask 0x01).
-    s1_mode: 0, 1;
-
-    // ──────────────────────────────────────────────────────────────────
-    // Octet 4 on the wire (index 1) — Rel-16
-    // ──────────────────────────────────────────────────────────────────
-
-    /// RACS — Radio Capability Signalling optimisation (octet 4 bit 8, mask 0x80).
-    racs: 1, 8;
-    /// NSSAA — Network Slice-Specific Authentication and Authorization (octet 4 bit 7, mask 0x40).
-    nssaa: 1, 7;
-    /// 5G-LCS — 5G location services (octet 4 bit 6, mask 0x20).
-    lcs_5g: 1, 6;
-    /// V2XCNPC5 — V2X communication over NR PC5 (octet 4 bit 5, mask 0x10).
-    v2x_cnpc5: 1, 5;
-    /// V2XCEPC5 — V2X communication over E-UTRA PC5 (octet 4 bit 4, mask 0x08).
-    v2x_cepc5: 1, 4;
-    /// V2X — V2X capability (octet 4 bit 3, mask 0x04).
-    v2x: 1, 3;
-    /// 5G-UP CIoT — user-plane CIoT 5GS optimisation (octet 4 bit 2, mask 0x02).
-    up_ciot: 1, 2;
-    /// 5GSRVCC — 5G SRVCC from NG-RAN to UTRAN (octet 4 bit 1, mask 0x01).
-    srvcc_5g: 1, 1;
-
-    // ──────────────────────────────────────────────────────────────────
-    // Octet 5 on the wire (index 2) — Rel-16/17
-    // ──────────────────────────────────────────────────────────────────
-
-    /// 5G ProSe L2 Relay (octet 5 bit 8, mask 0x80).
-    prose_l2_relay: 2, 8;
-    /// 5G ProSe direct communication (octet 5 bit 7, mask 0x40).
-    prose_dc: 2, 7;
-    /// 5G ProSe direct discovery (octet 5 bit 6, mask 0x20).
-    prose_dd: 2, 6;
-    /// ER-NSSAI — Extended rejected NSSAI (octet 5 bit 5, mask 0x10).
-    er_nssai: 2, 5;
-    /// 5G-EHC CP CIoT — Ethernet header compression for CP CIoT (octet 5 bit 4, mask 0x08).
-    ehc_cp_ciot: 2, 4;
-    /// Multiple UP — Multiple user-plane resources (octet 5 bit 3, mask 0x04).
-    multiple_up: 2, 3;
-    /// WUSA — WUS assistance information supported (octet 5 bit 2, mask 0x02).
-    wusa: 2, 2;
-    /// CAG — Closed Access Group (octet 5 bit 1, mask 0x01).
-    cag: 2, 1;
-
-    // ──────────────────────────────────────────────────────────────────
-    // Octet 6 on the wire (index 3) — Rel-17
-    // ──────────────────────────────────────────────────────────────────
-
-    /// PR — Paging restriction (octet 6 bit 8, mask 0x80).
-    pr: 3, 8;
-    /// RPR — Reject paging request (octet 6 bit 7, mask 0x40).
-    rpr: 3, 7;
-    /// PIV — Periodic registration update timer enhanced value (octet 6 bit 6, mask 0x20).
-    piv: 3, 6;
-    /// NCR — Non-cellular Capability Restriction (octet 6 bit 5, mask 0x10).
-    ncr: 3, 5;
-    /// NR-PSSI — NR positioning SIB types (octet 6 bit 4, mask 0x08).
-    nr_pssi: 3, 4;
-    /// 5G ProSe L3 Remote (octet 6 bit 3, mask 0x04).
-    prose_l3_remote: 3, 3;
-    /// 5G ProSe L2 Remote (octet 6 bit 2, mask 0x02).
-    prose_l2_remote: 3, 2;
-    /// 5G ProSe L3 Relay (octet 6 bit 1, mask 0x01).
-    prose_l3_relay: 3, 1;
-
-    // ──────────────────────────────────────────────────────────────────
-    // Octet 7 on the wire (index 4) — Rel-17
-    // ──────────────────────────────────────────────────────────────────
-
-    /// MPSIU — Multimedia priority service in inter-PLMN scenarios (octet 7 bit 8, mask 0x80).
-    mpsiu: 4, 8;
-    /// UAS — Uncrewed Aerial Systems services (octet 7 bit 7, mask 0x40).
-    uas: 4, 7;
-    /// NSAG — Network Slice AS Group (octet 7 bit 6, mask 0x20).
-    nsag: 4, 6;
-    /// Ex-CAG — Extended CAG information (octet 7 bit 5, mask 0x10).
-    ex_cag: 4, 5;
-    /// SSNPNSI — Subscribed SNPN signalling (octet 7 bit 4, mask 0x08).
-    ssnpnsi: 4, 4;
-    /// Event notification (octet 7 bit 3, mask 0x04).
-    event_notification: 4, 3;
-    /// MINT — Minimization of service interruption (octet 7 bit 2, mask 0x02).
-    mint: 4, 2;
-    /// NSSRG — Network Slice Simultaneous Registration Group (octet 7 bit 1, mask 0x01).
-    nssrg: 4, 1;
-
-    // ──────────────────────────────────────────────────────────────────
-    // Octet 8 on the wire (index 5) — Rel-17/18
-    // ──────────────────────────────────────────────────────────────────
-
-    /// SBTS — Satellite NR access (octet 8 bit 8, mask 0x80).
-    sbts: 5, 8;
-    /// NSR — Non-satellite roaming (octet 8 bit 7, mask 0x40).
-    nsr: 5, 7;
-    /// LADN-DS — LADN data structure (octet 8 bit 6, mask 0x20).
-    ladn_ds: 5, 6;
-    /// RAN timing synchronisation (octet 8 bit 5, mask 0x10).
-    ran_timing: 5, 5;
-    /// ECI — Enhanced coverage indicator (octet 8 bit 4, mask 0x08).
-    eci: 5, 4;
-    /// ESI — Emergency services indicator (octet 8 bit 3, mask 0x04).
-    esi: 5, 3;
-    /// RcMan — Reachability via congested mobile-terminated access (octet 8 bit 2, mask 0x02).
-    rcman: 5, 2;
-    /// RcMap — Reachability via congested mobile-terminated access policy (octet 8 bit 1, mask 0x01).
-    rcmap: 5, 1;
-
-    // ──────────────────────────────────────────────────────────────────
-    // Octet 9 on the wire (index 6) — Rel-18
-    // ──────────────────────────────────────────────────────────────────
-
-    /// 5G ProSe Layer-2 endpoint (octet 9 bit 8, mask 0x80).
-    prose_l2_endpoint: 6, 8;
-    /// 5G ProSe Layer-3 UE-to-UE relay (octet 9 bit 7, mask 0x40).
-    prose_l3_u2u_relay: 6, 7;
-    /// 5G ProSe Layer-2 UE-to-UE relay (octet 9 bit 6, mask 0x20).
-    prose_l2_u2u_relay: 6, 6;
-    /// RSLPS — Ranging and SideLink Positioning Service (octet 9 bit 5, mask 0x10).
-    rslps: 6, 5;
-    /// SBNS — Satellite-based NB-IoT NAS support (octet 9 bit 4, mask 0x08).
-    sbns: 6, 4;
-    /// UN-PER — UAS NF periodic reporting (octet 9 bit 3, mask 0x04).
-    un_per: 6, 3;
-    /// A2X NPC5 — A2X over NR PC5 (octet 9 bit 2, mask 0x02).
-    a2x_npc5: 6, 2;
-    /// A2X EPC5 — A2X over E-UTRA PC5 (octet 9 bit 1, mask 0x01).
-    a2x_epc5: 6, 1;
-
-    // ──────────────────────────────────────────────────────────────────
-    // Octet 10 on the wire (index 7) — Rel-18
-    // ──────────────────────────────────────────────────────────────────
-
-    /// A2X over Uu (octet 10 bit 8, mask 0x80).
-    a2x_uu: 7, 8;
-    /// SLVI — Sidelink V2X (octet 10 bit 7, mask 0x40).
-    slvi: 7, 7;
-    /// TempNS — Temporary network slice (octet 10 bit 6, mask 0x20).
-    temp_ns: 7, 6;
-    /// SUPL — Secure User-Plane Location (octet 10 bit 5, mask 0x10).
-    supl: 7, 5;
-    /// LCS-UPP — Location Services User-Plane Positioning (octet 10 bit 4, mask 0x08).
-    lcs_upp: 7, 4;
-    /// PNS — Positioning NAS support (octet 10 bit 3, mask 0x04).
-    pns: 7, 3;
-    /// RSLP — Ranging and SideLink Positioning (octet 10 bit 2, mask 0x02).
-    rslp: 7, 2;
-    /// 5G ProSe Layer-3 endpoint (octet 10 bit 1, mask 0x01).
-    prose_l3_endpoint: 7, 1;
-
-    // ──────────────────────────────────────────────────────────────────
-    // Octet 11 on the wire (index 8) — Rel-18
-    // ──────────────────────────────────────────────────────────────────
-
-    /// LP-WUS-PSAI — Low-power Wake-Up Signal paging subgroup assistance info (octet 11 bit 8).
-    lp_wus_psai: 8, 8;
-    /// ATUC — Anchor TS UDM connection (octet 11 bit 7, mask 0x40).
-    atuc: 8, 7;
-    /// RSLPPU — Ranging and SideLink Positioning protocol over user plane (octet 11 bit 6).
-    rslppu: 8, 6;
-    /// RSLPVU — RSLP via UE (octet 11 bit 5, mask 0x10).
-    rslpvu: 8, 5;
-    /// NSUC — Network Slice Usage Control (octet 11 bit 4, mask 0x08).
-    nsuc: 8, 4;
-    /// RSLPL — RSLP via location services (octet 11 bit 3, mask 0x04).
-    rslpl: 8, 3;
-    /// NVL-SatNR — NVL satellite NR (octet 11 bit 2, mask 0x02).
-    nvl_satnr: 8, 2;
-    /// MCSIU — Mission Critical Service interruption (octet 11 bit 1, mask 0x01).
-    mcsiu: 8, 1;
-
-    // ──────────────────────────────────────────────────────────────────
-    // Octet 12 on the wire (index 9) — Rel-18
-    // ──────────────────────────────────────────────────────────────────
-
-    /// LWD — Localised wireless data (octet 12 bit 8, mask 0x80).
-    lwd: 9, 8;
-    /// EF5L — Extended five-letter feature (octet 12 bit 7, mask 0x40).
-    ef5l: 9, 7;
-    /// MINT-EPS — Minimization of service interruption in EPS (octet 12 bit 6, mask 0x20).
-    mint_eps: 9, 6;
-    /// 5G ProSe Layer-2 IP-mode relay (octet 12 bit 5, mask 0x10).
-    prose_l2_im_relay: 9, 5;
-    /// 5G ProSe Layer-3 IP-mode relay (octet 12 bit 4, mask 0x08).
-    prose_l3_im_relay: 9, 4;
-    /// MLCSUP — Multi-link sidelink user plane (octet 12 bit 3, mask 0x04).
-    mlcsup: 9, 3;
-    /// 5G ProSe MCI — ProSe MC indication (octet 12 bit 2, mask 0x02).
-    prose_mci: 9, 2;
-    /// OPHPAE — Operator policies for home PLMN access (octet 12 bit 1, mask 0x01).
-    ophpae: 9, 1;
-
-    // ──────────────────────────────────────────────────────────────────
-    // Octet 13 on the wire (index 10). TS 24.501 V19.8.0 defines bits 1
-    // and 4; bits 2 and 3 are Release 20 (V20.1.0) and spare in V19.8.0.
-    // ──────────────────────────────────────────────────────────────────
-
-    /// Non-satellite lower PLMN selection (octet 13 bit 1).
-    non_sat_lsp: 10, 1;
-    /// NSSAA over EPC support (octet 13 bit 2). Release 20 (TS 24.501
-    /// V20.1.0): the bit is spare in V19.8.0.
-    nssaa_epc: 10, 2;
-    /// AIoT UE reader capability (octet 13 bit 3). Release 20 (TS 24.501
-    /// V20.1.0): the bit is spare in V19.8.0.
-    aiot_ue_reader: 10, 3;
-    /// Location service continuity for deferred location (octet 13 bit 4).
-    lcscdl: 10, 4;
-});
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl GmmCapability (value) "9.11.3.1" octets 13 {
+        sgc "SGC": 0 8 1,
+        iphc_cp_ciot "5G-IPHC-CP CIoT": 0 7 1,
+        n3_data_not_supported "N3 data": 0 6 1,
+        cp_ciot "5G-CP CIoT": 0 5 1,
+        restrict_ec "RestrictEC": 0 4 1,
+        lpp "LPP": 0 3 1,
+        ho_attach "HO attach": 0 2 1,
+        s1_mode "S1 mode": 0 1 1,
+        racs "RACS": 1 8 1,
+        nssaa "NSSAA": 1 7 1,
+        lcs_5g "5G-LCS": 1 6 1,
+        v2x_cnpc5 "V2XCNPC5": 1 5 1,
+        v2x_cepc5 "V2XCEPC5": 1 4 1,
+        v2x "V2X-Uu": 1 3 1,
+        up_ciot "5G-UP CIoT": 1 2 1,
+        srvcc_5g "5GSRVCC": 1 1 1,
+        prose_l2_relay "5G ProSe-l2relay": 2 8 1,
+        prose_dc "5G ProSe-dc": 2 7 1,
+        prose_dd "5G ProSe-dd": 2 6 1,
+        er_nssai "ER-NSSAI": 2 5 1,
+        ehc_cp_ciot "5G-EHC-CP CIoT": 2 4 1,
+        multiple_up "multipleUP": 2 3 1,
+        wusa "WUSA": 2 2 1,
+        cag "CAG": 2 1 1,
+        pr "PR": 3 8 1,
+        rpr "RPR": 3 7 1,
+        piv "PIV": 3 6 1,
+        ncr "NCR": 3 5 1,
+        nr_pssi "NR-PSSI": 3 4 1,
+        prose_l3_remote "5G ProSe-l3rmt": 3 3 1,
+        prose_l2_remote "5G ProSe-l2rmt": 3 2 1,
+        prose_l3_relay "5G ProSe-l3relay": 3 1 1,
+        mpsiu "MPSIU": 4 8 1,
+        uas "UAS": 4 7 1,
+        nsag "NSAG": 4 6 1,
+        ex_cag "Ex-CAG": 4 5 1,
+        ssnpnsi "SSNPNSI": 4 4 1,
+        event_notification "EventNotification": 4 3 1,
+        mint "MINT": 4 2 1,
+        nssrg "NSSRG": 4 1 1,
+        sbts "SBTS": 5 8 1,
+        nsr "NSR": 5 7 1,
+        ladn_ds "LADN-DS": 5 6 1,
+        ran_timing "RAN timing": 5 5 1,
+        eci "ECI": 5 4 1,
+        esi "ESI": 5 3 1,
+        rcman "RCMAN": 5 2 1,
+        rcmap "RCMAP": 5 1 1,
+        prose_l2_endpoint "5G ProSe-l2end": 6 8 1,
+        prose_l3_u2u_relay "5G ProSe-l3U2U relay": 6 7 1,
+        prose_l2_u2u_relay "5G ProSe-l2U2U relay": 6 6 1,
+        rslps "RSLPS": 6 5 1,
+        sbns "SBNS": 6 4 1,
+        un_per "UN-PER": 6 3 1,
+        a2x_npc5 "A2XNPC5": 6 2 1,
+        a2x_epc5 "A2XEPC5": 6 1 1,
+        a2x_uu "A2X-Uu": 7 8 1,
+        slvi "SLVI": 7 7 1,
+        temp_ns "TempNS": 7 6 1,
+        supl "SUPL": 7 5 1,
+        lcs_upp "LCS-UPP": 7 4 1,
+        pns "PNS": 7 3 1,
+        rslp "RSLP": 7 2 1,
+        prose_l3_endpoint "5G ProSe-l3end": 7 1 1,
+        lp_wus_psai "LP-WUSPSAI-SI": 8 8 1,
+        atuc "ATUC": 8 7 1,
+        rslppu "RSLPPU": 8 6 1,
+        rslpvu "RSLPVU": 8 5 1,
+        nsuc "NSUC": 8 4 1,
+        rslpl "RSLPL": 8 3 1,
+        nvl_satnr "NVL-SATNR": 8 2 1,
+        mcsiu "MCSIU": 8 1 1,
+        lwd "LWD": 9 8 1,
+        ef5l "EF5L": 9 7 1,
+        mint_eps "MINT-EPS": 9 6 1,
+        prose_l2_im_relay "5G ProSe-L2IMrelay": 9 5 1,
+        prose_l3_im_relay "5G ProSe-L3IMrelay": 9 4 1,
+        mlcsup "MLCSUP": 9 3 1,
+        prose_mci "5G ProSe-MCI": 9 2 1,
+        ophpae "OPHPAE": 9 1 1,
+        non_sat_lsp "NonSATLSP": 10 1 1,
+        nssaa_epc "NSSAA-EPC": 10 2 1,
+        aiot_ue_reader "AIoTUR": 10 3 1,
+        lcscdl "LCSCDL": 10 4 1,
+    }
+}
+crate::common::field_table::table_ie!(GmmCapability, octets, 1..=13, receives 0, trailing);
 
 impl GmmCapability {
     // ──────────────────────────────────────────────────────────────────
@@ -4699,13 +4560,14 @@ impl UplinkDataStatus {
     }
 }
 
-crate::common::nas_ie_flags!(ReAttemptIndicator {
-    /// Whether retry in the current cell/tracking area is forbidden
-    /// (TS 24.008 §10.5.5.30, bit 1).
-    ratc_not_allowed: 0, 1;
-    /// Whether retry in an equivalent PLMN is forbidden (bit 2).
-    eplmnc_not_allowed: 0, 2;
-});
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl ReAttemptIndicator (value) "9.11.4.17" octets 1 {
+        ratc_not_allowed "RATC": 0 1 1,
+        eplmnc_not_allowed "EPLMNC": 0 2 1,
+    }
+}
+crate::common::field_table::table_ie!(ReAttemptIndicator, octets, 1..=1, receives 0, trailing);
 
 impl ReAttemptIndicator {
     /// Build from spec-polarity flags: `eplmnc_not_allowed`, `ratc_not_allowed`.

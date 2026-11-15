@@ -23,6 +23,7 @@
 //! checks sender rules.
 
 use crate::common::Plmn;
+use crate::common::field_table::field_row;
 use crate::common::types::ListOfPlmnsToBeUsedInDisasterCondition;
 use crate::common::types::PlmnIdentity;
 use crate::common::types::RegistrationWaitRange;
@@ -32,12 +33,14 @@ use crate::common::types::UeStatus;
 use crate::prelude::*;
 
 // UE status (TS 24.501 §9.11.3.56; TS 24.301 §9.9.3.54).
-crate::common::nas_ie_flags!(UeStatus {
-    /// S1 mode registration status: EMM-REGISTERED (octet 3, bit 1).
-    s1_mode_reg: 0, 1;
-    /// N1 mode registration status: 5GMM-REGISTERED (octet 3, bit 2).
-    n1_mode_reg: 0, 2;
-});
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl UeStatus (value) "9.11.3.56" octets 1 {
+        s1_mode_reg "S1 mode reg": 0 1 1,
+        n1_mode_reg "N1 mode reg": 0 2 1,
+    }
+}
+crate::common::field_table::table_ie!(UeStatus, octets, 1..=1, receives 0, trailing);
 
 impl UeStatus {
     /// Build from both registration states with the spare bits clear.

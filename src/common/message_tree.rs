@@ -3132,7 +3132,6 @@ macro_rules! shared_ies {
                 ie.set_key_set_identifier(identifier).map(|()| ie)
             }
         );
-        fields_ie!(ReAttemptIndicator {} flags);
     };
 }
 
@@ -3301,10 +3300,6 @@ mod shared_types {
         |ie| Some(numbers(&ie.active_bearers())),
         |_, bearers| EpsBearerContextStatus::from_bearers(&octets("eps-bearer-identity", &bearers, 1, 15)?)
     );
-    fields_ie!(UeStatus {} flags);
-    fields_ie!(Non3GppNwProvidedPolicies {} flags);
-    fields_ie!(MobileStationClassmark2 {} flags);
-    fields_ie!(AccessTechnologyUtilizationControl {} flags);
     decoded_ie!(
         ExtendedEmergencyNumberList: crate::common::message_tree::ExtendedEmergencyNumbers,
         |ie| {

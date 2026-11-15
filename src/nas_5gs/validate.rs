@@ -82,7 +82,7 @@ crate::common::ie_rules! {
     ExtendedLadnInformation: lengths(0, 1784);
     ExtendedRejectedNssai: lengths(3, 88), sender, receiver;
     FeatureAuthorizationIndication: lengths(1, 255);
-    GmmCapability: lengths(1, 13);
+    GmmCapability: lengths(1, 13), sender_table;
     GmmCause: display;
     GsmCapability: lengths(1, 13);
     GsmCause: display;

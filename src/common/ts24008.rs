@@ -23,6 +23,7 @@
 //! protocol that uses the grammar. Typed getters follow the receiver rules
 //! of TS 24.007 §11.1.4 and §11.4.2; `is_well_formed()` checks sender rules.
 
+use crate::common::field_table::field_row;
 use crate::common::types::AuthenticationFailureParameter;
 use crate::common::types::AuthenticationParameterAutn;
 use crate::common::types::AuthenticationParameterRand;
@@ -566,10 +567,13 @@ impl ImeisvRequest {
 // ── Non-3GPP NW provided policies (§10.5.5.37) ───────────────────────────────
 
 // Non-3GPP NW provided policies (TS 24.008 §10.5.5.37), a type 1 IE.
-crate::common::nas_ie_flags!(Non3GppNwProvidedPolicies half_octet {
-    /// N3EN: use of non-3GPP emergency numbers permitted (bit 1).
-    n3en: 1;
-});
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl Non3GppNwProvidedPolicies (value) "10.5.5.37" octets 1 {
+        n3en "N3EN indicator": 0 1 1,
+    }
+}
+crate::common::field_table::table_ie!(Non3GppNwProvidedPolicies, octet, 1..=1, receives 1);
 
 impl Non3GppNwProvidedPolicies {
     /// Build from the N3EN indicator with spare bits clear.
@@ -591,34 +595,25 @@ oxirush_utils::named_values! {
 crate::common::enums::values_readable!(MsRevisionLevel);
 
 // Mobile station classmark 2 (TS 24.008 §10.5.1.6): three value octets.
-crate::common::nas_ie_flags!(MobileStationClassmark2 {
-    /// ES IND: controlled early classmark sending (octet 3, bit 5).
-    es_ind: 0, 5;
-    /// PS capability (octet 4, bit 7).
-    ps_capability: 1, 7;
-    /// SM capability: mobile terminated point-to-point SMS (octet 4, bit 4).
-    sm_capability: 1, 4;
-    /// VBS notification reception (octet 4, bit 3).
-    vbs: 1, 3;
-    /// VGCS notification reception (octet 4, bit 2).
-    vgcs: 1, 2;
-    /// Frequency capability (octet 4, bit 1).
-    fc: 1, 1;
-    /// Classmark 3 options are supported (octet 5, bit 8).
-    cm3: 2, 8;
-    /// LCS value added location request notification (octet 5, bit 6).
-    lcsva_cap: 2, 6;
-    /// UCS2 treatment (octet 5, bit 5); an absent octet reads as 0.
-    ucs2: 2, 5;
-    /// SoLSA (octet 5, bit 4).
-    solsa: 2, 4;
-    /// CM service prompt (octet 5, bit 3).
-    cmsp: 2, 3;
-    /// A5/3 available (octet 5, bit 2).
-    a53: 2, 2;
-    /// A5/2 bit as sent (octet 5, bit 1); the network accepts any value.
-    a52: 2, 1;
-});
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl MobileStationClassmark2 (value) "10.5.1.6" octets 3 {
+        es_ind "ES-IND": 0 5 1,
+        ps_capability "PS-CAPABILITY": 1 7 1,
+        sm_capability "SM-CAPABILITY": 1 4 1,
+        vbs "VBS": 1 3 1,
+        vgcs "VGCS": 1 2 1,
+        fc "FC": 1 1 1,
+        cm3 "CM3": 2 8 1,
+        lcsva_cap "LCSVA CAP": 2 6 1,
+        ucs2 "UCS2": 2 5 1,
+        solsa "SoLSA": 2 4 1,
+        cmsp "CMSP": 2 3 1,
+        a53 "A5/3": 2 2 1,
+        a52 "A5/2": 2 1 1,
+    }
+}
+crate::common::field_table::table_ie!(MobileStationClassmark2, octets, 3..=3, receives 0, trailing);
 
 impl MobileStationClassmark2 {
     /// Revision level (octet 3, bits 7-6) with the receiver rule applied.

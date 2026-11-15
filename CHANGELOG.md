@@ -37,6 +37,14 @@ All notable changes to `oxirush-nas` are recorded here.
 
 - The tree of a message holds the names of its members and of the variants
   of its values without copying them, with oxirush-utils at 8f0b227.
+- Thirteen IE types of flags alone (5GMM capability, UE status, the
+  re-attempt indicators, non-3GPP NW provided policies, mobile station
+  classmark 2, access technology utilization control, MS network capability,
+  device properties, WLAN offload acceptability, network policy, MS network
+  feature support, the EPS additional information requested) come from the
+  tables of their figures: their setters return `&mut Self`, and each has
+  `spare_bits_are_zero()`. `validate()` reports spare bits set in a 5GMM
+  capability.
 - Every table of values (102, of TS 24.501, TS 24.301 and TS 24.008) is a
   table of `named_values!` of oxirush-utils, as `RegistrationTypeValue` is:
   `Other(u8)`, `from_value()`, `named()`, `value()`, `name()`, `tree_name()`
