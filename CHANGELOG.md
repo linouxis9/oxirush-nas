@@ -37,6 +37,11 @@ All notable changes to `oxirush-nas` are recorded here.
 
 - The tree of a message holds the names of its members and of the variants
   of its values without copying them, with oxirush-utils at 8f0b227.
+- The EPS additional update type, voice domain preference and UE's usage
+  setting, T3412 extended value, DRX parameter, UE radio capability ID request
+  and the truncated 5G-S-TMSI configuration come from tables. Their getters
+  return the field as the IE has it, not an `Option`, and a reserved value is
+  shown in a tree by its number.
 - Twenty-eight indications of one to four flags of TS 24.501 and TS 24.301
   (MICO indication, network slicing indication, priority indicator, extended
   EMM cause, and the others) come from tables: each flag has a setter that

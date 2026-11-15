@@ -1148,15 +1148,6 @@ fields_ie!(SecurityAlgorithms {
 });
 
 // The flags of an indication, by the names of its accessors.
-built_ie!(
-    AdditionalUpdateType,
-    |sms_only, signalling_active, ciot| Ok(Self::from_fields(sms_only, signalling_active, ciot)),
-    {
-        sms_only: bool,
-        signalling_active: bool,
-        preferred_ciot_behavior: PreferredCiotBehavior = |ie| ie.preferred_ciot_behavior(),
-    }
-);
 built_ie!(ConnectivityType, |lipa| Ok(Self::from_lipa(lipa)), { is_lipa: bool });
 built_ie!(ControlPlaneOnlyIndication, Self::from_cpoi, { cpoi: bool });
 built_ie!(CsfbResponse, |accepted| Ok(Self::from_accepted(accepted)), {
@@ -1181,39 +1172,12 @@ built_ie!(
     |available| Ok(Self::from_available(available)),
     { is_available: bool = |ie| ie.is_available() }
 );
-built_ie!(
-    UeRadioCapabilityIdRequest,
-    |requested| Ok(Self::from_requested(requested)),
-    { is_requested: bool = |ie| ie.is_requested() }
-);
-built_ie!(
-    VoiceDomainPreferenceAndUeUsageSetting,
-    |preference, data_centric| Ok(Self::from_fields(preference, data_centric)),
-    {
-        voice_domain_preference: VoiceDomainPreference = |ie| ie.voice_domain_preference(),
-        data_centric: bool = |ie| ie.data_centric(),
-    }
-);
 built_ie!(TransactionIdentifier, Self::from_ti, {
     ti_flag: bool = |ie| ie.ti_flag(),
     ti_value: u8 = |ie| ie.ti_value(),
 });
-built_ie!(DrxParameter, Self::from_fields, {
-    split_pg_cycle_code: u8 = |ie| ie.split_pg_cycle_code(),
-    s1_drx_value: S1DrxValue = |ie| ie.s1_drx_value(),
-    split_on_ccch: bool = |ie| ie.split_on_ccch(),
-    non_drx_timer: u8 = |ie| ie.non_drx_timer(),
-});
 // The unit of the extended T3412 value says whether the IE counts at all,
 // so it reads with the count and not as seconds.
-built_ie!(
-    T3412ExtendedValue,
-    Self::from_unit_value,
-    {
-        unit: GprsTimer3Unit = |ie| ie.unit(),
-        timer_value: u8 = |ie| ie.timer_value(),
-    }
-);
 
 /// The algorithms an octet of a capability has the bits of, by number.
 fn supported<T>(ie: &T, supports: fn(&T, u8) -> bool, algorithms: u8) -> Vec<u16> {

@@ -42,11 +42,12 @@ pub(crate) struct Row {
     pub(crate) form: Form,
 }
 
-/// How a tree shows a field: a flag, or a value of a table.
+/// How a tree shows a field: a flag, a number, or a value of a table.
 #[cfg(feature = "tree")]
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum Form {
     Flag,
+    Number,
     /// Its name, or the number of a value that the table does not name:
     /// `show` writes the tree of the number, `read` the number of a tree.
     Named {
@@ -57,14 +58,19 @@ pub(crate) enum Form {
 }
 
 impl Row {
+    /// How many bits the field has, in its two parts where it has two.
+    #[cfg(feature = "tree")]
+    pub(crate) const fn bits(&self) -> u8 {
+        match self.next {
+            Some((_, _, width)) => self.width + width,
+            None => self.width,
+        }
+    }
+
     /// The largest number that the field holds.
     #[cfg(feature = "tree")]
     pub(crate) const fn max(&self) -> u16 {
-        let bits = match self.next {
-            Some((_, _, width)) => self.width + width,
-            None => self.width,
-        };
-        ((1u32 << bits) - 1) as u16
+        ((1u32 << self.bits()) - 1) as u16
     }
 
     /// The bits of octet `octet` that the field has.
@@ -176,6 +182,7 @@ mod tree {
             let value = self.get(octets);
             match self.form {
                 Form::Flag => Value::Bool(value != 0),
+                Form::Number => value.into(),
                 Form::Named { show, .. } => show(value),
             }
         }
@@ -188,6 +195,7 @@ mod tree {
                         .map(u16::from)
                         .ok_or_else(|| format!("{value} is not true or false"));
                 }
+                Form::Number => readable::from_value::<u16>(value)?,
                 Form::Named { read, .. } => read(value)?,
             };
             match number <= self.max() {
@@ -203,10 +211,31 @@ mod tree {
         pub(crate) const fn takes(&self) -> &'static Takes {
             match self.form {
                 Form::Flag => &Takes::Flag,
+                Form::Number => NUMBERS[(self.bits() - 1) as usize],
                 Form::Named { takes, .. } => takes,
             }
         }
     }
+
+    /// What a number of 1 to 16 bits takes.
+    const NUMBERS: [&Takes; 16] = [
+        &Takes::Number(1),
+        &Takes::Number(3),
+        &Takes::Number(7),
+        &Takes::Number(15),
+        &Takes::Number(31),
+        &Takes::Number(63),
+        &Takes::Number(127),
+        &Takes::Number(255),
+        &Takes::Number(511),
+        &Takes::Number(1023),
+        &Takes::Number(2047),
+        &Takes::Number(4095),
+        &Takes::Number(8191),
+        &Takes::Number(16383),
+        &Takes::Number(32767),
+        &Takes::Number(65535),
+    ];
 
     impl Table {
         /// The tree of `octets`: each field by its name, in the order of the
@@ -275,7 +304,8 @@ mod tree {
 
 /// A row of `FIELDS` of an IE type, which `bits!` of oxirush-utils writes
 /// once for each field of the table of the type, in the order of its
-/// figure: a flag of one bit, or a value of the table `Kind`. The tree
+/// figure: a flag of one bit, a number, a number of two parts, or a value
+/// of the table `Kind`. The tree
 /// names the field as the code does.
 macro_rules! field_row {
     ($field:ident, $name:literal, $octet:literal, $low:literal, 1, [], []) => {
@@ -288,6 +318,18 @@ macro_rules! field_row {
             next: None,
             #[cfg(feature = "tree")]
             form: $crate::common::field_table::Form::Flag,
+        }
+    };
+    ($field:ident, $name:literal, $octet:literal, $low:literal, $width:tt, [$($octet2:literal $low2:literal $width2:tt)?], []) => {
+        $crate::common::field_table::Row {
+            #[cfg(feature = "tree")]
+            member: $crate::common::names::name!(stringify!($field)),
+            octet: $octet,
+            low: $low,
+            width: $width,
+            next: $crate::common::field_table::field_row!(@next $($octet2 $low2 $width2)?),
+            #[cfg(feature = "tree")]
+            form: $crate::common::field_table::Form::Number,
         }
     };
     ($field:ident, $name:literal, $octet:literal, $low:literal, $width:tt, [], [$kind:ident]) => {
@@ -320,6 +362,8 @@ macro_rules! field_row {
             },
         }
     };
+    (@next) => { None };
+    (@next $octet:literal $low:literal $width:tt) => { Some(($octet, $low, $width)) };
 }
 
 /// The table of an IE type whose fields `bits!` of oxirush-utils lays out

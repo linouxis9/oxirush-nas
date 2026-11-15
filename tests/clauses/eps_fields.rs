@@ -14,13 +14,14 @@ fn a_t3412_extended_value_is_a_unit_and_a_value_of_five_bits() {
     // Table 10.5.163a: the unit in bits 8 to 6, 101 for a minute, and the value in
     // bits 5 to 1
     let timer = T3412ExtendedValue::new(vec![0b101_00011]);
-    assert_eq!(timer.unit(), Some(GprsTimer3Unit::OneMinute));
-    assert_eq!(timer.timer_value(), Some(3));
+    assert_eq!(timer.unit(), GprsTimer3Unit::OneMinute);
+    assert_eq!(timer.timer_value(), 3);
     assert!(timer.is_well_formed());
     let longest = T3412ExtendedValue::new(vec![0b000_11111]);
-    assert_eq!(longest.unit(), Some(GprsTimer3Unit::TenMinutes));
-    assert_eq!(longest.timer_value(), Some(31));
-    assert_eq!(T3412ExtendedValue::new(Vec::new()).timer_value(), None);
+    assert_eq!(longest.unit(), GprsTimer3Unit::TenMinutes);
+    assert_eq!(longest.timer_value(), 31);
+    // An IE without its octet reads as zeros; a receiver takes none (lengths).
+    assert_eq!(T3412ExtendedValue::new(Vec::new()).timer_value(), 0);
     // A sender writes one octet, and not the unit "deactivated" (NOTE 2)
     assert!(!T3412ExtendedValue::new(vec![0b111_00001]).is_well_formed());
     assert!(!T3412ExtendedValue::new(vec![0b001_00001, 0]).is_well_formed());

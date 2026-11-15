@@ -183,23 +183,25 @@ fn a_drx_parameter_has_a_split_pg_cycle_and_the_fields_of_octet_4() {
     // bits 8 to 5, SPLIT on CCCH in bit 4 and the non-DRX timer in bits 3 to 1
     let drx = DrxParameter::new(vec![5, 0x7b]);
     assert_eq!(drx.split_pg_cycle(), Some(5));
-    assert_eq!(drx.s1_drx_value(), Some(S1DrxValue::T64));
-    assert_eq!(drx.s1_drx_value_raw(), Some(7));
-    assert_eq!(drx.split_on_ccch(), Some(true));
-    assert_eq!(drx.non_drx_timer(), Some(3));
+    assert_eq!(drx.s1_drx_value(), S1DrxValue::T64);
+    assert_eq!(drx.s1_drx_value_raw(), 7);
+    assert!(drx.split_on_ccch());
+    assert_eq!(drx.non_drx_timer(), 3);
     let other = DrxParameter::new(vec![64, 0x93]);
     assert_eq!(other.split_pg_cycle(), Some(64));
-    assert_eq!(other.s1_drx_value(), Some(S1DrxValue::T256));
-    assert_eq!(other.s1_drx_value_raw(), Some(9));
-    assert_eq!(other.split_on_ccch(), Some(false));
+    assert_eq!(other.s1_drx_value(), S1DrxValue::T256);
+    assert_eq!(other.s1_drx_value_raw(), 9);
+    assert!(!other.split_on_ccch());
     // Code 0 is 704, codes 65 to 98 those of the table, and the others 1
     assert_eq!(DrxParameter::new(vec![0, 0]).split_pg_cycle(), Some(704));
     assert_eq!(DrxParameter::new(vec![65, 0]).split_pg_cycle(), Some(71));
     assert_eq!(DrxParameter::new(vec![98, 0]).split_pg_cycle(), Some(352));
     assert_eq!(DrxParameter::new(vec![99, 0]).split_pg_cycle(), Some(1));
+    // An IE without its second octet reads it as zeros; a receiver takes none
+    // (lengths)
     let short = DrxParameter::new(vec![5]);
-    assert_eq!(short.s1_drx_value_raw(), None);
-    assert_eq!(short.split_on_ccch(), None);
+    assert_eq!(short.s1_drx_value_raw(), 0);
+    assert!(!short.split_on_ccch());
 }
 
 #[test]
@@ -214,8 +216,8 @@ fn the_voice_domain_preference_is_bits_2_to_1_and_the_usage_setting_bit_3() {
     for (value, preference) in preferences.into_iter().enumerate() {
         for usage in [0, 0x04] {
             let ie = VoiceDomainPreferenceAndUeUsageSetting::new(vec![usage | value as u8]);
-            assert_eq!(ie.voice_domain_preference(), Some(preference));
-            assert_eq!(ie.data_centric(), Some(usage != 0));
+            assert_eq!(ie.voice_domain_preference(), preference);
+            assert_eq!(ie.data_centric(), usage != 0);
             assert_eq!(
                 VoiceDomainPreferenceAndUeUsageSetting::from_fields(preference, usage != 0),
                 ie
@@ -223,8 +225,11 @@ fn the_voice_domain_preference_is_bits_2_to_1_and_the_usage_setting_bit_3() {
         }
     }
     let empty = VoiceDomainPreferenceAndUeUsageSetting::new(Vec::new());
-    assert_eq!(empty.voice_domain_preference(), None);
-    assert_eq!(empty.data_centric(), None);
+    assert_eq!(
+        empty.voice_domain_preference(),
+        VoiceDomainPreference::CsVoiceOnly
+    );
+    assert!(!empty.data_centric());
 }
 
 #[test]
@@ -1496,18 +1501,9 @@ fn the_ue_radio_capability_id_flags_are_their_low_bits() {
         Some(false)
     );
     // UE radio capability ID request: bit 1
-    assert_eq!(
-        UeRadioCapabilityIdRequest::new(vec![0x00]).is_requested(),
-        Some(false)
-    );
-    assert_eq!(
-        UeRadioCapabilityIdRequest::new(vec![0x02]).is_requested(),
-        Some(false)
-    );
-    assert_eq!(
-        UeRadioCapabilityIdRequest::new(vec![0x01]).is_requested(),
-        Some(true)
-    );
+    assert!(!UeRadioCapabilityIdRequest::new(vec![0x00]).is_requested());
+    assert!(!UeRadioCapabilityIdRequest::new(vec![0x02]).is_requested());
+    assert!(UeRadioCapabilityIdRequest::new(vec![0x01]).is_requested());
 }
 
 #[test]

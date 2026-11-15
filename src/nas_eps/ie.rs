@@ -284,45 +284,28 @@ const SPLIT_PG_CYCLES: [u16; 34] = [
     144, 150, 160, 171, 176, 192, 214, 224, 235, 256, 288, 320, 352,
 ];
 
-impl DrxParameter {
-    /// SPLIT PG CYCLE CODE (value octet 1).
-    pub fn split_pg_cycle_code(&self) -> Option<u8> {
-        self.value.first().copied()
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl DrxParameter (value) "10.5.5.6" octets 2 {
+        split_pg_cycle_code "SPLIT PG CYCLE CODE": 0 1 8,
+        s1_drx_value "CN Specific DRX cycle length coefficient and DRX value for S1 mode": 1 5 4 as S1DrxValue,
+        split_on_ccch "SPLIT on CCCH": 1 4 1,
+        non_drx_timer "non-DRX timer": 1 1 3,
     }
+}
+crate::common::field_table::table_ie!(DrxParameter, octets, 2..=2, receives 2);
 
+impl DrxParameter {
     /// SPLIT PG CYCLE: code 0 is 704 (no DRX), and reserved codes are read
     /// as 1.
     pub fn split_pg_cycle(&self) -> Option<u16> {
-        Some(match self.split_pg_cycle_code()? {
+        self.value.first()?;
+        Some(match self.split_pg_cycle_code() {
             0 => 704,
             code @ 1..=64 => u16::from(code),
             code @ 65..=98 => SPLIT_PG_CYCLES[usize::from(code - 65)],
             _ => 1,
         })
-    }
-
-    /// DRX value for S1 mode (value octet 2, bits 8-5), with the receive
-    /// fallback.
-    pub fn s1_drx_value(&self) -> Option<S1DrxValue> {
-        self.value
-            .get(1)
-            .map(|octet| S1DrxValue::from_value(octet >> 4).effective())
-    }
-
-    /// Raw CN specific DRX cycle length coefficient and S1 DRX value.
-    pub fn s1_drx_value_raw(&self) -> Option<u8> {
-        self.value.get(1).map(|octet| octet >> 4)
-    }
-
-    /// SPLIT on CCCH (value octet 2, bit 4).
-    pub fn split_on_ccch(&self) -> Option<bool> {
-        self.value.get(1).map(|octet| octet & 0x08 != 0)
-    }
-
-    /// Non-DRX timer code (value octet 2, bits 3-1): 0 means no non-DRX
-    /// mode, and code n means at most 2^(n-1) seconds.
-    pub fn non_drx_timer(&self) -> Option<u8> {
-        self.value.get(1).map(|octet| octet & 0x07)
     }
 
     /// Build from the fields.
@@ -359,23 +342,16 @@ oxirush_utils::named_values! {
 }
 crate::common::enums::values_readable!(VoiceDomainPreference);
 
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl VoiceDomainPreferenceAndUeUsageSetting (value) "10.5.5.28" octets 1 {
+        voice_domain_preference "Voice domain preference for E-UTRAN": 0 1 2 as VoiceDomainPreference,
+        data_centric "UE's usage setting": 0 3 1,
+    }
+}
+crate::common::field_table::table_ie!(VoiceDomainPreferenceAndUeUsageSetting, octets, 1..=1, receives 1);
+
 impl VoiceDomainPreferenceAndUeUsageSetting {
-    /// Voice domain preference for E-UTRAN (bits 2-1).
-    pub fn voice_domain_preference(&self) -> Option<VoiceDomainPreference> {
-        Some(match self.value.first()? & 0x03 {
-            0 => VoiceDomainPreference::CsVoiceOnly,
-            1 => VoiceDomainPreference::ImsPsVoiceOnly,
-            2 => VoiceDomainPreference::CsVoicePreferred,
-            _ => VoiceDomainPreference::ImsPsVoicePreferred,
-        })
-    }
-
-    /// UE's usage setting (bit 3): `true` for data centric, `false` for
-    /// voice centric.
-    pub fn data_centric(&self) -> Option<bool> {
-        self.value.first().map(|octet| octet & 0x04 != 0)
-    }
-
     /// Build with the spare bits clear.
     pub fn from_fields(preference: VoiceDomainPreference, data_centric: bool) -> Self {
         Self::new(vec![u8::from(data_centric) << 2 | u8::from(preference)])
@@ -4072,6 +4048,15 @@ crate::common::readable::readable!(
 #[cfg(feature = "tree")]
 crate::common::readable::serde_by_readable!(T3412ExtendedTimer);
 
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl T3412ExtendedValue (value) "10.5.7.4a" octets 1 {
+        unit "Unit": 0 6 3 as GprsTimer3Unit,
+        timer_value "Timer value": 0 1 5,
+    }
+}
+crate::common::field_table::table_ie!(T3412ExtendedValue, octets, 1..=1, receives 1);
+
 impl T3412ExtendedValue {
     /// Unit and value of the first value octet; extra octets are ignored.
     pub fn timer(&self) -> Option<(GprsTimer3Unit, u8)> {
@@ -4080,16 +4065,6 @@ impl T3412ExtendedValue {
             GprsTimer3Unit::from_value(octet >> 5).effective(),
             octet & 0x1f,
         ))
-    }
-
-    /// Timer unit.
-    pub fn unit(&self) -> Option<GprsTimer3Unit> {
-        self.timer().map(|(unit, _)| unit)
-    }
-
-    /// Timer value in bits 5-1.
-    pub fn timer_value(&self) -> Option<u8> {
-        self.value.first().map(|octet| octet & 0x1f)
     }
 
     /// Value as interpreted by the UE: unit 110 means 320 hours when the
@@ -4136,7 +4111,7 @@ impl T3412ExtendedValue {
     /// Sender check: exactly one value octet, not using the deactivated unit
     /// (TS 24.008 Table 10.5.163a, NOTE 2).
     pub fn is_well_formed(&self) -> bool {
-        self.value.len() == 1 && self.unit() != Some(GprsTimer3Unit::Deactivated)
+        self.value.len() == 1 && self.unit() != GprsTimer3Unit::Deactivated
     }
 }
 
@@ -4931,12 +4906,15 @@ impl UeRadioCapabilityIdAvailability {
     }
 }
 
-impl UeRadioCapabilityIdRequest {
-    /// Whether the UE radio capability ID is requested (URCIDR, bit 1).
-    pub fn is_requested(&self) -> Option<bool> {
-        self.value.first().map(|octet| octet & 0x01 != 0)
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl UeRadioCapabilityIdRequest (value) "9.9.3.65" octets 1 {
+        is_requested "URCIDR": 0 1 1,
     }
+}
+crate::common::field_table::table_ie!(UeRadioCapabilityIdRequest, octets, 1..=1, receives 1);
 
+impl UeRadioCapabilityIdRequest {
     /// Build with the spare bits clear.
     pub fn from_requested(requested: bool) -> Self {
         Self::new(vec![u8::from(requested)])
@@ -5247,22 +5225,17 @@ impl AdditionalInformationRequested {
 
 pub use crate::common::ts24301::PreferredCiotBehavior;
 
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl AdditionalUpdateType (value) "9.9.3.0B" octets 1 {
+        sms_only "SMS-ONLY": 0 1 1,
+        signalling_active "SIGNALLING-ACTIVE": 0 2 1,
+        preferred_ciot_behavior "PREFERRED-CIOT-BEHAVIOR": 0 3 2 as PreferredCiotBehavior,
+    }
+}
+crate::common::field_table::table_ie!(AdditionalUpdateType, octet, 1..=1, receives 1);
+
 impl AdditionalUpdateType {
-    /// Whether the UE asks for SMS-only service (bit 1).
-    pub fn sms_only(&self) -> bool {
-        self.value & 0x01 != 0
-    }
-
-    /// Whether the NAS signalling connection should remain active (bit 2).
-    pub fn signalling_active(&self) -> bool {
-        self.value & 0x02 != 0
-    }
-
-    /// Preferred CIoT behavior (bits 3–4).
-    pub fn preferred_ciot_behavior(&self) -> Option<PreferredCiotBehavior> {
-        PreferredCiotBehavior::named((self.value >> 2) & 0x03)
-    }
-
     /// Build all three fields in one half octet.
     pub fn from_fields(
         sms_only: bool,
@@ -6551,11 +6524,8 @@ mod tests {
         assert_eq!(drx.split_pg_cycle(), Some(79));
         assert_eq!(DrxParameter::new(vec![99, 0]).split_pg_cycle(), Some(1));
         assert_eq!(DrxParameter::new(vec![0, 0]).split_pg_cycle(), Some(704));
-        assert_eq!(drx.s1_drx_value(), Some(S1DrxValue::NotSpecified));
-        assert_eq!(
-            (drx.split_on_ccch(), drx.non_drx_timer()),
-            (Some(true), Some(3))
-        );
+        assert_eq!(drx.s1_drx_value().effective(), S1DrxValue::NotSpecified);
+        assert_eq!((drx.split_on_ccch(), drx.non_drx_timer()), (true, 3));
         let built = DrxParameter::from_fields(10, S1DrxValue::T128, false, 0).unwrap();
         assert_eq!(built.value, [10, 0x80]);
         assert!(built.is_well_formed() && !drx.is_well_formed());
@@ -6590,10 +6560,7 @@ mod tests {
 
         let availability = UeRadioCapabilityIdAvailability::new(vec![0x05]);
         assert_eq!(availability.is_available(), Some(false));
-        assert_eq!(
-            UeRadioCapabilityIdRequest::from_requested(true).is_requested(),
-            Some(true)
-        );
+        assert!(UeRadioCapabilityIdRequest::from_requested(true).is_requested());
 
         let voice = VoiceDomainPreferenceAndUeUsageSetting::from_fields(
             VoiceDomainPreference::ImsPsVoicePreferred,
@@ -6601,8 +6568,8 @@ mod tests {
         );
         assert_eq!(voice.value, [0x07]);
         assert_eq!(
-            voice.voice_domain_preference(),
-            Some(VoiceDomainPreference::ImsPsVoicePreferred)
+            voice.voice_domain_preference().effective(),
+            VoiceDomainPreference::ImsPsVoicePreferred
         );
 
         let list = SAndFMonitoringList::Present(vec![3, 4]);
@@ -6883,11 +6850,14 @@ mod tests {
         assert!(update.sms_only());
         assert!(update.signalling_active());
         assert_eq!(
-            update.preferred_ciot_behavior(),
-            Some(PreferredCiotBehavior::ControlPlane)
+            update.preferred_ciot_behavior().effective(),
+            PreferredCiotBehavior::ControlPlane
         );
         assert_eq!(
-            AdditionalUpdateType::new(0x0c).preferred_ciot_behavior(),
+            AdditionalUpdateType::new(0x0c)
+                .preferred_ciot_behavior()
+                .effective()
+                .name(),
             None
         );
 

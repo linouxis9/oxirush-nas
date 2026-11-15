@@ -10758,32 +10758,37 @@ impl Nid {
     }
 }
 
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl Truncated5gSTmsiConfiguration (value) "9.11.3.70" octets 1 {
+        truncated_amf_set_id_length "Truncated AMF Set ID value": 0 5 4,
+        truncated_amf_pointer_length "Truncated AMF Pointer value": 0 1 4,
+    }
+}
+crate::common::field_table::table_ie!(Truncated5gSTmsiConfiguration, octets, 1..=1, receives 1);
+
 impl Truncated5gSTmsiConfiguration {
-    /// Raw truncated AMF Set ID length field (bits 8 through 5).
-    pub fn truncated_amf_set_id_length(&self) -> Option<u8> {
-        self.value.first().map(|octet| octet >> 4)
-    }
-
-    /// Raw truncated AMF Pointer length field (bits 4 through 1).
-    pub fn truncated_amf_pointer_length(&self) -> Option<u8> {
-        self.value.first().map(|octet| octet & 0x0f)
-    }
-
     /// Receiver interpretation of the AMF Set ID length.
     pub fn effective_amf_set_id_length(&self) -> Option<u8> {
-        self.truncated_amf_set_id_length().map(|length| {
-            if (1..=10).contains(&length) {
-                length
-            } else {
-                10
-            }
-        })
+        self.value
+            .first()
+            .map(|_| self.truncated_amf_set_id_length())
+            .map(|length| {
+                if (1..=10).contains(&length) {
+                    length
+                } else {
+                    10
+                }
+            })
     }
 
     /// Receiver interpretation of the AMF Pointer length.
     pub fn effective_amf_pointer_length(&self) -> Option<u8> {
-        self.truncated_amf_pointer_length()
-            .map(|length| if (1..=6).contains(&length) { length } else { 6 })
+        (self
+            .value
+            .first()
+            .map(|_| self.truncated_amf_pointer_length()))
+        .map(|length| if (1..=6).contains(&length) { length } else { 6 })
     }
 
     /// Build sender-valid component lengths.
@@ -10844,8 +10849,8 @@ impl Truncated5gSTmsiConfiguration {
     pub fn is_well_formed(&self) -> bool {
         self.value.len() == 1
             && Self::try_from_lengths(
-                self.truncated_amf_set_id_length().unwrap_or(0),
-                self.truncated_amf_pointer_length().unwrap_or(0),
+                self.truncated_amf_set_id_length(),
+                self.truncated_amf_pointer_length(),
             )
             .is_ok_and(|canonical| canonical.value == self.value)
     }
@@ -17325,8 +17330,8 @@ mod tests {
     fn test_truncated_tmsi_config() {
         // TS 24.501 §9.11.3.70: set ID length in upper nibble, pointer length in lower.
         let ie = Truncated5gSTmsiConfiguration::new(vec![(6 << 4) | 4]);
-        assert_eq!(ie.truncated_amf_set_id_length(), Some(6));
-        assert_eq!(ie.truncated_amf_pointer_length(), Some(4));
+        assert_eq!(ie.truncated_amf_set_id_length(), 6);
+        assert_eq!(ie.truncated_amf_pointer_length(), 4);
         assert!(ie.is_well_formed());
         assert_eq!(
             Truncated5gSTmsiConfiguration::try_from_lengths(6, 4),

@@ -12,7 +12,7 @@ use crate::prelude::*;
 use alloc::{format, vec};
 use oxirush_utils::tree::Value;
 
-/// A row of a field: a flag of one bit, or a value of `$kind`.
+/// A row of a field: a flag of one bit, a number, or a value of `$kind`.
 macro_rules! row {
     ($field:ident, $octet:literal, $low:literal, 1) => {
         Row {
@@ -22,6 +22,16 @@ macro_rules! row {
             width: 1,
             next: None,
             form: Form::Flag,
+        }
+    };
+    ($field:ident, $octet:literal, $low:literal, $width:literal) => {
+        Row {
+            member: crate::common::names::name!(stringify!($field)),
+            octet: $octet,
+            low: $low,
+            width: $width,
+            next: None,
+            form: Form::Number,
         }
     };
     ($field:ident, $octet:literal, $low:literal, $width:literal, $kind:ty) => {
@@ -92,6 +102,8 @@ where
     let name = core::any::type_name::<T>();
     let mut differences = Vec::new();
     let mut kept_shorter = Vec::new();
+    let mut shown_by_number = 0;
+    let mut by_number_trees = Vec::new();
     let ies: Vec<(Vec<u8>, T)> = (values.iter())
         .filter_map(|octets| Some((octets.clone(), make(H::of(octets)?))))
         .collect();
@@ -101,14 +113,25 @@ where
             true => table.shown(octets),
             false => Some(table.tree(octets)),
         };
-        if ie.decoded(Scope::NONE) != tree {
+        // Where neither shows a value, the IE is its octets in a tree, whatever
+        // value it decodes to.
+        let neither = ie.shown_value(Scope::NONE).is_none();
+        if !neither && ie.decoded(Scope::NONE) != tree {
             differences.push(format!(
                 "{name} {octets:02x?}: decoded {:?}, table {tree:?}",
                 ie.decoded(Scope::NONE)
             ));
         }
         let mine = table.shown(octets);
-        if ie.shown_value(Scope::NONE) != mine {
+        // A value that the constructor of a built IE refuses, as a reserved code, is
+        // shown by its number, where the IE was its octets: what the tree shows writes
+        // the IE back.
+        let by_number = ie.shown_value(Scope::NONE).is_none() && mine.is_some();
+        if by_number {
+            shown_by_number += 1;
+            by_number_trees.extend(mine.clone());
+        }
+        if !by_number && ie.shown_value(Scope::NONE) != mine {
             differences.push(format!(
                 "{name} {octets:02x?}: shown {:?}, table {mine:?}",
                 ie.shown_value(Scope::NONE)
@@ -160,8 +183,13 @@ where
             if shorter {
                 kept_shorter.push(format!("{name} {tree}: {theirs:02x?} -> {mine:02x?}"));
             }
+            // The tree of a value shown by its number writes it, which the
+            // constructor refused.
+            let written_by_number =
+                theirs.is_err() && mine.is_ok() && by_number_trees.contains(tree);
             if !kept
                 && !shorter
+                && !written_by_number
                 && (theirs.is_ok() != mine.is_ok() || theirs.as_ref().ok() != mine.as_ref().ok())
             {
                 differences.push(format!(
@@ -169,6 +197,9 @@ where
                 ));
             }
         }
+    }
+    if shown_by_number > 0 {
+        std::println!("{name}: {shown_by_number} values shown by number");
     }
     if let Some(first) = kept_shorter.first() {
         std::println!("{} written shorter: {first}", kept_shorter.len());
@@ -267,6 +298,14 @@ fn each_value_that_a_table_shows_writes_its_ie_back() {
     writes_back(crate::nas_eps::EpsUpdateType::new);
     writes_back(crate::nas_eps::ControlPlaneServiceType::new);
     writes_back(crate::nas_eps::DetachType::new);
+    writes_back(crate::nas_eps::AdditionalUpdateType::new);
+    writes_back(|octet| crate::nas_eps::VoiceDomainPreferenceAndUeUsageSetting::new(octets(octet)));
+    writes_back(|octet| crate::nas_eps::T3412ExtendedValue::new(octets(octet)));
+    writes_back(|octet| nas_5gs::Truncated5gSTmsiConfiguration::new(octets(octet)));
+    writes_back(|octet| {
+        crate::nas_eps::DrxParameter::new(crate::common::Octets::from([octet, octet]))
+    });
+    writes_back(|octet| crate::nas_eps::UeRadioCapabilityIdRequest::new(octets(octet)));
     writes_back(|octet| nas_5gs::Additional5gSecurityInformation::new(octets(octet)));
     writes_back(nas_5gs::AdditionalConfigurationIndication::new);
     writes_back(|octet| nas_5gs::AdditionalInformationRequested::new(octets(octet)));

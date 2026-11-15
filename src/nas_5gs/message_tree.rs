@@ -1289,10 +1289,6 @@ built_ie!(
     |hpase, mbsrai| Ok(Self::from_flags(hpase, mbsrai)),
     { hpase: bool, mbsrai: FeatureAuthMbsraiValue = |ie| ie.mbsrai() }
 );
-built_ie!(Truncated5gSTmsiConfiguration, Self::try_from_lengths, {
-    truncated_amf_set_id_length: u8 = |ie| ie.truncated_amf_set_id_length(),
-    truncated_amf_pointer_length: u8 = |ie| ie.truncated_amf_pointer_length(),
-});
 built_ie!(
     Aun3DeviceSecurityKey,
     |askt, key: Vec<u8>| Self::from_typed(askt, &key),
