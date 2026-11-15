@@ -462,13 +462,13 @@ struct Readme;
 
 // What the two systems share. What belongs to one of them is in its module:
 // `nas_5gs::SecurityContext` and `nas_eps::SecurityContext`.
-#[cfg(feature = "security")]
-pub use common::MAX_REPLAY_WINDOW;
 pub use common::{
     Decode, DecodeOptions, Direction, Encode, Error, IeFault, IeName, MAX_IE_VALUE_LENGTH, Octets,
     Result, Severity, UnknownIe, UnknownIes, UnknownIesIter, Validate, ValidationError, ValueError,
     ValueFault,
 };
+#[cfg(feature = "security")]
+pub use common::{MAX_REPLAY_WINDOW, replayed_count};
 /// The COUNT of a NAS security context and the errors of NAS security, of the
 /// `oxirush-security` that this crate is built with.
 #[cfg(feature = "security")]

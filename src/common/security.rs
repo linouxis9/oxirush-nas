@@ -116,6 +116,35 @@ fn clear_stack() {
 /// direction that its replay window can hold: one bit each, in a `u64`.
 pub const MAX_REPLAY_WINDOW: u8 = 64;
 
+/// The NAS COUNT that a received message of `sequence_number` replays, for
+/// a receiver whose next COUNT is `next`, `None` once every COUNT of the
+/// direction was used, as `nas_count()` of a security context gives it: the
+/// highest COUNT below `next`, of the 256 below it, that ends with the
+/// sequence number. A receiver that verifies the message with it, which it
+/// accepted already or skipped, has a replay (TS 24.501 §4.4.3.2, TS 24.301
+/// §4.4.3.2). `None` when no COUNT below `next` ends with it.
+///
+/// ```
+/// use oxirush_nas::{NasCount, replayed_count};
+///
+/// // A receiver that expects COUNT 0x0101: the sequence number 0xff is
+/// // that of COUNT 0x00ff, and 0x01 that of 0x0001
+/// let next = NasCount::new(0x0101).ok();
+/// assert_eq!(replayed_count(next, 0xff), NasCount::new(0x00ff).ok());
+/// assert_eq!(replayed_count(next, 0x01), NasCount::new(0x0001).ok());
+/// assert_eq!(replayed_count(NasCount::new(1).ok(), 0x01), None);
+/// // Once every COUNT was used, the last one ends with 0xff
+/// assert_eq!(replayed_count(None, 0xff), Some(NasCount::MAX));
+/// ```
+pub fn replayed_count(next: Option<NasCount>, sequence_number: u8) -> Option<NasCount> {
+    let highest = match next {
+        Some(next) => next.get().checked_sub(1)?,
+        None => NasCount::MAX.get(),
+    };
+    let count = highest.checked_sub(u32::from((highest as u8).wrapping_sub(sequence_number)))?;
+    NasCount::new(count).ok()
+}
+
 /// The `size` low bits of a `u64`.
 fn low_bits(size: u8) -> u64 {
     match size {
@@ -564,6 +593,24 @@ impl<S: System> Core<S> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The COUNT of the 256 below the next one that ends with a sequence
+    /// number: the one that a received message of it replays.
+    #[test]
+    fn a_replayed_count_is_the_one_below_the_next_of_its_sequence_number() {
+        let count = |value: u32| NasCount::new(value).ok();
+        assert_eq!(replayed_count(count(5), 4), count(4));
+        assert_eq!(replayed_count(count(5), 0), count(0));
+        assert_eq!(replayed_count(count(5), 5), None);
+        assert_eq!(replayed_count(count(5), 0xff), None);
+        assert_eq!(replayed_count(count(0x0101), 0x00), count(0x0100));
+        assert_eq!(replayed_count(count(0x0101), 0x01), count(0x0001));
+        assert_eq!(replayed_count(count(0x0101), 0xff), count(0x00ff));
+        assert_eq!(replayed_count(count(0), 0), None);
+        // Once every COUNT was used, the last one ends with 0xff.
+        assert_eq!(replayed_count(None, 0xff), count(0x00ff_ffff));
+        assert_eq!(replayed_count(None, 0x00), count(0x00ff_ff00));
+    }
 
     /// What this crate computed before it took the arithmetic of
     /// [`NasCount`]: the smallest number at or above `next_expected` whose

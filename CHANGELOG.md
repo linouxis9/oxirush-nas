@@ -6,6 +6,9 @@ All notable changes to `oxirush-nas` are recorded here.
 
 ### Added
 
+- `replayed_count()`: the NAS COUNT that a received message of a sequence
+  number replays, the highest of the 256 below the receiver's next one that
+  ends with it (TS 24.501 and TS 24.301 §4.4.3.2).
 - `ies()` of each message type (`GmmMessageType`, `GsmMessageType`,
   `EmmMessageType`, `EsmMessageType`) gives the rows of the table of its
   message, `IeRow`: the name of each IE as the tree prints it, its IEI, whether
