@@ -110,28 +110,21 @@ impl UeRadioCapabilityId {
     }
 }
 
-crate::common::enums::nas_enum! {
+oxirush_utils::named_values! {
     /// UE radio capability ID deletion request (TS 24.501 Table 9.11.3.69.1).
-    #[non_exhaustive]
-    pub enum RadioCapabilityIdDeletionRequest {
-        /// UE radio capability ID deletion not requested.
-        NotRequested = 0,
-        /// Network-assigned UE radio capability IDs deletion requested.
-        NetworkAssignedDeletion = 1,
-    }
-    received {
-        _ => NotRequested,
+    pub enum RadioCapabilityIdDeletionRequest "Table 9.11.3.69.1" bits 3 others as 0 {
+        0 NotRequested "not requested" tree "not-requested",
+        1 NetworkAssignedDeletion "network assigned deletion" tree "network-assigned-deletion",
     }
 }
+crate::common::enums::values_readable!(RadioCapabilityIdDeletionRequest);
 
 /// UE radio capability ID deletion indication (TS 24.501 §9.11.3.69; TS
 /// 24.301 §9.9.3.61), a type 1 IE.
 impl UeRadioCapabilityIdDeletionIndication {
     /// Deletion request with the UE receive fallback.
     pub fn deletion_request(&self) -> Option<RadioCapabilityIdDeletionRequest> {
-        Some(RadioCapabilityIdDeletionRequest::received(
-            self.value & 0x07,
-        ))
+        Some(RadioCapabilityIdDeletionRequest::from_value(self.value & 0x07).effective())
     }
 
     /// Raw deletion request (bits 3-1).
@@ -141,7 +134,7 @@ impl UeRadioCapabilityIdDeletionIndication {
 
     /// Build from a deletion request with the spare bit clear.
     pub fn from_deletion_request(request: RadioCapabilityIdDeletionRequest) -> Self {
-        Self::new(request as u8)
+        Self::new(u8::from(request))
     }
 
     /// Build from the code of a deletion request, 0 to 7.
@@ -158,7 +151,7 @@ impl UeRadioCapabilityIdDeletionIndication {
 impl RegistrationWaitRange {
     fn wait_seconds(octet: Option<&u8>) -> Option<u64> {
         let octet = *octet?;
-        let unit = Some(crate::common::ts24008::GprsTimerUnit::received(octet >> 5))?;
+        let unit = Some(crate::common::ts24008::GprsTimerUnit::from_value(octet >> 5).effective())?;
         (unit != crate::common::ts24008::GprsTimerUnit::Deactivated)
             .then(|| unit.seconds_multiplier() * u64::from(octet & 0x1f))
     }
@@ -192,11 +185,8 @@ impl RegistrationWaitRange {
     /// Sender check: two octets with defined units and minimum not
     /// above maximum.
     pub fn is_well_formed(&self) -> bool {
-        let defined = |octet: &u8| {
-            crate::common::ts24008::GprsTimerUnit::try_from(octet >> 5)
-                .ok()
-                .is_some()
-        };
+        let defined =
+            |octet: &u8| crate::common::ts24008::GprsTimerUnit::named(octet >> 5).is_some();
         matches!(self.value.as_slice(), [min, max] if defined(min) && defined(max))
             && self.min_seconds() <= self.max_seconds()
     }
@@ -244,7 +234,7 @@ mod tests {
             Some(RadioCapabilityIdDeletionRequest::NotRequested)
         );
         assert_eq!(
-            RadioCapabilityIdDeletionRequest::try_from(deletion.value & 0x07).ok(),
+            RadioCapabilityIdDeletionRequest::named(deletion.value & 0x07),
             None
         );
 
@@ -276,9 +266,7 @@ mod tests {
         for code in 0..=u8::MAX {
             let three = code & 0x07;
             assert_eq!(
-                RadioCapabilityIdDeletionRequest::try_from(code & 0x07)
-                    .ok()
-                    .map(|value| value as u8),
+                RadioCapabilityIdDeletionRequest::named(code & 0x07).map(u8::from),
                 (three < 2).then_some(three)
             );
         }

@@ -1004,13 +1004,13 @@ container_ie!(
 code_ie!(
     EmmCause,
     EmmCauseValue,
-    |ie| EmmCauseValue::try_from(ie.value).ok(),
+    |ie| EmmCauseValue::named(ie.value),
     EmmCause::from_cause
 );
 code_ie!(
     EsmCause,
     EsmCauseValue,
-    |ie| EsmCauseValue::try_from(ie.value).ok(),
+    |ie| EsmCauseValue::named(ie.value),
     EsmCause::from_cause
 );
 code_ie!(
@@ -1101,7 +1101,7 @@ code_ie!(
 code_ie!(
     RadioPriority,
     RadioPriorityLevel,
-    |ie| RadioPriorityLevel::try_from(ie.priority_level_raw() & 0x07).ok(),
+    |ie| RadioPriorityLevel::named(ie.priority_level_raw() & 0x07),
     RadioPriority::from_priority_level
 );
 named_ie!(
@@ -1157,7 +1157,7 @@ fields_ie!(ControlPlaneServiceType {
 // The same code names a type of detach in each direction, so both read.
 fields_ie!(DetachType {
     "ue-detach-kind":
-        |ie| Code::of(UeDetachKind::try_from(ie.value & 0x07).ok(), ie.detach_type_raw()),
+        |ie| Code::of(UeDetachKind::named(ie.value & 0x07), ie.detach_type_raw()),
         |ie, code: Code<UeDetachKind>| write_code(
             ie,
             code,
@@ -1167,7 +1167,7 @@ fields_ie!(DetachType {
             |ie| ie.detach_type_raw(),
         );
     "network-detach-kind":
-        |ie| Code::of(NetworkDetachKind::try_from(ie.value & 0x07).ok(), ie.detach_type_raw()),
+        |ie| Code::of(NetworkDetachKind::named(ie.value & 0x07), ie.detach_type_raw()),
         |ie, code: Code<NetworkDetachKind>| write_code(
             ie,
             code,
@@ -1182,22 +1182,22 @@ fields_ie!(DetachType {
 });
 fields_ie!(SecurityAlgorithms {
     "ciphering":
-        |ie| Code::of(CipheringAlgorithm::try_from(ie.ciphering_raw()).ok(), ie.ciphering_raw()),
+        |ie| Code::of(CipheringAlgorithm::named(ie.ciphering_raw()), ie.ciphering_raw()),
         |ie, code: Code<CipheringAlgorithm>| write_code(
             ie,
             code,
             |ie, name| {
-                ie.set_ciphering_raw(name as u8);
+                ie.set_ciphering_raw(u8::from(name));
             },
             |ie| ie.ciphering_raw(),
         );
     "integrity":
-        |ie| Code::of(IntegrityAlgorithm::try_from(ie.integrity_raw()).ok(), ie.integrity_raw()),
+        |ie| Code::of(IntegrityAlgorithm::named(ie.integrity_raw()), ie.integrity_raw()),
         |ie, code: Code<IntegrityAlgorithm>| write_code(
             ie,
             code,
             |ie, name| {
-                ie.set_integrity_raw(name as u8);
+                ie.set_integrity_raw(u8::from(name));
             },
             |ie| ie.integrity_raw(),
         );
@@ -1689,7 +1689,7 @@ decoded_ie!(
     },
     |_, number| {
         let presentation_screening = match (number.presentation, number.screening) {
-            (Some(presentation), Some(screening)) => Some((presentation as u8, screening as u8)),
+            (Some(presentation), Some(screening)) => Some((u8::from(presentation), u8::from(screening))),
             (None, None) => None,
             (Some(_), None) => {
                 let rule = "is written with `screening`: octet 3a has both or neither";
@@ -1701,8 +1701,8 @@ decoded_ie!(
             }
         };
         Cli::from_number(&CallingPartyNumber {
-            type_of_number: number.type_of_number as u8,
-            numbering_plan: number.numbering_plan as u8,
+            type_of_number: u8::from(number.type_of_number),
+            numbering_plan: u8::from(number.numbering_plan),
             presentation_screening,
             digits: number.digits,
         })

@@ -114,4 +114,4 @@ bench = false
 # crate without copying them, are not released yet: every crate of the build takes
 # oxirush-utils from this revision until its next release.
 [patch.crates-io]
-oxirush-utils = { git = "https://github.com/linouxis9/oxirush-utils", rev = "0f94ec72b71dc60df9e0f8565aa281044d85ab45" }
+oxirush-utils = { git = "https://github.com/linouxis9/oxirush-utils", rev = "5ea75c6c9c58599b5fa8975a27ffb32a9ea7580f" }

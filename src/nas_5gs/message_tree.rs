@@ -1165,10 +1165,15 @@ code_ie!(
 code_ie!(
     PduSessionType,
     PduSessionTypeValue,
-    |ie| ie.session_type(),
+    |ie| Some(ie.session_type()),
     PduSessionType::from_session_type
 );
-code_ie!(SscMode, SscModeValue, |ie| ie.mode(), SscMode::from_mode);
+code_ie!(
+    SscMode,
+    SscModeValue,
+    |ie| Some(ie.mode()),
+    SscMode::from_mode
+);
 code_ie!(
     AccessType,
     AccessTypeValue,
@@ -1275,7 +1280,7 @@ fields_ie!(UpdateType {
 fields_ie!(RegistrationResult {
     "result":
         |ie| Code::of(
-            RegistrationResultValue::try_from(ie.result_value_raw() & 0x07).ok(),
+            RegistrationResultValue::named(ie.result_value_raw() & 0x07),
             ie.result_value_raw(),
         ),
         |ie, code: Code<RegistrationResultValue>| write_code(
@@ -1296,7 +1301,7 @@ fields_ie!(RegistrationResult {
 fields_ie!(ControlPlaneServiceType {
 "service-type":
     |ie| Code::of(
-        ControlPlaneServiceTypeValue::try_from(ie.service_type_raw() & 0x07).ok(),
+        ControlPlaneServiceTypeValue::named(ie.service_type_raw() & 0x07),
         ie.service_type_raw(),
     ),
     |ie, code: Code<ControlPlaneServiceTypeValue>| write_code(
@@ -1310,44 +1315,44 @@ fields_ie!(ControlPlaneServiceType {
 });
 fields_ie!(SecurityAlgorithms {
     "ciphering":
-        |ie| Code::of(CipheringAlgorithm::try_from(ie.ciphering_raw()).ok(), ie.ciphering_raw()),
+        |ie| Code::of(CipheringAlgorithm::named(ie.ciphering_raw()), ie.ciphering_raw()),
         |ie, code: Code<CipheringAlgorithm>| write_code(
             ie,
             code,
             |ie, name| {
-                ie.set_ciphering_raw(name as u8);
+                ie.set_ciphering_raw(u8::from(name));
             },
             |ie| ie.ciphering_raw(),
         );
     "integrity":
-        |ie| Code::of(IntegrityAlgorithm::try_from(ie.integrity_raw()).ok(), ie.integrity_raw()),
+        |ie| Code::of(IntegrityAlgorithm::named(ie.integrity_raw()), ie.integrity_raw()),
         |ie, code: Code<IntegrityAlgorithm>| write_code(
             ie,
             code,
             |ie, name| {
-                ie.set_integrity_raw(name as u8);
+                ie.set_integrity_raw(u8::from(name));
             },
             |ie| ie.integrity_raw(),
         );
 });
 fields_ie!(EpsNasSecurityAlgorithms {
     "ciphering":
-        |ie| Code::of(crate::common::ts24301::CipheringAlgorithm::try_from(ie.ciphering_raw()).ok(), ie.ciphering_raw()),
+        |ie| Code::of(crate::common::ts24301::CipheringAlgorithm::named(ie.ciphering_raw()), ie.ciphering_raw()),
         |ie, code: Code<crate::common::ts24301::CipheringAlgorithm>| write_code(
             ie,
             code,
             |ie, name| {
-                ie.set_ciphering_raw(name as u8);
+                ie.set_ciphering_raw(u8::from(name));
             },
             |ie| ie.ciphering_raw(),
         );
     "integrity":
-        |ie| Code::of(crate::common::ts24301::IntegrityAlgorithm::try_from(ie.integrity_raw()).ok(), ie.integrity_raw()),
+        |ie| Code::of(crate::common::ts24301::IntegrityAlgorithm::named(ie.integrity_raw()), ie.integrity_raw()),
         |ie, code: Code<crate::common::ts24301::IntegrityAlgorithm>| write_code(
             ie,
             code,
             |ie, name| {
-                ie.set_integrity_raw(name as u8);
+                ie.set_integrity_raw(u8::from(name));
             },
             |ie| ie.integrity_raw(),
         );
@@ -2092,8 +2097,8 @@ crate::common::readable::readable!(struct MaximumDataRates { ul, dl });
 decoded_ie!(
     IntegrityProtectionMaximumDataRate: MaximumDataRates,
     |ie| Some(MaximumDataRates {
-        ul: MaxDataRate::try_from(ie.ul_raw()).ok()?,
-        dl: MaxDataRate::try_from(ie.dl_raw()).ok()?,
+        ul: MaxDataRate::named(ie.ul_raw())?,
+        dl: MaxDataRate::named(ie.dl_raw())?,
     }),
     |_, rates| Ok(IntegrityProtectionMaximumDataRate::from_rates(rates.ul, rates.dl))
 );

@@ -143,21 +143,21 @@ fn named(table: &[(u8, &'static str)], value: u8) -> Option<&'static str> {
 #[test]
 fn an_emm_cause_is_a_value_of_table_9_9_3_9_1() {
     for value in 0..=u8::MAX {
-        let cause = EmmCauseValue::try_from(value).ok();
+        let cause = EmmCauseValue::named(value);
         match named(&EMM, value) {
             Some(name) => {
                 let cause = cause.unwrap_or_else(|| panic!("{value}"));
                 assert_eq!(u8::from(cause), value);
                 assert!(
-                    cause.description().eq_ignore_ascii_case(name),
+                    cause.name().unwrap_or_default().eq_ignore_ascii_case(name),
                     "{value}: {cause:?}"
                 );
-                assert_eq!(EmmCauseValue::received(value), cause);
+                assert_eq!(EmmCauseValue::from_value(value).effective(), cause);
             }
             None => {
                 assert_eq!(cause, None, "{value}");
                 assert_eq!(
-                    EmmCauseValue::received(value),
+                    EmmCauseValue::from_value(value).effective(),
                     EmmCauseValue::ProtocolErrorUnspecified
                 );
             }
@@ -168,21 +168,21 @@ fn an_emm_cause_is_a_value_of_table_9_9_3_9_1() {
 #[test]
 fn a_5gmm_cause_is_a_value_of_table_9_11_3_2_1() {
     for value in 0..=u8::MAX {
-        let cause = GmmCauseValue::try_from(value).ok();
+        let cause = GmmCauseValue::named(value);
         match named(&GMM, value) {
             Some(name) => {
                 let cause = cause.unwrap_or_else(|| panic!("{value}"));
                 assert_eq!(u8::from(cause), value);
                 assert!(
-                    cause.description().eq_ignore_ascii_case(name),
+                    cause.name().unwrap_or_default().eq_ignore_ascii_case(name),
                     "{value}: {cause:?}"
                 );
-                assert_eq!(GmmCauseValue::received(value), cause);
+                assert_eq!(GmmCauseValue::from_value(value).effective(), cause);
             }
             None => {
                 assert_eq!(cause, None, "{value}");
                 assert_eq!(
-                    GmmCauseValue::received(value),
+                    GmmCauseValue::from_value(value).effective(),
                     GmmCauseValue::ProtocolErrorUnspecified
                 );
             }
@@ -249,13 +249,13 @@ const GSM: [(u8, &str); 46] = [
 #[test]
 fn a_5gsm_cause_is_a_value_of_table_9_11_4_2_1() {
     for value in 0..=u8::MAX {
-        let cause = GsmCauseValue::try_from(value).ok();
+        let cause = GsmCauseValue::named(value);
         match named(&GSM, value) {
             Some(name) => {
                 let cause = cause.unwrap_or_else(|| panic!("{value}"));
                 assert_eq!(u8::from(cause), value);
                 assert!(
-                    cause.description().eq_ignore_ascii_case(name),
+                    cause.name().unwrap_or_default().eq_ignore_ascii_case(name),
                     "{value}: {cause:?}"
                 );
                 assert_eq!(GsmCauseValue::from_u8_for_ue(value), cause);

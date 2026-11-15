@@ -2745,8 +2745,8 @@ mod envelope_tests {
         };
         assert_eq!(request.service_type.service_type_raw(), 0x0a);
         assert_eq!(
-            request.service_type.service_type(),
-            Some(crate::nas_5gs::ServiceTypeValue::Data)
+            request.service_type.service_type().effective(),
+            crate::nas_5gs::ServiceTypeValue::Data
         );
         assert_eq!(request.ngksi.value, 0x01);
 
@@ -2947,7 +2947,7 @@ mod envelope_tests {
             panic!("expected SERVICE REQUEST");
         };
         request.service_type.value = 0x0c;
-        assert_eq!(request.service_type.service_type(), None);
+        assert_eq!(request.service_type.service_type().effective().name(), None);
         assert!(message.validate().iter().any(|finding| {
             finding.severity == crate::common::Severity::Error && finding.field == "service_type"
         }));

@@ -28,7 +28,7 @@ fn a_rejected_s_nssai_has_its_cause_and_its_length() {
         Cause::FailedOrRevokedAuth,
     ];
     for (code, cause) in (0..).zip(causes) {
-        assert_eq!(Cause::try_from(code).ok(), Some(cause));
+        assert_eq!(Cause::named(code), Some(cause));
     }
     let rejected = Rejected {
         cause: 1,

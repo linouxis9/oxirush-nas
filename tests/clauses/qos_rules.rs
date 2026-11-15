@@ -609,12 +609,12 @@ fn the_operation_and_the_direction_are_their_bits() {
     ];
     for value in 0..=u8::MAX {
         assert_eq!(
-            Op::received(value & 0x07),
+            Op::from_value(value & 0x07).effective(),
             operations[usize::from(value & 0x07)],
             "{value}"
         );
         assert_eq!(
-            Direction::received(value & 0x03),
+            Direction::from_value(value & 0x03).effective(),
             directions[usize::from(value & 0x03)],
             "{value}"
         );

@@ -379,7 +379,7 @@ fn the_registration_result_has_its_value_and_four_indications() {
     assert_eq!(changed.value, [0x79]);
     assert_eq!(
         changed.result_value(),
-        Some(RegistrationResultValue::ThreeGppAccess)
+        RegistrationResultValue::ThreeGppAccess
     );
     assert_eq!(changed.result_value_raw(), 1);
     // A sender writes one octet, with the bit 8 spare and a result that is not
@@ -439,8 +439,8 @@ fn the_update_type_has_its_requests_and_the_preferred_behaviours() {
     update.set_ng_ran_rcu(true);
     update.set_pnb_ciot(PreferredCiotBehavior::UserPlane);
     update.set_eps_pnb_ciot(PreferredCiotBehavior::ControlPlane);
-    let pnb = PreferredCiotBehavior::UserPlane as u8;
-    let eps = PreferredCiotBehavior::ControlPlane as u8;
+    let pnb = u8::from(PreferredCiotBehavior::UserPlane);
+    let eps = u8::from(PreferredCiotBehavior::ControlPlane);
     assert_eq!(update.value, [0x03 | pnb << 2 | eps << 4]);
     assert!(update.sms_requested() && update.ng_ran_rcu());
     assert_eq!(update.pnb_ciot(), Some(PreferredCiotBehavior::UserPlane));

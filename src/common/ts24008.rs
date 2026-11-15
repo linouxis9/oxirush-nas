@@ -124,23 +124,16 @@ impl AuthenticationFailureParameter {
 
 // ── GPRS timers (§10.5.7.3, §10.5.7.4, §10.5.7.4a) ──────────────────────────
 
-crate::common::enums::nas_enum! {
+oxirush_utils::named_values! {
     /// Unit of a GPRS timer or GPRS timer 2 value (TS 24.008 §10.5.7.3).
-    #[non_exhaustive]
-    pub enum GprsTimerUnit {
-        /// Value is incremented in multiples of 2 seconds.
-        TwoSeconds = 0,
-        /// Value is incremented in multiples of 1 minute.
-        OneMinute = 1,
-        /// Value is incremented in multiples of decihours.
-        SixMinutes = 2,
-        /// Timer is deactivated.
-        Deactivated = 7,
-    }
-    received {
-        _ => OneMinute,
+    pub enum GprsTimerUnit "§10.5.7.3" bits 8 others as 1 {
+        0 TwoSeconds "two seconds" tree "two-seconds",
+        1 OneMinute "one minute" tree "one-minute",
+        2 SixMinutes "six minutes" tree "six-minutes",
+        7 Deactivated "deactivated" tree "deactivated",
     }
 }
+crate::common::enums::values_readable!(GprsTimerUnit);
 
 impl GprsTimerUnit {
     /// Seconds per timer value step; zero when deactivated.
@@ -150,36 +143,26 @@ impl GprsTimerUnit {
             Self::OneMinute => 60,
             Self::SixMinutes => 360,
             Self::Deactivated => 0,
+            // A unit that the table does not name is read as one minute.
+            Self::Other(_) => self.effective().seconds_multiplier(),
         }
     }
 }
 
-crate::common::enums::nas_enum! {
+oxirush_utils::named_values! {
     /// Unit of a GPRS timer 3 value (TS 24.008 §10.5.7.4a).
-    #[non_exhaustive]
-    pub enum GprsTimer3Unit {
-        /// Value is incremented in multiples of 10 minutes.
-        TenMinutes = 0,
-        /// Value is incremented in multiples of 1 hour.
-        OneHour = 1,
-        /// Value is incremented in multiples of 10 hours.
-        TenHours = 2,
-        /// Value is incremented in multiples of 2 seconds.
-        TwoSeconds = 3,
-        /// Value is incremented in multiples of 30 seconds.
-        ThirtySeconds = 4,
-        /// Value is incremented in multiples of 1 minute.
-        OneMinute = 5,
-        /// Value is incremented in multiples of 320 hours; only defined for the
-        /// T3312 extended, T3412 extended, and T3512 values.
-        ThreeHundredTwentyHours = 6,
-        /// Timer is deactivated.
-        Deactivated = 7,
-    }
-    received {
-        _ => Deactivated,
+    pub enum GprsTimer3Unit "§10.5.7.4a" bits 3 others as 7 {
+        0 TenMinutes "ten minutes" tree "ten-minutes",
+        1 OneHour "one hour" tree "one-hour",
+        2 TenHours "ten hours" tree "ten-hours",
+        3 TwoSeconds "two seconds" tree "two-seconds",
+        4 ThirtySeconds "thirty seconds" tree "thirty-seconds",
+        5 OneMinute "one minute" tree "one-minute",
+        6 ThreeHundredTwentyHours "three hundred twenty hours" tree "three-hundred-twenty-hours",
+        7 Deactivated "deactivated" tree "deactivated",
     }
 }
+crate::common::enums::values_readable!(GprsTimer3Unit);
 
 impl GprsTimer3Unit {
     /// Seconds per timer value step; zero when deactivated.
@@ -193,6 +176,8 @@ impl GprsTimer3Unit {
             Self::TenHours => 36_000,
             Self::ThreeHundredTwentyHours => 1_152_000,
             Self::Deactivated => 0,
+            // A unit that the table does not name is read as deactivated.
+            Self::Other(_) => self.effective().seconds_multiplier(),
         }
     }
 }
@@ -213,7 +198,7 @@ pub(crate) fn gprs_timer_octet_from_seconds(
     .find_map(|unit| {
         let step = unit.seconds_multiplier();
         (seconds.is_multiple_of(step) && seconds / step <= 31)
-            .then(|| (unit as u8) << 5 | (seconds / step) as u8)
+            .then(|| (u8::from(unit)) << 5 | (seconds / step) as u8)
     })
     .ok_or_else(|| {
         let expected = "up to 31 times 2 seconds, 1 minute or 6 minutes";
@@ -240,7 +225,7 @@ pub(crate) fn gprs_timer3_octet_from_seconds(
     .find_map(|unit| {
         let step = unit.seconds_multiplier();
         (seconds.is_multiple_of(step) && seconds / step <= 31)
-            .then(|| (unit as u8) << 5 | (seconds / step) as u8)
+            .then(|| (u8::from(unit)) << 5 | (seconds / step) as u8)
     })
     .ok_or_else(|| {
         let expected = "up to 31 times 2 or 30 seconds, 1 or 10 minutes, or 1 or 10 hours";
@@ -275,9 +260,7 @@ macro_rules! gprs_timer_ie {
         impl $name {
             /// Timer unit with the receiver rule applied (bits 8-6).
             pub fn unit(&self) -> Option<crate::common::ts24008::GprsTimerUnit> {
-                Some(crate::common::ts24008::GprsTimerUnit::received(
-                    self.value >> 5,
-                ))
+                Some(crate::common::ts24008::GprsTimerUnit::from_value(self.value >> 5).effective())
             }
 
             /// Raw timer unit code.
@@ -326,7 +309,7 @@ macro_rules! gprs_timer_ie {
                 value: u8,
             ) -> core::result::Result<Self, crate::common::ValueError> {
                 crate::common::within("timer-value", value, 0, 31)?;
-                Ok(Self::new((unit as u8) << 5 | value))
+                Ok(Self::new((u8::from(unit)) << 5 | value))
             }
 
             /// Build the smallest exact encoding of a duration.
@@ -340,7 +323,7 @@ macro_rules! gprs_timer_ie {
 
             /// Build a deactivated timer.
             pub fn deactivated() -> Self {
-                Self::new((crate::common::ts24008::GprsTimerUnit::Deactivated as u8) << 5)
+                Self::new((u8::from(crate::common::ts24008::GprsTimerUnit::Deactivated)) << 5)
             }
         }
     };
@@ -352,7 +335,7 @@ impl GprsTimer2 {
     pub fn timer(&self) -> Option<(crate::common::ts24008::GprsTimerUnit, u8)> {
         let octet = *self.value.first()?;
         Some((
-            Some(crate::common::ts24008::GprsTimerUnit::received(octet >> 5))?,
+            Some(crate::common::ts24008::GprsTimerUnit::from_value(octet >> 5).effective())?,
             octet & 0x1f,
         ))
     }
@@ -408,7 +391,7 @@ impl GprsTimer2 {
         value: u8,
     ) -> core::result::Result<Self, crate::common::ValueError> {
         crate::common::within("timer-value", value, 0, 31)?;
-        Ok(Self::new(vec![(unit as u8) << 5 | value]))
+        Ok(Self::new(vec![(u8::from(unit)) << 5 | value]))
     }
 
     /// Build the smallest exact encoding of a duration.
@@ -421,7 +404,7 @@ impl GprsTimer2 {
     /// Build a deactivated timer.
     pub fn deactivated() -> Self {
         Self::new(vec![
-            (crate::common::ts24008::GprsTimerUnit::Deactivated as u8) << 5,
+            (u8::from(crate::common::ts24008::GprsTimerUnit::Deactivated)) << 5,
         ])
     }
 
@@ -441,7 +424,7 @@ impl GprsTimer3 {
     pub fn timer(&self) -> Option<(crate::common::ts24008::GprsTimer3Unit, u8)> {
         let octet = *self.value.first()?;
         Some((
-            crate::common::ts24008::GprsTimer3Unit::received(octet >> 5),
+            crate::common::ts24008::GprsTimer3Unit::from_value(octet >> 5).effective(),
             octet & 0x1f,
         ))
     }
@@ -500,7 +483,7 @@ impl GprsTimer3 {
         value: u8,
     ) -> core::result::Result<Self, crate::common::ValueError> {
         crate::common::within("timer-value", value, 0, 31)?;
-        Ok(Self::new(vec![(unit as u8) << 5 | value]))
+        Ok(Self::new(vec![(u8::from(unit)) << 5 | value]))
     }
 
     /// Build the smallest exact encoding of a duration.
@@ -513,7 +496,7 @@ impl GprsTimer3 {
     /// Build a deactivated timer.
     pub fn deactivated() -> Self {
         Self::new(vec![
-            (crate::common::ts24008::GprsTimer3Unit::Deactivated as u8) << 5,
+            (u8::from(crate::common::ts24008::GprsTimer3Unit::Deactivated)) << 5,
         ])
     }
 
@@ -529,32 +512,25 @@ impl GprsTimer3 {
 
 // ── IMEISV request (§10.5.5.10) ──────────────────────────────────────────────
 
-crate::common::enums::nas_enum! {
+oxirush_utils::named_values! {
     /// IMEISV request value (TS 24.008 §10.5.5.10, Table 10.5.143).
-    #[non_exhaustive]
-    pub enum ImeisvRequestValue {
-        /// IMEISV not requested.
-        NotRequested = 0x00,
-        /// IMEISV requested.
-        Requested = 0x01,
-    }
-    received {
-        _ => NotRequested,
+    pub enum ImeisvRequestValue "Table 10.5.143" bits 3 others as 0x00 {
+        0x00 NotRequested "not requested" tree "not-requested",
+        0x01 Requested "requested" tree "requested",
     }
 }
+crate::common::enums::values_readable!(ImeisvRequestValue);
 
 /// IMEISV request (TS 24.008 §10.5.5.10), a type 1 IE.
 impl ImeisvRequest {
     /// Request value with the receiver rule applied.
     pub fn request(&self) -> Option<crate::common::ts24008::ImeisvRequestValue> {
-        Some(crate::common::ts24008::ImeisvRequestValue::received(
-            self.value & 0x07,
-        ))
+        Some(crate::common::ts24008::ImeisvRequestValue::from_value(self.value & 0x07).effective())
     }
 
     /// Request value restricted to the defined codes.
     pub fn request_strict(&self) -> Option<crate::common::ts24008::ImeisvRequestValue> {
-        crate::common::ts24008::ImeisvRequestValue::try_from(self.value & 0x07).ok()
+        crate::common::ts24008::ImeisvRequestValue::named(self.value & 0x07)
     }
 
     /// Raw request value (bits 1-3).
@@ -572,13 +548,13 @@ impl ImeisvRequest {
         &mut self,
         request: crate::common::ts24008::ImeisvRequestValue,
     ) -> &mut Self {
-        self.value = request as u8;
+        self.value = u8::from(request);
         self
     }
 
     /// Build from a request value.
     pub fn from_request(request: crate::common::ts24008::ImeisvRequestValue) -> Self {
-        Self::new(request as u8)
+        Self::new(u8::from(request))
     }
 
     /// Build from a flag.
@@ -604,21 +580,15 @@ impl Non3GppNwProvidedPolicies {
 
 // ── Mobile station classmark 2 (§10.5.1.6) ───────────────────────────────────
 
-crate::common::enums::nas_enum! {
+oxirush_utils::named_values! {
     /// Revision level of a mobile station classmark (TS 24.008 §10.5.1.6).
-    #[non_exhaustive]
-    pub enum MsRevisionLevel {
-        /// Reserved for GSM phase 1.
-        GsmPhase1 = 0,
-        /// GSM phase 2 mobile station.
-        GsmPhase2 = 1,
-        /// R99 or later mobile station.
-        R99OrLater = 2,
-    }
-    received {
-        _ => R99OrLater,
+    pub enum MsRevisionLevel "§10.5.1.6" bits 2 others as 2 {
+        0 GsmPhase1 "gsm phase1" tree "gsm-phase1",
+        1 GsmPhase2 "gsm phase2" tree "gsm-phase2",
+        2 R99OrLater "r99 or later" tree "r99-or-later",
     }
 }
+crate::common::enums::values_readable!(MsRevisionLevel);
 
 // Mobile station classmark 2 (TS 24.008 §10.5.1.6): three value octets.
 crate::common::nas_ie_flags!(MobileStationClassmark2 {
@@ -653,9 +623,10 @@ crate::common::nas_ie_flags!(MobileStationClassmark2 {
 impl MobileStationClassmark2 {
     /// Revision level (octet 3, bits 7-6) with the receiver rule applied.
     pub fn revision_level(&self) -> Option<crate::common::ts24008::MsRevisionLevel> {
-        Some(crate::common::ts24008::MsRevisionLevel::received(
-            (self.value.first()? >> 5) & 0x03,
-        ))
+        Some(
+            crate::common::ts24008::MsRevisionLevel::from_value((self.value.first()? >> 5) & 0x03)
+                .effective(),
+        )
     }
 
     /// Raw revision level (octet 3, bits 7-6).
@@ -1033,16 +1004,14 @@ impl ExtendedProtocolConfigurationOptions {
 
 // ── Network name, time zone, and emergency numbers (§10.5.3) ───────────────
 
-crate::common::enums::nas_enum! {
+oxirush_utils::named_values! {
     /// Network name coding scheme (TS 24.008 Table 10.5.94).
-    #[non_exhaustive]
-    pub enum NetworkNameCodingScheme {
-        /// GSM 7-bit default alphabet (TS 23.038).
-        Gsm7Bit = 0x00,
-        /// UCS2 (16 bit).
-        Ucs2 = 0x01,
+    pub enum NetworkNameCodingScheme "Table 10.5.94" bits 3 {
+        0x00 Gsm7Bit "gsm7 bit" tree "gsm7-bit",
+        0x01 Ucs2 "ucs2" tree "ucs2",
     }
 }
+crate::common::enums::values_readable!(NetworkNameCodingScheme);
 
 /// Network name (TS 24.008 §10.5.3.5a): a header octet with the coding
 /// scheme, the "Add CI" flag, and the number of spare bits in the last
@@ -1050,7 +1019,7 @@ crate::common::enums::nas_enum! {
 impl NetworkName {
     /// Coding scheme; reserved codes return `None`.
     pub fn coding_scheme(&self) -> Option<NetworkNameCodingScheme> {
-        NetworkNameCodingScheme::try_from(self.coding_scheme_raw() & 0x07).ok()
+        NetworkNameCodingScheme::named(self.coding_scheme_raw() & 0x07)
     }
 
     /// Raw coding scheme (bits 7-5 of the header octet).
@@ -1096,6 +1065,7 @@ impl NetworkName {
             )
             .collect::<core::result::Result<String, _>>()
             .ok(),
+            NetworkNameCodingScheme::Other(_) => None,
         }
     }
 
@@ -1111,7 +1081,7 @@ impl NetworkName {
                 value
             }
             Err(_) => {
-                let mut value = vec![0x80 | (NetworkNameCodingScheme::Ucs2 as u8) << 4 | ci];
+                let mut value = vec![0x80 | (u8::from(NetworkNameCodingScheme::Ucs2)) << 4 | ci];
                 value.extend(name.encode_utf16().flat_map(u16::to_be_bytes));
                 value
             }
@@ -1129,7 +1099,7 @@ impl NetworkName {
 
     /// Set the coding scheme; UCS2 also clears the spare-bit count.
     pub fn set_coding_scheme(&mut self, scheme: NetworkNameCodingScheme) -> &mut Self {
-        self.update_header(0x70, (scheme as u8) << 4);
+        self.update_header(0x70, (u8::from(scheme)) << 4);
         if scheme == NetworkNameCodingScheme::Ucs2 {
             self.update_header(0x07, 0);
         }
@@ -1303,24 +1273,21 @@ pub(crate) fn to_swapped_bcd_value(value: u8) -> u8 {
     ((value % 10) << 4) | ((value / 10) % 10)
 }
 
-crate::common::enums::nas_enum! {
+oxirush_utils::named_values! {
     /// Daylight saving time adjustment (TS 24.008 Table 10.5.97a).
-    #[non_exhaustive]
-    pub enum DaylightSavingAdjustment {
-        /// No adjustment for daylight saving time.
-        NoAdjustment = 0,
-        /// +1 hour adjustment.
-        PlusOneHour = 1,
-        /// +2 hours adjustment.
-        PlusTwoHours = 2,
+    pub enum DaylightSavingAdjustment "Table 10.5.97a" bits 2 {
+        0 NoAdjustment "no adjustment" tree "no-adjustment",
+        1 PlusOneHour "plus one hour" tree "plus-one-hour",
+        2 PlusTwoHours "plus two hours" tree "plus-two-hours",
     }
 }
+crate::common::enums::values_readable!(DaylightSavingAdjustment);
 
 /// Daylight saving time (TS 24.008 §10.5.3.12).
 impl DaylightSavingTime {
     /// Adjustment; spare bits are ignored and the reserved value is `None`.
     pub fn adjustment(&self) -> Option<DaylightSavingAdjustment> {
-        DaylightSavingAdjustment::try_from((*self.value.first()?) & 0x03).ok()
+        DaylightSavingAdjustment::named((*self.value.first()?) & 0x03)
     }
 
     /// Raw adjustment (bits 2-1), or 0 if the value is empty.
@@ -1330,7 +1297,7 @@ impl DaylightSavingTime {
 
     /// Build from an adjustment with the spare bits clear.
     pub fn from_adjustment(adjustment: DaylightSavingAdjustment) -> Self {
-        Self::new(vec![adjustment as u8])
+        Self::new(vec![u8::from(adjustment)])
     }
 
     /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
@@ -2101,40 +2068,37 @@ mod tests {
     fn each_code_decodes_to_its_value() {
         for code in 0..=u8::MAX {
             let (two, three) = (code & 0x03, code & 0x07);
-            assert_eq!(GprsTimer3Unit::received(code & 0x07) as u8, three);
             assert_eq!(
-                GprsTimer3Unit::try_from(code & 0x07)
-                    .ok()
-                    .map(|unit| unit as u8),
+                u8::from(GprsTimer3Unit::from_value(code & 0x07).effective()),
+                three
+            );
+            assert_eq!(
+                GprsTimer3Unit::named(code & 0x07).map(u8::from),
                 Some(three)
             );
             assert_eq!(
-                Some(ImeisvRequestValue::received(code & 0x07)),
+                Some(ImeisvRequestValue::from_value(code & 0x07).effective()),
                 Some(match three {
                     1 => ImeisvRequestValue::Requested,
                     _ => ImeisvRequestValue::NotRequested,
                 })
             );
             assert_eq!(
-                ImeisvRequestValue::try_from(code & 0x07)
-                    .ok()
-                    .map(|value| value as u8),
+                ImeisvRequestValue::named(code & 0x07).map(u8::from),
                 (three < 2).then_some(three)
             );
             assert_eq!(
-                Some(MsRevisionLevel::received(code & 0x03)).map(|level| level as u8),
+                Some(u8::from(
+                    MsRevisionLevel::from_value(code & 0x03).effective()
+                )),
                 Some(two.min(2))
             );
             assert_eq!(
-                MsRevisionLevel::try_from(code & 0x03)
-                    .ok()
-                    .map(|level| level as u8),
+                MsRevisionLevel::named(code & 0x03).map(u8::from),
                 (two < 3).then_some(two)
             );
             assert_eq!(
-                DaylightSavingAdjustment::try_from(code & 0x03)
-                    .ok()
-                    .map(|adjustment| adjustment as u8),
+                DaylightSavingAdjustment::named(code & 0x03).map(u8::from),
                 (two < 3).then_some(two)
             );
         }

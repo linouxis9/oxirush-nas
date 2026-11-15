@@ -3810,7 +3810,7 @@ mod tests {
         let Message::Esm(_, EsmMessage::PdnConnectivityRequest(request)) = &message else {
             panic!("expected PDN CONNECTIVITY REQUEST");
         };
-        assert_eq!(request.pdn_type.pdn_type(), Some(PdnTypeValue::Ipv6));
+        assert_eq!(request.pdn_type.pdn_type().effective(), PdnTypeValue::Ipv6);
         assert!(
             message
                 .validate()

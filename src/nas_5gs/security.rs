@@ -330,13 +330,17 @@ fn validate_message_direction(message: &Message, direction: Direction) -> Result
     }
 }
 
-impl From<AccessTypeValue> for NasConnection {
+impl TryFrom<AccessTypeValue> for NasConnection {
+    type Error = AccessTypeValue;
+
     /// The NAS connection of an access type: a security context keeps a
-    /// pair of NAS COUNTs for each (TS 24.501 §4.4.3).
-    fn from(value: AccessTypeValue) -> Self {
+    /// pair of NAS COUNTs for each (TS 24.501 §4.4.3). An access type that
+    /// the table does not name has none.
+    fn try_from(value: AccessTypeValue) -> core::result::Result<Self, AccessTypeValue> {
         match value {
-            AccessTypeValue::ThreeGppAccess => Self::ThreeGpp,
-            AccessTypeValue::Non3GppAccess => Self::Non3Gpp,
+            AccessTypeValue::ThreeGppAccess => Ok(Self::ThreeGpp),
+            AccessTypeValue::Non3GppAccess => Ok(Self::Non3Gpp),
+            other => Err(other),
         }
     }
 }
@@ -3075,11 +3079,11 @@ mod tests {
     #[test]
     fn the_connection_of_an_access_type_and_the_direction_convert() {
         assert_eq!(
-            NasConnection::from(AccessTypeValue::ThreeGppAccess),
+            NasConnection::try_from(AccessTypeValue::ThreeGppAccess).unwrap(),
             NasConnection::ThreeGpp
         );
         assert_eq!(
-            NasConnection::from(AccessTypeValue::Non3GppAccess),
+            NasConnection::try_from(AccessTypeValue::Non3GppAccess).unwrap(),
             NasConnection::Non3Gpp
         );
         assert_eq!(

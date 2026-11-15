@@ -40,7 +40,7 @@ fn a_request_type_is_one_of_the_five_of_table_10_5_173() {
     ];
     for (value, request_type) in types {
         assert_eq!(
-            RequestTypeValue::try_from(value & 0x07).ok(),
+            RequestTypeValue::named(value & 0x07),
             request_type,
             "{value}"
         );
@@ -67,12 +67,9 @@ fn cs_lcs_is_no_information_supported_or_not_supported() {
         CsLcsSupport::NotSupported,
     ];
     for (value, support) in support.into_iter().enumerate() {
-        assert_eq!(
-            CsLcsSupport::try_from((value as u8) & 0x03).ok(),
-            Some(support)
-        );
+        assert_eq!(CsLcsSupport::named((value as u8) & 0x03), Some(support));
     }
-    assert_eq!(CsLcsSupport::try_from(3).ok(), None);
+    assert_eq!(CsLcsSupport::named(3), None);
 }
 
 #[test]

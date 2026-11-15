@@ -44,18 +44,14 @@ fn a_unit_of_the_session_ambr_is_one_of_the_25_steps_of_table_9_11_4_14_1() {
         SessionAmbrUnit::Pbps256,
     ];
     for (code, unit) in units.into_iter().enumerate() {
-        assert_eq!(
-            SessionAmbrUnit::try_from(code as u8).ok(),
-            Some(unit),
-            "{code}"
-        );
+        assert_eq!(SessionAmbrUnit::named(code as u8), Some(unit), "{code}");
     }
     // "Other values shall be interpreted as multiples of 256 Pbps"
     for code in [0x1a, 0x80, 0xff] {
-        assert_eq!(SessionAmbrUnit::try_from(code).ok(), None, "{code}");
+        assert_eq!(SessionAmbrUnit::named(code), None, "{code}");
         assert_eq!(
-            SessionAmbrUnit::received(code),
-            Some(SessionAmbrUnit::Pbps256)
+            SessionAmbrUnit::from_value(code).effective(),
+            SessionAmbrUnit::Pbps256
         );
     }
 }
@@ -71,16 +67,12 @@ fn a_drx_value_is_a_cycle_of_its_table_or_not_specified() {
         DrxValue::Cycle256,
     ];
     for (code, cycle) in cycles.into_iter().enumerate() {
-        assert_eq!(
-            DrxValue::try_from((code as u8) & 0x0F).ok(),
-            Some(cycle),
-            "{code}"
-        );
+        assert_eq!(DrxValue::named((code as u8) & 0x0F), Some(cycle), "{code}");
     }
     for code in 5..16 {
-        assert_eq!(DrxValue::try_from(code & 0x0F).ok(), None, "{code}");
+        assert_eq!(DrxValue::named(code & 0x0F), None, "{code}");
         assert_eq!(
-            Some(DrxValue::received(code & 0x0F)),
+            Some(DrxValue::from_value(code & 0x0F).effective()),
             Some(DrxValue::NotSpecified),
             "{code}"
         );
@@ -96,21 +88,17 @@ fn a_drx_value_is_a_cycle_of_its_table_or_not_specified() {
         (0x7, NbN1DrxValue::T1024),
     ];
     for (code, cycle) in cycles {
+        assert_eq!(NbN1DrxValue::named(code & 0x0F), Some(cycle), "{code}");
         assert_eq!(
-            NbN1DrxValue::try_from(code & 0x0F).ok(),
-            Some(cycle),
-            "{code}"
-        );
-        assert_eq!(
-            Some(NbN1DrxValue::received(code & 0x0F)),
+            Some(NbN1DrxValue::from_value(code & 0x0F).effective()),
             Some(cycle),
             "{code}"
         );
     }
     for code in [0x6, 0x8, 0xf] {
-        assert_eq!(NbN1DrxValue::try_from(code & 0x0F).ok(), None, "{code}");
+        assert_eq!(NbN1DrxValue::named(code & 0x0F), None, "{code}");
         assert_eq!(
-            Some(NbN1DrxValue::received(code & 0x0F)),
+            Some(NbN1DrxValue::from_value(code & 0x0F).effective()),
             Some(NbN1DrxValue::NotSpecified)
         );
     }
@@ -125,20 +113,16 @@ fn a_cid_length_of_11_is_read_as_7_bits() {
         (2, EthHdrCompCidLen::FifteenBits),
     ];
     for (code, length) in lengths {
+        assert_eq!(EthHdrCompCidLen::named(code & 0x03), Some(length), "{code}");
         assert_eq!(
-            EthHdrCompCidLen::try_from(code & 0x03).ok(),
-            Some(length),
-            "{code}"
-        );
-        assert_eq!(
-            Some(EthHdrCompCidLen::received(code & 0x03)),
+            Some(EthHdrCompCidLen::from_value(code & 0x03).effective()),
             Some(length),
             "{code}"
         );
     }
-    assert_eq!(EthHdrCompCidLen::try_from(3).ok(), None);
+    assert_eq!(EthHdrCompCidLen::named(3), None);
     assert_eq!(
-        Some(EthHdrCompCidLen::received(3)),
+        Some(EthHdrCompCidLen::from_value(3).effective()),
         Some(EthHdrCompCidLen::SevenBits)
     );
 }
@@ -147,12 +131,13 @@ fn a_cid_length_of_11_is_read_as_7_bits() {
 fn a_pdu_session_type_is_a_value_of_table_9_11_4_11_1() {
     for code in 0..=u8::MAX {
         let value = code & 0x07;
-        let strict = PduSessionTypeValue::try_from(code & 0x07)
-            .ok()
-            .map(|kind| kind as u8);
+        let strict = PduSessionTypeValue::named(code & 0x07).map(u8::from);
         assert_eq!(strict, (1..=5).contains(&value).then_some(value), "{code}");
         // "All other values are unused and shall be interpreted as IPv4v6", 111 reserved
-        let received = PduSessionTypeValue::received(code & 0x07).map(|kind| kind as u8);
+        let received = PduSessionTypeValue::named(u8::from(
+            PduSessionTypeValue::from_value(code & 0x07).effective(),
+        ))
+        .map(u8::from);
         let expected = match value {
             0 | 6 => Some(3),
             7 => None,
@@ -168,7 +153,7 @@ fn a_pdu_session_type_is_a_value_of_table_9_11_4_11_1() {
         (PduSessionTypeValue::Ethernet, "ETHERNET"),
     ];
     for (kind, name) in names {
-        assert_eq!(kind.sbi_str(), name);
+        assert_eq!(kind.sbi_str(), Some(name));
     }
 }
 
@@ -176,12 +161,13 @@ fn a_pdu_session_type_is_a_value_of_table_9_11_4_11_1() {
 fn a_service_type_is_a_value_of_table_9_11_3_50_1() {
     for code in 0..=u8::MAX {
         let value = code & 0x0f;
-        let strict = ServiceTypeValue::try_from(code & 0x0f)
-            .ok()
-            .map(|kind| kind as u8);
+        let strict = ServiceTypeValue::named(code & 0x0f).map(u8::from);
         assert_eq!(strict, (value <= 6).then_some(value), "{code}");
         // 0111 and 1000 are read as signalling, 1001 to 1011 as data, by the network
-        let received = ServiceTypeValue::received(code & 0x0f).map(|kind| kind as u8);
+        let received = ServiceTypeValue::named(u8::from(
+            ServiceTypeValue::from_value(code & 0x0f).effective(),
+        ))
+        .map(u8::from);
         let expected = match value {
             0..=6 => Some(value),
             7 | 8 => Some(0),
@@ -189,9 +175,7 @@ fn a_service_type_is_a_value_of_table_9_11_3_50_1() {
             _ => None,
         };
         assert_eq!(received, expected, "{code}");
-        let control = ControlPlaneServiceTypeValue::try_from(code & 0x07)
-            .ok()
-            .map(|kind| kind as u8);
+        let control = ControlPlaneServiceTypeValue::named(code & 0x07).map(u8::from);
         assert_eq!(control, (code & 0x07 <= 3).then_some(code & 0x07), "{code}");
     }
 }
@@ -200,17 +184,17 @@ fn a_service_type_is_a_value_of_table_9_11_3_50_1() {
 fn the_codes_of_eap_and_of_the_qos_operations_are_their_values() {
     for code in 0..=u8::MAX {
         // RFC 3748 and RFC 6696: request to finish
-        let eap = EapCode::try_from(code).ok().map(|kind| kind as u8);
+        let eap = EapCode::named(code).map(u8::from);
         assert_eq!(eap, (1..=6).contains(&code).then_some(code), "{code}");
         // Tables 9.11.4.13.1 and 9.11.4.12.1
         assert_eq!(
-            QosRuleOpCode::received(code & 0x07) as u8,
+            u8::from(QosRuleOpCode::from_value(code & 0x07).effective()),
             code & 0x07,
             "{code}"
         );
-        let direction = QosPacketFilterDirection::received(code & 0x03) as u8;
+        let direction = u8::from(QosPacketFilterDirection::from_value(code & 0x03).effective());
         assert_eq!(direction, code & 0x03, "{code}");
-        let flow = QosFlowOpCode::received(code) as u8;
+        let flow = u8::from(QosFlowOpCode::from_value(code).effective());
         assert_eq!(
             flow,
             if (1..=3).contains(&code) { code } else { 0 },
@@ -254,7 +238,7 @@ fn listed<T: PartialEq + core::fmt::Debug>(read: fn(u8) -> T, table: &[(u8, T)],
 #[test]
 fn each_code_of_a_5gs_field_reads_as_its_table_says() {
     masked(
-        |code| PayloadContainerKind::try_from(code).ok(),
+        PayloadContainerKind::named,
         0x0f,
         &[
             None,
@@ -276,7 +260,7 @@ fn each_code_of_a_5gs_field_reads_as_its_table_says() {
         ],
     );
     masked(
-        RequestTypeValue::received,
+        |code| RequestTypeValue::named(u8::from(RequestTypeValue::from_value(code).effective())),
         0x07,
         &[
             Some(RequestTypeValue::InitialRequest),
@@ -290,7 +274,7 @@ fn each_code_of_a_5gs_field_reads_as_its_table_says() {
         ],
     );
     masked(
-        |code| RequestTypeValue::try_from(code).ok(),
+        RequestTypeValue::named,
         0x07,
         &[
             None,
@@ -304,7 +288,7 @@ fn each_code_of_a_5gs_field_reads_as_its_table_says() {
         ],
     );
     masked(
-        SscModeValue::received,
+        |code| SscModeValue::named(u8::from(SscModeValue::from_value(code).effective())),
         0x07,
         &[
             None,
@@ -318,7 +302,7 @@ fn each_code_of_a_5gs_field_reads_as_its_table_says() {
         ],
     );
     masked(
-        |code| SscModeValue::try_from(code).ok(),
+        SscModeValue::named,
         0x07,
         &[
             None,
@@ -332,7 +316,7 @@ fn each_code_of_a_5gs_field_reads_as_its_table_says() {
         ],
     );
     masked(
-        NssaiInclusionModeValue::received,
+        |code| NssaiInclusionModeValue::from_value(code).effective(),
         0x03,
         &[
             NssaiInclusionModeValue::A,
@@ -342,7 +326,11 @@ fn each_code_of_a_5gs_field_reads_as_its_table_says() {
         ],
     );
     masked(
-        RegistrationResultValue::received,
+        |code| {
+            RegistrationResultValue::named(u8::from(
+                RegistrationResultValue::from_value(code).effective(),
+            ))
+        },
         0x07,
         &[
             Some(RegistrationResultValue::ThreeGppAccess),
@@ -356,7 +344,7 @@ fn each_code_of_a_5gs_field_reads_as_its_table_says() {
         ],
     );
     masked(
-        |code| RegistrationResultValue::try_from(code).ok(),
+        RegistrationResultValue::named,
         0x07,
         &[
             None,
@@ -370,7 +358,7 @@ fn each_code_of_a_5gs_field_reads_as_its_table_says() {
         ],
     );
     listed(
-        |code| MaxDataRate::try_from(code).ok(),
+        MaxDataRate::named,
         &[
             (0x00, Some(MaxDataRate::Kbps64)),
             (0x01, Some(MaxDataRate::Null)),
@@ -379,7 +367,7 @@ fn each_code_of_a_5gs_field_reads_as_its_table_says() {
         None,
     );
     masked(
-        |code| DeregistrationAccessType::try_from(code).ok(),
+        DeregistrationAccessType::named,
         0x03,
         &[
             None,
@@ -389,7 +377,7 @@ fn each_code_of_a_5gs_field_reads_as_its_table_says() {
         ],
     );
     masked(
-        |code| EmergencyServiceSupport::try_from(code).ok(),
+        EmergencyServiceSupport::named,
         0x03,
         &[
             Some(EmergencyServiceSupport::NotSupported),
@@ -399,7 +387,7 @@ fn each_code_of_a_5gs_field_reads_as_its_table_says() {
         ],
     );
     masked(
-        |code| EmergencyFallbackSupport::try_from(code).ok(),
+        EmergencyFallbackSupport::named,
         0x03,
         &[
             Some(EmergencyFallbackSupport::NotSupported),
@@ -409,7 +397,7 @@ fn each_code_of_a_5gs_field_reads_as_its_table_says() {
         ],
     );
     masked(
-        |code| RestrictionOnEnhancedCoverage::try_from(code).ok(),
+        RestrictionOnEnhancedCoverage::named,
         0x03,
         &[
             Some(RestrictionOnEnhancedCoverage::NotRestricted),
@@ -419,7 +407,7 @@ fn each_code_of_a_5gs_field_reads_as_its_table_says() {
         ],
     );
     masked(
-        |code| MaPduSessionInfoValue::try_from(code).ok(),
+        MaPduSessionInfoValue::named,
         0x0f,
         &[
             Some(MaPduSessionInfoValue::NoAdditionalInformation),
@@ -441,7 +429,7 @@ fn each_code_of_a_5gs_field_reads_as_its_table_says() {
         ],
     );
     masked(
-        |code| Some(DrxValue::received(code)),
+        |code| Some(DrxValue::from_value(code).effective()),
         0x0f,
         &[
             Some(DrxValue::NotSpecified),
@@ -463,7 +451,7 @@ fn each_code_of_a_5gs_field_reads_as_its_table_says() {
         ],
     );
     masked(
-        |code| DrxValue::try_from(code).ok(),
+        DrxValue::named,
         0x0f,
         &[
             Some(DrxValue::NotSpecified),
@@ -485,7 +473,7 @@ fn each_code_of_a_5gs_field_reads_as_its_table_says() {
         ],
     );
     listed(
-        |code| AtsssLowLayerFunctionality::try_from(code).ok(),
+        AtsssLowLayerFunctionality::named,
         &[
             (0x00, Some(AtsssLowLayerFunctionality::NotSupported)),
             (0x01, Some(AtsssLowLayerFunctionality::ActiveStandbyOnly)),
@@ -553,7 +541,7 @@ fn each_code_of_a_5gs_field_reads_as_its_table_says() {
         None,
     );
     listed(
-        |code| RejectedNssaiCause::try_from(code).ok(),
+        RejectedNssaiCause::named,
         &[
             (0x00, Some(RejectedNssaiCause::NotAvailableInPlmnOrSnpn)),
             (
@@ -568,12 +556,12 @@ fn each_code_of_a_5gs_field_reads_as_its_table_says() {
         None,
     );
     listed(
-        |code| RsnValue::try_from(code).ok(),
+        RsnValue::named,
         &[(0x00, Some(RsnValue::V1)), (0x01, Some(RsnValue::V2))],
         None,
     );
     listed(
-        |code| ServiceLevelAaServerAddressType::try_from(code).ok(),
+        ServiceLevelAaServerAddressType::named,
         &[
             (0x01, Some(ServiceLevelAaServerAddressType::Ipv4)),
             (0x02, Some(ServiceLevelAaServerAddressType::Ipv6)),
@@ -583,7 +571,7 @@ fn each_code_of_a_5gs_field_reads_as_its_table_says() {
         None,
     );
     masked(
-        ServiceLevelAaResponseResult::received,
+        |code| ServiceLevelAaResponseResult::from_value(code).effective(),
         0x03,
         &[
             ServiceLevelAaResponseResult::NoInformation,
@@ -593,7 +581,7 @@ fn each_code_of_a_5gs_field_reads_as_its_table_says() {
         ],
     );
     masked(
-        ServiceLevelAaResponseC2AuthorizationResult::received,
+        |code| ServiceLevelAaResponseC2AuthorizationResult::from_value(code).effective(),
         0x03,
         &[
             ServiceLevelAaResponseC2AuthorizationResult::NoInformation,
@@ -604,9 +592,11 @@ fn each_code_of_a_5gs_field_reads_as_its_table_says() {
     );
     // A rate that the table does not have is read as 64 kbps
     for code in 0..=u8::MAX {
-        let rate = MaxDataRate::try_from(code)
-            .ok()
-            .unwrap_or(MaxDataRate::Kbps64);
-        assert_eq!(Some(MaxDataRate::received(code)), Some(rate), "{code}");
+        let rate = MaxDataRate::named(code).unwrap_or(MaxDataRate::Kbps64);
+        assert_eq!(
+            Some(MaxDataRate::from_value(code).effective()),
+            Some(rate),
+            "{code}"
+        );
     }
 }

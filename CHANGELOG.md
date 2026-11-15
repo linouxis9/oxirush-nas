@@ -37,6 +37,19 @@ All notable changes to `oxirush-nas` are recorded here.
 
 - The tree of a message holds the names of its members and of the variants
   of its values without copying them, with oxirush-utils at 8f0b227.
+- Every table of values (102, of TS 24.501, TS 24.301 and TS 24.008) is a
+  table of `named_values!` of oxirush-utils, as `RegistrationTypeValue` is:
+  `Other(u8)`, `from_value()`, `named()`, `value()`, `name()`, `tree_name()`
+  and `effective()`. `TryFrom<u8>` never fails (`named()` reads a code
+  strictly), `received()` goes (`from_value(code).effective()`),
+  `description()` is `name()`, and `u8::from(value)` is the code of a value.
+  The getters that returned an `Option` of the value as a receiver reads it
+  return the value that the IE has (`downlink_unit()`, `uplink_unit()`,
+  `unit_value()`, `mode()`, `session_type()`, `request_type()`,
+  `result_value()`, `service_type()`, `pdn_type()`, `update_type()`).
+  `PduSessionTypeValue::sbi_str()` returns an `Option`; an access type gives
+  its `NasConnection` by `TryFrom`. `IpHdrCompAdditionalSetupType::Other` is
+  `OtherProfile`. The trees do not change.
 - The accessors of the 5GS registration type (§9.11.3.7) come from the table
   of its figure, and so does its tree: `set_registration_type()` and
   `set_follow_on_request()` return `&mut Self`; `registration_type_raw()`,

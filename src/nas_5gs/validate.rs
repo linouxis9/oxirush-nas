@@ -1006,20 +1006,14 @@ impl Validate for SecurityModeCommand {
         push_optional_eap(&mut errs, self.eap_message.as_ref());
 
         let sa = &self.selected_nas_security_algorithms;
-        if CipheringAlgorithm::try_from(sa.ciphering_raw())
-            .ok()
-            .is_none()
-        {
+        if CipheringAlgorithm::named(sa.ciphering_raw()).is_none() {
             errs.push(ValidationError {
                 severity: Severity::Warning,
                 field: "selected_nas_security_algorithms",
                 message: format!("Unknown ciphering algorithm 0x{:x}", (sa.value >> 4) & 0x0F),
             });
         }
-        if IntegrityAlgorithm::try_from(sa.integrity_raw())
-            .ok()
-            .is_none()
-        {
+        if IntegrityAlgorithm::named(sa.integrity_raw()).is_none() {
             errs.push(ValidationError {
                 severity: Severity::Warning,
                 field: "selected_nas_security_algorithms",
@@ -1123,10 +1117,7 @@ impl Validate for IdentityResponse {
 impl Validate for ServiceRequest {
     fn validate(&self) -> Vec<ValidationError> {
         let mut errs = self.sender_check_findings();
-        if ServiceTypeValue::try_from(self.service_type.service_type_raw() & 0x0F)
-            .ok()
-            .is_none()
-        {
+        if ServiceTypeValue::named(self.service_type.service_type_raw() & 0x0F).is_none() {
             errs.push(ValidationError {
                 severity: Severity::Error,
                 field: "service_type",
@@ -1394,10 +1385,7 @@ impl Validate for PduSessionEstablishmentAccept {
             });
         }
         let selected_ssc_mode = self.selected_ssc_mode.value;
-        if selected_ssc_mode & 0x08 != 0
-            || SscModeValue::try_from(selected_ssc_mode & 0x07)
-                .ok()
-                .is_none()
+        if selected_ssc_mode & 0x08 != 0 || SscModeValue::named(selected_ssc_mode & 0x07).is_none()
         {
             errs.push(ValidationError {
                 severity: Severity::Error,

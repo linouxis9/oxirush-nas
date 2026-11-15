@@ -383,51 +383,35 @@ pub(crate) fn valid_routing_indicator(value: &[u8]) -> bool {
 // NAS Security Algorithms (§9.11.3.34)
 // ---------------------------------------------------------------------------
 
-crate::common::enums::nas_enum! {
+oxirush_utils::named_values! {
     /// 5G NAS ciphering algorithm (TS 33.501 &sect;5.5).
-    #[non_exhaustive]
-    pub(crate) enum CipheringAlgorithm {
-        /// Null ciphering (no encryption).
-        NEA0 = 0x00,
-        /// 128-EEA1 (SNOW 3G).
-        NEA1 = 0x01,
-        /// 128-EEA2 (AES-128-CTR).
-        NEA2 = 0x02,
-        /// 128-EEA3 (ZUC).
-        NEA3 = 0x03,
-        /// Reserved algorithm code 4.
-        NEA4 = 0x04,
-        /// Reserved algorithm code 5.
-        NEA5 = 0x05,
-        /// Reserved algorithm code 6.
-        NEA6 = 0x06,
-        /// Reserved algorithm code 7.
-        NEA7 = 0x07,
+    pub(crate) enum CipheringAlgorithm "" bits 8 {
+        0x00 NEA0 "nea0" tree "nea0",
+        0x01 NEA1 "nea1" tree "nea1",
+        0x02 NEA2 "nea2" tree "nea2",
+        0x03 NEA3 "nea3" tree "nea3",
+        0x04 NEA4 "nea4" tree "nea4",
+        0x05 NEA5 "nea5" tree "nea5",
+        0x06 NEA6 "nea6" tree "nea6",
+        0x07 NEA7 "nea7" tree "nea7",
     }
 }
+crate::common::enums::values_readable!(CipheringAlgorithm);
 
-crate::common::enums::nas_enum! {
+oxirush_utils::named_values! {
     /// 5G NAS integrity algorithm (TS 33.501 &sect;5.5).
-    #[non_exhaustive]
-    pub(crate) enum IntegrityAlgorithm {
-        /// Null integrity (no protection). Must not be selected in production.
-        NIA0 = 0x00,
-        /// 128-EIA1 (SNOW 3G UIA2).
-        NIA1 = 0x01,
-        /// 128-EIA2 (AES-CMAC).
-        NIA2 = 0x02,
-        /// 128-EIA3 (ZUC MAC).
-        NIA3 = 0x03,
-        /// Reserved algorithm code 4.
-        NIA4 = 0x04,
-        /// Reserved algorithm code 5.
-        NIA5 = 0x05,
-        /// Reserved algorithm code 6.
-        NIA6 = 0x06,
-        /// Reserved algorithm code 7.
-        NIA7 = 0x07,
+    pub(crate) enum IntegrityAlgorithm "" bits 8 {
+        0x00 NIA0 "nia0" tree "nia0",
+        0x01 NIA1 "nia1" tree "nia1",
+        0x02 NIA2 "nia2" tree "nia2",
+        0x03 NIA3 "nia3" tree "nia3",
+        0x04 NIA4 "nia4" tree "nia4",
+        0x05 NIA5 "nia5" tree "nia5",
+        0x06 NIA6 "nia6" tree "nia6",
+        0x07 NIA7 "nia7" tree "nia7",
     }
 }
+crate::common::enums::values_readable!(IntegrityAlgorithm);
 
 crate::common::ts24301::nas_security_algorithms_ie!(SecurityAlgorithms, 0x0f);
 
@@ -569,139 +553,86 @@ impl IdentityType {
 // 5GMM Cause (§9.11.3.2, Table 9.11.3.2.1)
 // ---------------------------------------------------------------------------
 
-crate::common::enums::nas_enum! {
+oxirush_utils::named_values! {
     /// 5GMM cause values per TS 24.501 Table 9.11.3.2.1.
     ///
     /// ```
     /// use oxirush_nas::nas_5gs::GmmCauseValue;
     ///
-    /// assert_eq!(GmmCauseValue::try_from(22), Ok(GmmCauseValue::Congestion));
+    /// assert_eq!(GmmCauseValue::named(22), Some(GmmCauseValue::Congestion));
     /// assert_eq!(u8::from(GmmCauseValue::Congestion), 22);
-    /// assert_eq!(GmmCauseValue::Congestion.description(), "Congestion");
+    /// assert_eq!(GmmCauseValue::Congestion.name(), Some("Congestion"));
     /// ```
-    #[non_exhaustive]
-    pub enum GmmCauseValue {
-        /// #3 Illegal UE.
-        IllegalUe = 3 => "Illegal UE",
-        /// #5 PEI not accepted.
-        PeiNotAccepted = 5 => "PEI not accepted",
-        /// #6 Illegal ME.
-        IllegalMe = 6 => "Illegal ME",
-        /// #7 5GS services not allowed.
-        FiveGsServicesNotAllowed = 7 => "5GS services not allowed",
-        /// #9 UE identity cannot be derived by the network.
-        UeIdentityCannotBeDerivedByTheNetwork = 9 => "UE identity cannot be derived by the network",
-        /// #10 Implicitly de-registered.
-        ImplicitlyDeregistered = 10 => "Implicitly de-registered",
-        /// #11 PLMN not allowed.
-        PlmnNotAllowed = 11 => "PLMN not allowed",
-        /// #12 Tracking area not allowed.
-        TrackingAreaNotAllowed = 12 => "Tracking area not allowed",
-        /// #13 Roaming not allowed in this tracking area.
-        RoamingNotAllowedInThisTrackingArea = 13 => "Roaming not allowed in this tracking area",
-        /// #15 No suitable cells in tracking area.
-        NoSuitableCellsInTrackingArea = 15 => "No suitable cells in tracking area",
-        /// #20 MAC failure.
-        MacFailure = 20 => "MAC failure",
-        /// #21 Synch failure.
-        SynchFailure = 21 => "Synch failure",
-        /// #22 Congestion.
-        Congestion = 22 => "Congestion",
-        /// #23 UE security capabilities mismatch.
-        UeSecurityCapabilitiesMismatch = 23 => "UE security capabilities mismatch",
-        /// #24 Security mode rejected, unspecified.
-        SecurityModeRejectedUnspecified = 24 => "Security mode rejected, unspecified",
-        /// #26 Non-5G authentication unacceptable.
-        NonFiveGAuthenticationUnacceptable = 26 => "Non-5G authentication unacceptable",
-        /// #27 N1 mode not allowed.
-        N1ModeNotAllowed = 27 => "N1 mode not allowed",
-        /// #28 Restricted service area.
-        RestrictedServiceArea = 28 => "Restricted service area",
-        /// #31 Redirection to EPC required.
-        RedirectionToEpcRequired = 31 => "Redirection to EPC required",
-        /// #36 IAB-node operation not authorized.
-        IabNodeOperationNotAuthorized = 36 => "IAB-node operation not authorized",
-        /// #43 LADN not available.
-        LadnNotAvailable = 43 => "LADN not available",
-        /// #62 No network slices available.
-        NoNetworkSlicesAvailable = 62 => "No network slices available",
-        /// #65 Maximum number of PDU sessions reached.
-        MaximumNumberOfPduSessionsReached = 65 => "Maximum number of PDU sessions reached",
-        /// #67 Insufficient resources for specific slice and DNN.
-        InsufficientResourcesForSpecificSliceAndDnn = 67 => "Insufficient resources for specific slice and DNN",
-        /// #69 Insufficient resources for specific slice.
-        InsufficientResourcesForSpecificSlice = 69 => "Insufficient resources for specific slice",
-        /// #71 ngKSI already in use.
-        NgKsiAlreadyInUse = 71 => "ngKSI already in use",
-        /// #72 Non-3GPP access to 5GCN not allowed.
-        Non3GppAccessToFiveGcnNotAllowed = 72 => "Non-3GPP access to 5GCN not allowed",
-        /// #73 Serving network not authorized.
-        ServingNetworkNotAuthorized = 73 => "Serving network not authorized",
-        /// #74 Temporarily not authorized for this SNPN.
-        TemporarilyNotAuthorizedForThisSnpn = 74 => "Temporarily not authorized for this SNPN",
-        /// #75 Permanently not authorized for this SNPN.
-        PermanentlyNotAuthorizedForThisSnpn = 75 => "Permanently not authorized for this SNPN",
-        /// #76 Not authorized for this CAG or authorized for CAG cells only.
-        NotAuthorizedForThisCagOrAuthorizedForCagCellsOnly = 76 => "Not authorized for this CAG or authorized for CAG cells only",
-        /// #77 Wireline access area not allowed.
-        WirelineAccessAreaNotAllowed = 77 => "Wireline access area not allowed",
-        /// #78 PLMN not allowed to operate at the present UE location.
-        PlmnNotAllowedToOperateAtThePresentUeLocation = 78 => "PLMN not allowed to operate at the present UE location",
-        /// #79 UAS services not allowed.
-        UasServicesNotAllowed = 79 => "UAS services not allowed",
-        /// #80 Disaster roaming for the determined PLMN with disaster condition not allowed.
-        DisasterRoamingForTheDeterminedPlmnWithDisasterConditionNotAllowed = 80 => "Disaster roaming for the determined PLMN with disaster condition not allowed",
-        /// #81 Selected N3IWF is not compatible with the allowed NSSAI.
-        SelectedN3iwfIsNotCompatibleWithTheAllowedNssai = 81 => "Selected N3IWF is not compatible with the allowed NSSAI",
-        /// #82 Selected TNGF is not compatible with the allowed NSSAI.
-        SelectedTngfIsNotCompatibleWithTheAllowedNssai = 82 => "Selected TNGF is not compatible with the allowed NSSAI",
-        /// #90 Payload was not forwarded.
-        PayloadWasNotForwarded = 90 => "Payload was not forwarded",
-        /// #91 DNN not supported or not subscribed in the slice.
-        DnnNotSupportedOrNotSubscribedInTheSlice = 91 => "DNN not supported or not subscribed in the slice",
-        /// #92 Insufficient user-plane resources for the PDU session.
-        InsufficientUserPlaneResourcesForThePduSession = 92 => "Insufficient user-plane resources for the PDU session",
-        /// #93 Onboarding services terminated.
-        OnboardingServicesTerminated = 93 => "Onboarding services terminated",
-        /// #94 User plane positioning not authorized.
-        UserPlanePositioningNotAuthorized = 94 => "User plane positioning not authorized",
-        /// #95 Semantically incorrect message.
-        SemanticallyIncorrectMessage = 95 => "Semantically incorrect message",
-        /// #96 Invalid mandatory information.
-        InvalidMandatoryInformation = 96 => "Invalid mandatory information",
-        /// #97 Message type non-existent or not implemented.
-        MessageTypeNonExistentOrNotImplemented = 97 => "Message type non-existent or not implemented",
-        /// #98 Message type not compatible with the protocol state.
-        MessageTypeNotCompatibleWithTheProtocolState = 98 => "Message type not compatible with the protocol state",
-        /// #99 Information element non-existent or not implemented.
-        InformationElementNonExistentOrNotImplemented = 99 => "Information element non-existent or not implemented",
-        /// #100 Conditional IE error.
-        ConditionalIeError = 100 => "Conditional IE error",
-        /// #101 Message not compatible with the protocol state.
-        MessageNotCompatibleWithTheProtocolState = 101 => "Message not compatible with the protocol state",
-        /// #111 Protocol error, unspecified.
-        ProtocolErrorUnspecified = 111 => "Protocol error, unspecified",
-    }
-    received {
-        _ => ProtocolErrorUnspecified,
+    pub enum GmmCauseValue "Table 9.11.3.2.1" bits 8 others as 111 {
+        3 IllegalUe "Illegal UE" tree "illegal-ue",
+        5 PeiNotAccepted "PEI not accepted" tree "pei-not-accepted",
+        6 IllegalMe "Illegal ME" tree "illegal-me",
+        7 FiveGsServicesNotAllowed "5GS services not allowed" tree "5gs-services-not-allowed",
+        9 UeIdentityCannotBeDerivedByTheNetwork "UE identity cannot be derived by the network" tree "ue-identity-cannot-be-derived-by-the-network",
+        10 ImplicitlyDeregistered "Implicitly de-registered" tree "implicitly-deregistered",
+        11 PlmnNotAllowed "PLMN not allowed" tree "plmn-not-allowed",
+        12 TrackingAreaNotAllowed "Tracking area not allowed" tree "tracking-area-not-allowed",
+        13 RoamingNotAllowedInThisTrackingArea "Roaming not allowed in this tracking area" tree "roaming-not-allowed-in-this-tracking-area",
+        15 NoSuitableCellsInTrackingArea "No suitable cells in tracking area" tree "no-suitable-cells-in-tracking-area",
+        20 MacFailure "MAC failure" tree "mac-failure",
+        21 SynchFailure "Synch failure" tree "synch-failure",
+        22 Congestion "Congestion" tree "congestion",
+        23 UeSecurityCapabilitiesMismatch "UE security capabilities mismatch" tree "ue-security-capabilities-mismatch",
+        24 SecurityModeRejectedUnspecified "Security mode rejected, unspecified" tree "security-mode-rejected-unspecified",
+        26 NonFiveGAuthenticationUnacceptable "Non-5G authentication unacceptable" tree "non-5g-authentication-unacceptable",
+        27 N1ModeNotAllowed "N1 mode not allowed" tree "n1-mode-not-allowed",
+        28 RestrictedServiceArea "Restricted service area" tree "restricted-service-area",
+        31 RedirectionToEpcRequired "Redirection to EPC required" tree "redirection-to-epc-required",
+        36 IabNodeOperationNotAuthorized "IAB-node operation not authorized" tree "iab-node-operation-not-authorized",
+        43 LadnNotAvailable "LADN not available" tree "ladn-not-available",
+        62 NoNetworkSlicesAvailable "No network slices available" tree "no-network-slices-available",
+        65 MaximumNumberOfPduSessionsReached "Maximum number of PDU sessions reached" tree "maximum-number-of-pdu-sessions-reached",
+        67 InsufficientResourcesForSpecificSliceAndDnn "Insufficient resources for specific slice and DNN" tree "insufficient-resources-for-specific-slice-and-dnn",
+        69 InsufficientResourcesForSpecificSlice "Insufficient resources for specific slice" tree "insufficient-resources-for-specific-slice",
+        71 NgKsiAlreadyInUse "ngKSI already in use" tree "ng-ksi-already-in-use",
+        72 Non3GppAccessToFiveGcnNotAllowed "Non-3GPP access to 5GCN not allowed" tree "non-3gpp-access-to-5gcn-not-allowed",
+        73 ServingNetworkNotAuthorized "Serving network not authorized" tree "serving-network-not-authorized",
+        74 TemporarilyNotAuthorizedForThisSnpn "Temporarily not authorized for this SNPN" tree "temporarily-not-authorized-for-this-snpn",
+        75 PermanentlyNotAuthorizedForThisSnpn "Permanently not authorized for this SNPN" tree "permanently-not-authorized-for-this-snpn",
+        76 NotAuthorizedForThisCagOrAuthorizedForCagCellsOnly "Not authorized for this CAG or authorized for CAG cells only" tree "not-authorized-for-this-cag-or-authorized-for-cag-cells-only",
+        77 WirelineAccessAreaNotAllowed "Wireline access area not allowed" tree "wireline-access-area-not-allowed",
+        78 PlmnNotAllowedToOperateAtThePresentUeLocation "PLMN not allowed to operate at the present UE location" tree "plmn-not-allowed-to-operate-at-the-present-ue-location",
+        79 UasServicesNotAllowed "UAS services not allowed" tree "uas-services-not-allowed",
+        80 DisasterRoamingForTheDeterminedPlmnWithDisasterConditionNotAllowed "Disaster roaming for the determined PLMN with disaster condition not allowed" tree "disaster-roaming-for-the-determined-plmn-with-disaster-condition-not-allowed",
+        81 SelectedN3iwfIsNotCompatibleWithTheAllowedNssai "Selected N3IWF is not compatible with the allowed NSSAI" tree "selected-n3iwf-is-not-compatible-with-the-allowed-nssai",
+        82 SelectedTngfIsNotCompatibleWithTheAllowedNssai "Selected TNGF is not compatible with the allowed NSSAI" tree "selected-tngf-is-not-compatible-with-the-allowed-nssai",
+        90 PayloadWasNotForwarded "Payload was not forwarded" tree "payload-was-not-forwarded",
+        91 DnnNotSupportedOrNotSubscribedInTheSlice "DNN not supported or not subscribed in the slice" tree "dnn-not-supported-or-not-subscribed-in-the-slice",
+        92 InsufficientUserPlaneResourcesForThePduSession "Insufficient user-plane resources for the PDU session" tree "insufficient-user-plane-resources-for-the-pdu-session",
+        93 OnboardingServicesTerminated "Onboarding services terminated" tree "onboarding-services-terminated",
+        94 UserPlanePositioningNotAuthorized "User plane positioning not authorized" tree "user-plane-positioning-not-authorized",
+        95 SemanticallyIncorrectMessage "Semantically incorrect message" tree "semantically-incorrect-message",
+        96 InvalidMandatoryInformation "Invalid mandatory information" tree "invalid-mandatory-information",
+        97 MessageTypeNonExistentOrNotImplemented "Message type non-existent or not implemented" tree "message-type-non-existent-or-not-implemented",
+        98 MessageTypeNotCompatibleWithTheProtocolState "Message type not compatible with the protocol state" tree "message-type-not-compatible-with-the-protocol-state",
+        99 InformationElementNonExistentOrNotImplemented "Information element non-existent or not implemented" tree "information-element-non-existent-or-not-implemented",
+        100 ConditionalIeError "Conditional IE error" tree "conditional-ie-error",
+        101 MessageNotCompatibleWithTheProtocolState "Message not compatible with the protocol state" tree "message-not-compatible-with-the-protocol-state",
+        111 ProtocolErrorUnspecified "Protocol error, unspecified" tree "protocol-error-unspecified",
     }
 }
+crate::common::enums::values_readable!(GmmCauseValue);
 
 impl GmmCause {
     /// The cause, if its value is one of the table.
     pub fn cause(&self) -> Option<GmmCauseValue> {
-        GmmCauseValue::try_from(self.value).ok()
+        GmmCauseValue::named(self.value)
     }
 
     /// Cause with the receiver rule of TS 24.501 Table 9.11.3.2.1 applied.
     pub fn cause_received(&self) -> GmmCauseValue {
-        GmmCauseValue::received(self.value)
+        GmmCauseValue::from_value(self.value).effective()
     }
 
     /// Human-readable description (returns hex for unknown values).
     pub fn description(&self) -> String {
         match self.cause() {
-            Some(c) => c.description().to_string(),
+            Some(c) => c.name().unwrap_or_default().to_string(),
             None => format!("Unknown 5GMM cause 0x{:02x}", self.value),
         }
     }
@@ -722,121 +653,75 @@ impl GmmCause {
 // 5GSM Cause (§9.11.4.2, Table 9.11.4.2.1)
 // ---------------------------------------------------------------------------
 
-crate::common::enums::nas_enum! {
+oxirush_utils::named_values! {
     /// 5GSM cause values per TS 24.501 Table 9.11.4.2.1.
-    #[non_exhaustive]
-    pub enum GsmCauseValue {
-        /// #8 Operator determined barring.
-        OperatorDeterminedBarring = 0x08 => "Operator determined barring",
-        /// #26 Insufficient resources.
-        InsufficientResources = 0x1A => "Insufficient resources",
-        /// #27 Missing or unknown DNN.
-        MissingOrUnknownDnn = 0x1B => "Missing or unknown DNN",
-        /// #28 Unknown PDU session type.
-        UnknownPduSessionType = 0x1C => "Unknown PDU session type",
-        /// #29 User authentication or authorization failed.
-        UserAuthenticationOrAuthorizationFailed = 0x1D => "User authentication or authorization failed",
-        /// #31 Request rejected, unspecified.
-        RequestRejectedUnspecified = 0x1F => "Request rejected, unspecified",
-        /// #32 Service option not supported.
-        ServiceOptionNotSupported = 0x20 => "Service option not supported",
-        /// #33 Requested service option not subscribed.
-        RequestedServiceOptionNotSubscribed = 0x21 => "Requested service option not subscribed",
-        /// #35 PTI already in use.
-        PtiAlreadyInUse = 0x23 => "PTI already in use",
-        /// #36 Regular deactivation.
-        RegularDeactivation = 0x24 => "Regular deactivation",
-        /// #37 5GS QoS not accepted.
-        FiveGsQosNotAccepted = 0x25 => "5GS QoS not accepted",
-        /// #38 Network failure.
-        NetworkFailure = 0x26 => "Network failure",
-        /// #39 Reactivation requested.
-        ReactivationRequested = 0x27 => "Reactivation requested",
-        /// #41 Semantic error in the TFT operation.
-        SemanticErrorInTheTftOperation = 0x29 => "Semantic error in the TFT operation",
-        /// #42 Syntactical error in the TFT operation.
-        SyntacticalErrorInTheTftOperation = 0x2A => "Syntactical error in the TFT operation",
-        /// #43 Invalid PDU session identity.
-        InvalidPduSessionIdentity = 0x2B => "Invalid PDU session identity",
-        /// #44 Semantic errors in packet filter(s).
-        SemanticErrorsInPacketFilters = 0x2C => "Semantic errors in packet filter(s)",
-        /// #45 Syntactical error in packet filter(s).
-        SyntacticalErrorInPacketFilters = 0x2D => "Syntactical error in packet filter(s)",
-        /// #46 Out of LADN service area.
-        OutOfLadnServiceArea = 0x2E => "Out of LADN service area",
-        /// #47 PTI mismatch.
-        PtiMismatch = 0x2F => "PTI mismatch",
-        /// #50 PDU session type IPv4 only allowed.
-        PduSessionTypeIpv4OnlyAllowed = 0x32 => "PDU session type IPv4 only allowed",
-        /// #51 PDU session type IPv6 only allowed.
-        PduSessionTypeIpv6OnlyAllowed = 0x33 => "PDU session type IPv6 only allowed",
-        /// #54 PDU session does not exist.
-        PduSessionDoesNotExist = 0x36 => "PDU session does not exist",
-        /// #57 PDU session type IPv4v6 only allowed.
-        PduSessionTypeIpv4v6OnlyAllowed = 0x39 => "PDU session type IPv4v6 only allowed",
-        /// #58 PDU session type Unstructured only allowed.
-        PduSessionTypeUnstructuredOnlyAllowed = 0x3A => "PDU session type Unstructured only allowed",
-        /// #59 Unsupported 5QI value.
-        Unsupported5QiValue = 0x3B => "Unsupported 5QI value",
-        /// #61 PDU session type Ethernet only allowed.
-        PduSessionTypeEthernetOnlyAllowed = 0x3D => "PDU session type Ethernet only allowed",
-        /// #67 Insufficient resources for specific slice and DNN.
-        InsufficientResourcesForSpecificSliceAndDnn = 0x43 => "Insufficient resources for specific slice and DNN",
-        /// #68 Not supported SSC mode.
-        NotSupportedSscMode = 0x44 => "Not supported SSC mode",
-        /// #69 Insufficient resources for specific slice.
-        InsufficientResourcesForSpecificSlice = 0x45 => "Insufficient resources for specific slice",
-        /// #70 Missing or unknown DNN in a slice.
-        MissingOrUnknownDnnInASlice = 0x46 => "Missing or unknown DNN in a slice",
-        /// #81 Invalid PTI value.
-        InvalidPtiValue = 0x51 => "Invalid PTI value",
-        /// #82 Maximum data rate per UE for user-plane integrity protection is too low.
-        MaximumDataRatePerUeForUserPlaneIntegrityProtectionIsTooLow = 0x52 => "Maximum data rate per UE for user-plane integrity protection is too low",
-        /// #83 Semantic error in the QoS operation.
-        SemanticErrorInTheQosOperation = 0x53 => "Semantic error in the QoS operation",
-        /// #84 Syntactical error in the QoS operation.
-        SyntacticalErrorInTheQosOperation = 0x54 => "Syntactical error in the QoS operation",
-        /// #85 Invalid mapped EPS bearer identity.
-        InvalidMappedEpsBearerIdentity = 0x55 => "Invalid mapped EPS bearer identity",
-        /// #86 UAS services not allowed.
-        UasServicesNotAllowed = 0x56 => "UAS services not allowed",
-        /// #87 QoS differentiation for non-3GPP device identifier(s) not available.
-        QosDifferentiationForNon3GppDeviceIdentifiersNotAvailable = 0x57 => "QoS differentiation for non-3GPP device identifier(s) not available",
-        /// #95 Semantically incorrect message.
-        SemanticallyIncorrectMessage = 0x5F => "Semantically incorrect message",
-        /// #96 Invalid mandatory information.
-        InvalidMandatoryInformation = 0x60 => "Invalid mandatory information",
-        /// #97 Message type non-existent or not implemented.
-        MessageTypeNonExistentOrNotImplemented = 0x61 => "Message type non-existent or not implemented",
-        /// #98 Message type not compatible with the protocol state.
-        MessageTypeNotCompatibleWithTheProtocolState = 0x62 => "Message type not compatible with the protocol state",
-        /// #99 Information element non-existent or not implemented.
-        InformationElementNonExistentOrNotImplemented = 0x63 => "Information element non-existent or not implemented",
-        /// #100 Conditional IE error.
-        ConditionalIeError = 0x64 => "Conditional IE error",
-        /// #101 Message not compatible with the protocol state.
-        MessageNotCompatibleWithTheProtocolState = 0x65 => "Message not compatible with the protocol state",
-        /// #111 Protocol error, unspecified.
-        ProtocolErrorUnspecified = 0x6F => "Protocol error, unspecified",
+    pub enum GsmCauseValue "Table 9.11.4.2.1" bits 8 {
+        0x08 OperatorDeterminedBarring "Operator determined barring" tree "operator-determined-barring",
+        0x1A InsufficientResources "Insufficient resources" tree "insufficient-resources",
+        0x1B MissingOrUnknownDnn "Missing or unknown DNN" tree "missing-or-unknown-dnn",
+        0x1C UnknownPduSessionType "Unknown PDU session type" tree "unknown-pdu-session-type",
+        0x1D UserAuthenticationOrAuthorizationFailed "User authentication or authorization failed" tree "user-authentication-or-authorization-failed",
+        0x1F RequestRejectedUnspecified "Request rejected, unspecified" tree "request-rejected-unspecified",
+        0x20 ServiceOptionNotSupported "Service option not supported" tree "service-option-not-supported",
+        0x21 RequestedServiceOptionNotSubscribed "Requested service option not subscribed" tree "requested-service-option-not-subscribed",
+        0x23 PtiAlreadyInUse "PTI already in use" tree "pti-already-in-use",
+        0x24 RegularDeactivation "Regular deactivation" tree "regular-deactivation",
+        0x25 FiveGsQosNotAccepted "5GS QoS not accepted" tree "5gs-qos-not-accepted",
+        0x26 NetworkFailure "Network failure" tree "network-failure",
+        0x27 ReactivationRequested "Reactivation requested" tree "reactivation-requested",
+        0x29 SemanticErrorInTheTftOperation "Semantic error in the TFT operation" tree "semantic-error-in-the-tft-operation",
+        0x2A SyntacticalErrorInTheTftOperation "Syntactical error in the TFT operation" tree "syntactical-error-in-the-tft-operation",
+        0x2B InvalidPduSessionIdentity "Invalid PDU session identity" tree "invalid-pdu-session-identity",
+        0x2C SemanticErrorsInPacketFilters "Semantic errors in packet filter(s)" tree "semantic-errors-in-packet-filters",
+        0x2D SyntacticalErrorInPacketFilters "Syntactical error in packet filter(s)" tree "syntactical-error-in-packet-filters",
+        0x2E OutOfLadnServiceArea "Out of LADN service area" tree "out-of-ladn-service-area",
+        0x2F PtiMismatch "PTI mismatch" tree "pti-mismatch",
+        0x32 PduSessionTypeIpv4OnlyAllowed "PDU session type IPv4 only allowed" tree "pdu-session-type-ipv4-only-allowed",
+        0x33 PduSessionTypeIpv6OnlyAllowed "PDU session type IPv6 only allowed" tree "pdu-session-type-ipv6-only-allowed",
+        0x36 PduSessionDoesNotExist "PDU session does not exist" tree "pdu-session-does-not-exist",
+        0x39 PduSessionTypeIpv4v6OnlyAllowed "PDU session type IPv4v6 only allowed" tree "pdu-session-type-ipv4v6-only-allowed",
+        0x3A PduSessionTypeUnstructuredOnlyAllowed "PDU session type Unstructured only allowed" tree "pdu-session-type-unstructured-only-allowed",
+        0x3B Unsupported5QiValue "Unsupported 5QI value" tree "unsupported5-qi-value",
+        0x3D PduSessionTypeEthernetOnlyAllowed "PDU session type Ethernet only allowed" tree "pdu-session-type-ethernet-only-allowed",
+        0x43 InsufficientResourcesForSpecificSliceAndDnn "Insufficient resources for specific slice and DNN" tree "insufficient-resources-for-specific-slice-and-dnn",
+        0x44 NotSupportedSscMode "Not supported SSC mode" tree "not-supported-ssc-mode",
+        0x45 InsufficientResourcesForSpecificSlice "Insufficient resources for specific slice" tree "insufficient-resources-for-specific-slice",
+        0x46 MissingOrUnknownDnnInASlice "Missing or unknown DNN in a slice" tree "missing-or-unknown-dnn-in-a-slice",
+        0x51 InvalidPtiValue "Invalid PTI value" tree "invalid-pti-value",
+        0x52 MaximumDataRatePerUeForUserPlaneIntegrityProtectionIsTooLow "Maximum data rate per UE for user-plane integrity protection is too low" tree "maximum-data-rate-per-ue-for-user-plane-integrity-protection-is-too-low",
+        0x53 SemanticErrorInTheQosOperation "Semantic error in the QoS operation" tree "semantic-error-in-the-qos-operation",
+        0x54 SyntacticalErrorInTheQosOperation "Syntactical error in the QoS operation" tree "syntactical-error-in-the-qos-operation",
+        0x55 InvalidMappedEpsBearerIdentity "Invalid mapped EPS bearer identity" tree "invalid-mapped-eps-bearer-identity",
+        0x56 UasServicesNotAllowed "UAS services not allowed" tree "uas-services-not-allowed",
+        0x57 QosDifferentiationForNon3GppDeviceIdentifiersNotAvailable "QoS differentiation for non-3GPP device identifier(s) not available" tree "qos-differentiation-for-non-3gpp-device-identifiers-not-available",
+        0x5F SemanticallyIncorrectMessage "Semantically incorrect message" tree "semantically-incorrect-message",
+        0x60 InvalidMandatoryInformation "Invalid mandatory information" tree "invalid-mandatory-information",
+        0x61 MessageTypeNonExistentOrNotImplemented "Message type non-existent or not implemented" tree "message-type-non-existent-or-not-implemented",
+        0x62 MessageTypeNotCompatibleWithTheProtocolState "Message type not compatible with the protocol state" tree "message-type-not-compatible-with-the-protocol-state",
+        0x63 InformationElementNonExistentOrNotImplemented "Information element non-existent or not implemented" tree "information-element-non-existent-or-not-implemented",
+        0x64 ConditionalIeError "Conditional IE error" tree "conditional-ie-error",
+        0x65 MessageNotCompatibleWithTheProtocolState "Message not compatible with the protocol state" tree "message-not-compatible-with-the-protocol-state",
+        0x6F ProtocolErrorUnspecified "Protocol error, unspecified" tree "protocol-error-unspecified",
     }
 }
+crate::common::enums::values_readable!(GsmCauseValue);
 
 impl GsmCauseValue {
     /// TS 24.501 §9.11.4.2 receive-side interpretation for values received by the UE.
     pub fn from_u8_for_ue(v: u8) -> Self {
-        Self::try_from(v).unwrap_or(Self::RequestRejectedUnspecified)
+        Self::named(v).unwrap_or(Self::RequestRejectedUnspecified)
     }
 
     /// TS 24.501 §9.11.4.2 receive-side interpretation for values received by the network.
     pub fn from_u8_for_network(v: u8) -> Self {
-        Self::try_from(v).unwrap_or(Self::ProtocolErrorUnspecified)
+        Self::named(v).unwrap_or(Self::ProtocolErrorUnspecified)
     }
 }
 
 impl GsmCause {
     /// The cause, if its value is one of the table.
     pub fn cause(&self) -> Option<GsmCauseValue> {
-        GsmCauseValue::try_from(self.value).ok()
+        GsmCauseValue::named(self.value)
     }
 
     /// Cause as received by the UE (TS 24.501 §9.11.4.2).
@@ -852,7 +737,7 @@ impl GsmCause {
     /// Human-readable description.
     pub fn description(&self) -> String {
         match self.cause() {
-            Some(c) => c.description().to_string(),
+            Some(c) => c.name().unwrap_or_default().to_string(),
             None => format!("Unknown 5GSM cause 0x{:02x}", self.value),
         }
     }
@@ -880,7 +765,10 @@ impl T3512Value {
     /// Unit and value of the first value octet; extra octets are ignored.
     pub fn timer(&self) -> Option<(GprsTimer3Unit, u8)> {
         let octet = *self.value.first()?;
-        Some((GprsTimer3Unit::received(octet >> 5), octet & 0x1f))
+        Some((
+            GprsTimer3Unit::from_value(octet >> 5).effective(),
+            octet & 0x1f,
+        ))
     }
 
     /// Timer unit.
@@ -952,7 +840,7 @@ impl T3512Value {
         value: u8,
     ) -> core::result::Result<Self, ValueError> {
         within("timer-value", value, 0, 31)?;
-        Ok(Self::new(vec![(unit as u8) << 5 | value]))
+        Ok(Self::new(vec![(u8::from(unit)) << 5 | value]))
     }
 
     /// Build the smallest exact encoding of a duration, of 320 hours too.
@@ -972,7 +860,7 @@ impl T3512Value {
 
     /// Build a deactivated timer.
     pub fn deactivated() -> Self {
-        Self::new(vec![(GprsTimer3Unit::Deactivated as u8) << 5])
+        Self::new(vec![(u8::from(GprsTimer3Unit::Deactivated)) << 5])
     }
 
     /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
@@ -987,43 +875,30 @@ impl T3512Value {
 // Payload Container Type (§9.11.3.40)
 // ---------------------------------------------------------------------------
 
-crate::common::enums::nas_enum! {
+oxirush_utils::named_values! {
     /// Payload container type values.
-    #[non_exhaustive]
-    pub enum PayloadContainerKind {
-        /// N1 SM information.
-        N1SmInformation = 0x01,
-        /// SMS.
-        Sms = 0x02,
-        /// LTE Positioning Protocol (LPP) message container.
-        LtePp = 0x03,
-        /// SOR transparent container.
-        SorTransparentContainer = 0x04,
-        /// UE policy container.
-        UePolicy = 0x05,
-        /// UE parameters update transparent container.
-        UeParametersUpdate = 0x06,
-        /// Location services message container.
-        LocationServices = 0x07,
-        /// CIoT user data container.
-        CIoT = 0x08,
-        /// Service-level-AA container (Rel-17), TS 24.501 §9.11.3.39.
-        ServiceLevelAaContainer = 0x09,
-        /// Event notification.
-        EventNotification = 0x0A,
-        /// UPP-CMI container (User Plane Positioning — Capability Management Information).
-        UppCmiContainer = 0x0B,
-        /// SLPP message container (Sidelink Positioning Protocol).
-        SlppMessageContainer = 0x0C,
-        /// Multiple payloads.
-        MultiplePayloads = 0x0F,
+    pub enum PayloadContainerKind "" bits 4 {
+        0x01 N1SmInformation "n1 sm information" tree "n1-sm-information",
+        0x02 Sms "sms" tree "sms",
+        0x03 LtePp "lte pp" tree "lte-pp",
+        0x04 SorTransparentContainer "sor transparent container" tree "sor-transparent-container",
+        0x05 UePolicy "ue policy" tree "ue-policy",
+        0x06 UeParametersUpdate "ue parameters update" tree "ue-parameters-update",
+        0x07 LocationServices "location services" tree "location-services",
+        0x08 CIoT "ciot" tree "ciot",
+        0x09 ServiceLevelAaContainer "service level aa container" tree "service-level-aa-container",
+        0x0A EventNotification "event notification" tree "event-notification",
+        0x0B UppCmiContainer "upp cmi container" tree "upp-cmi-container",
+        0x0C SlppMessageContainer "slpp message container" tree "slpp-message-container",
+        0x0F MultiplePayloads "multiple payloads" tree "multiple-payloads",
     }
 }
+crate::common::enums::values_readable!(PayloadContainerKind);
 
 impl PayloadContainerType {
     /// Typed payload container kind.
     pub fn kind(&self) -> Option<PayloadContainerKind> {
-        PayloadContainerKind::try_from(self.value & 0x0F).ok()
+        PayloadContainerKind::named(self.value & 0x0F)
     }
 
     /// Whether this is N1 SM information (most common case).
@@ -1033,13 +908,13 @@ impl PayloadContainerType {
 
     /// Mutating setter for the payload container kind.
     pub fn set_kind(&mut self, kind: PayloadContainerKind) -> &mut Self {
-        self.value = (self.value & !0x0F) | (kind as u8 & 0x0F);
+        self.value = (self.value & !0x0F) | (u8::from(kind) & 0x0F);
         self
     }
 
     /// Build from a typed payload container kind.
     pub fn from_kind(kind: PayloadContainerKind) -> Self {
-        Self::new(kind as u8)
+        Self::new(u8::from(kind))
     }
 
     /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
@@ -1055,44 +930,40 @@ impl PayloadContainerType {
 // PDU Session Type (§9.11.4.11)
 // ---------------------------------------------------------------------------
 
-crate::common::enums::nas_enum! {
+oxirush_utils::named_values! {
     /// PDU session type per TS 24.501 §9.11.4.11.
-    #[non_exhaustive]
-    pub enum PduSessionTypeValue {
-        /// IPv4.
-        Ipv4 = 0x01,
-        /// IPv6.
-        Ipv6 = 0x02,
-        /// IPv4v6.
-        Ipv4v6 = 0x03,
-        /// Unstructured.
-        Unstructured = 0x04,
-        /// Ethernet.
-        Ethernet = 0x05,
-    }
-    received {
-        0x00 => Ipv4v6,
-        0x06 => Ipv4v6,
+    pub enum PduSessionTypeValue "§9.11.4.11" bits 3 read [0x00 ..= 0x00 as 0x03, 0x06 ..= 0x06 as 0x03] {
+        0x01 Ipv4 "ipv4" tree "ipv4",
+        0x02 Ipv6 "ipv6" tree "ipv6",
+        0x03 Ipv4v6 "ipv4v6" tree "ipv4v6",
+        0x04 Unstructured "unstructured" tree "unstructured",
+        0x05 Ethernet "ethernet" tree "ethernet",
     }
 }
+crate::common::enums::values_readable!(PduSessionTypeValue);
 
 impl PduSessionTypeValue {
-    /// 3GPP SBI string representation (TS 29.502).
-    pub fn sbi_str(&self) -> &'static str {
+    /// 3GPP SBI string representation (TS 29.502): `None` for a value that
+    /// the table does not name.
+    pub fn sbi_str(&self) -> Option<&'static str> {
         match self {
-            Self::Ipv4 => "IPV4",
-            Self::Ipv6 => "IPV6",
-            Self::Ipv4v6 => "IPV4V6",
-            Self::Unstructured => "UNSTRUCTURED",
-            Self::Ethernet => "ETHERNET",
+            Self::Ipv4 => Some("IPV4"),
+            Self::Ipv6 => Some("IPV6"),
+            Self::Ipv4v6 => Some("IPV4V6"),
+            Self::Unstructured => Some("UNSTRUCTURED"),
+            Self::Ethernet => Some("ETHERNET"),
+            Self::Other(_) => None,
         }
     }
 }
 
 impl PduSessionType {
     /// Typed PDU session type.
-    pub fn session_type(&self) -> Option<PduSessionTypeValue> {
-        PduSessionTypeValue::received(self.value & 0x07)
+    ///
+    /// The value as the IE has it: `effective()` is the value as a receiver
+    /// reads it.
+    pub fn session_type(&self) -> PduSessionTypeValue {
+        PduSessionTypeValue::from_value(self.value & 0x07)
     }
 
     /// Raw session type value (lower 3 bits).
@@ -1102,23 +973,20 @@ impl PduSessionType {
 
     /// Mutating setter for the typed PDU session type.
     pub fn set_session_type(&mut self, session_type: PduSessionTypeValue) -> &mut Self {
-        self.value = session_type as u8 & 0x07;
+        self.value = u8::from(session_type) & 0x07;
         self
     }
 
     /// Build from a typed session type.
     pub fn from_session_type(st: PduSessionTypeValue) -> Self {
-        Self::new(st as u8)
+        Self::new(u8::from(st))
     }
 
     /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
     pub(crate) const SENDER_RULE: &'static str = "a defined PDU session type, bit 4 clear";
     /// Whether this value uses a defined sender code with spare bits cleared.
     pub fn is_well_formed(&self) -> bool {
-        self.value & !0x07 == 0
-            && PduSessionTypeValue::try_from(self.value & 0x07)
-                .ok()
-                .is_some()
+        self.value & !0x07 == 0 && PduSessionTypeValue::named(self.value & 0x07).is_some()
     }
 }
 
@@ -1126,22 +994,20 @@ impl PduSessionType {
 // Access Type (§9.11.2.1A)
 // ---------------------------------------------------------------------------
 
-crate::common::enums::nas_enum! {
+oxirush_utils::named_values! {
     /// Access type per TS 24.501 §9.11.2.1A.
-    #[non_exhaustive]
-    pub enum AccessTypeValue {
-        /// 3GPP access
-        ThreeGppAccess = 0x01,
-        /// Non-3GPP access
-        Non3GppAccess = 0x02,
+    pub enum AccessTypeValue "§9.11.2.1A" bits 2 {
+        0x01 ThreeGppAccess "3gpp access" tree "3gpp-access",
+        0x02 Non3GppAccess "non 3gpp access" tree "non-3gpp-access",
     }
 }
+crate::common::enums::values_readable!(AccessTypeValue);
 
 impl AccessType {
     /// Typed access type value, of the half octet of the IE: a mandatory
     /// octet has a spare half octet beside it.
     pub fn access_type(&self) -> Option<AccessTypeValue> {
-        AccessTypeValue::try_from((self.value & 0x0f) & 0x03).ok()
+        AccessTypeValue::named((self.value & 0x0f) & 0x03)
     }
 
     /// Raw access type value (lower 2 bits).
@@ -1151,13 +1017,13 @@ impl AccessType {
 
     /// Mutating setter for the typed access type.
     pub fn set_access_type(&mut self, access_type: AccessTypeValue) -> &mut Self {
-        self.value = access_type as u8 & 0x03;
+        self.value = u8::from(access_type) & 0x03;
         self
     }
 
     /// Build from a typed access type.
     pub fn from_access_type(at: AccessTypeValue) -> Self {
-        Self::new(at as u8)
+        Self::new(u8::from(at))
     }
 
     /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
@@ -1173,92 +1039,61 @@ impl AccessType {
 // Request Type (§9.11.3.47)
 // ---------------------------------------------------------------------------
 
-crate::common::enums::nas_enum! {
+oxirush_utils::named_values! {
     /// Request type per TS 24.501 §9.11.3.47.
-    #[non_exhaustive]
-    pub enum RequestTypeValue {
-        /// Initial request.
-        InitialRequest = 0x01,
-        /// Existing PDU session.
-        ExistingPduSession = 0x02,
-        /// Initial emergency request.
-        InitialEmergencyRequest = 0x03,
-        /// Existing emergency PDU session.
-        ExistingEmergencyPduSession = 0x04,
-        /// Modification request.
-        ModificationRequest = 0x05,
-        /// MA PDU request.
-        MaPduRequest = 0x06,
-    }
-    received {
-        0x00 => InitialRequest,
+    pub enum RequestTypeValue "§9.11.3.47" bits 3 read [0x00 ..= 0x00 as 0x01] {
+        0x01 InitialRequest "initial request" tree "initial-request",
+        0x02 ExistingPduSession "existing pdu session" tree "existing-pdu-session",
+        0x03 InitialEmergencyRequest "initial emergency request" tree "initial-emergency-request",
+        0x04 ExistingEmergencyPduSession "existing emergency pdu session" tree "existing-emergency-pdu-session",
+        0x05 ModificationRequest "modification request" tree "modification-request",
+        0x06 MaPduRequest "ma pdu request" tree "ma-pdu-request",
     }
 }
+crate::common::enums::values_readable!(RequestTypeValue);
 
 // ---------------------------------------------------------------------------
 // SSC Mode (§9.11.4.16)
 // ---------------------------------------------------------------------------
 
-crate::common::enums::nas_enum! {
+oxirush_utils::named_values! {
     /// SSC mode per TS 24.501 §9.11.4.16.
-    #[non_exhaustive]
-    pub enum SscModeValue {
-        /// SSC mode 1.
-        Ssc1 = 0x01,
-        /// SSC mode 2.
-        Ssc2 = 0x02,
-        /// SSC mode 3.
-        Ssc3 = 0x03,
-    }
-    received {
-        0x04 => Ssc1,
-        0x05 => Ssc2,
-        0x06 => Ssc3,
+    pub enum SscModeValue "§9.11.4.16" bits 3 read [0x04 ..= 0x04 as 0x01, 0x05 ..= 0x05 as 0x02, 0x06 ..= 0x06 as 0x03] {
+        0x01 Ssc1 "ssc1" tree "ssc1",
+        0x02 Ssc2 "ssc2" tree "ssc2",
+        0x03 Ssc3 "ssc3" tree "ssc3",
     }
 }
+crate::common::enums::values_readable!(SscModeValue);
 
 // ---------------------------------------------------------------------------
 // NSSAI Inclusion Mode (§9.11.3.37A)
 // ---------------------------------------------------------------------------
 
-crate::common::enums::nas_enum! {
+oxirush_utils::named_values! {
     /// NSSAI inclusion mode per TS 24.501 §9.11.3.37A.
-    #[non_exhaustive]
-    pub enum NssaiInclusionModeValue {
-        /// Mode A (0b00) — see TS 24.501 §9.11.3.37A table 9.11.3.37A.1.
-        A = 0x00,
-        /// Mode B (0b01) — see TS 24.501 §9.11.3.37A table 9.11.3.37A.1.
-        B = 0x01,
-        /// Mode C (0b10) — see TS 24.501 §9.11.3.37A table 9.11.3.37A.1.
-        C = 0x02,
-        /// Mode D (0b11) — see TS 24.501 §9.11.3.37A table 9.11.3.37A.1.
-        D = 0x03,
-    }
-    received {
-        _ => D,
+    pub enum NssaiInclusionModeValue "§9.11.3.37A" bits 2 others as 0x03 {
+        0x00 A "a" tree "a",
+        0x01 B "b" tree "b",
+        0x02 C "c" tree "c",
+        0x03 D "d" tree "d",
     }
 }
+crate::common::enums::values_readable!(NssaiInclusionModeValue);
 
 // ---------------------------------------------------------------------------
 // 5GS Registration Result (§9.11.3.6)
 // ---------------------------------------------------------------------------
 
-crate::common::enums::nas_enum! {
+oxirush_utils::named_values! {
     /// Registration result value per TS 24.501 §9.11.3.6.
-    #[non_exhaustive]
-    pub enum RegistrationResultValue {
-        /// 3GPP access
-        ThreeGppAccess = 0x01,
-        /// Non-3GPP access
-        Non3GppAccess = 0x02,
-        /// 3GPP and non-3GPP access
-        ThreeGppAccessAndNon3GppAccess = 0x03,
-    }
-    received {
-        0x00 => ThreeGppAccess,
-        0x04..=0x06 => ThreeGppAccess,
+    pub enum RegistrationResultValue "§9.11.3.6" bits 3 read [0x00 ..= 0x00 as 0x01, 0x04 ..= 0x06 as 0x01] {
+        0x01 ThreeGppAccess "3gpp access" tree "3gpp-access",
+        0x02 Non3GppAccess "non 3gpp access" tree "non-3gpp-access",
+        0x03 ThreeGppAccessAndNon3GppAccess "3gpp access and non 3gpp access" tree "3gpp-access-and-non-3gpp-access",
     }
 }
+crate::common::enums::values_readable!(RegistrationResultValue);
 
 // ---------------------------------------------------------------------------
 // Daylight Saving Time (§9.11.3.19)
@@ -1268,23 +1103,17 @@ crate::common::enums::nas_enum! {
 // Integrity Protection Maximum Data Rate (§9.11.4.7)
 // ---------------------------------------------------------------------------
 
-crate::common::enums::nas_enum! {
+oxirush_utils::named_values! {
     /// Integrity protection maximum data rate per TS 24.501 §9.11.4.7.
     ///
     /// Three named values are defined; all others are reserved.
-    #[non_exhaustive]
-    pub enum MaxDataRate {
-        /// 64 kbps
-        Kbps64 = 0x00,
-        /// NULL — integrity protection not used (TS 24.501 Table 9.11.4.7.1).
-        Null = 0x01,
-        /// Full data rate
-        FullRate = 0xFF,
-    }
-    received {
-        _ => Kbps64,
+    pub enum MaxDataRate "§9.11.4.7" bits 8 others as 0x00 {
+        0x00 Kbps64 "kbps64" tree "kbps64",
+        0x01 Null "null" tree "null",
+        0xFF FullRate "full rate" tree "full-rate",
     }
 }
+crate::common::enums::values_readable!(MaxDataRate);
 
 // ============================================================================
 
@@ -1583,12 +1412,12 @@ impl DeRegistrationType {
     /// For this IE, value `0b11` means both 3GPP and non-3GPP access; use
     /// [`Self::deregistration_access_type`] when that value must be represented.
     pub fn access_type(&self) -> Option<AccessTypeValue> {
-        AccessTypeValue::try_from(self.value & 0x03).ok()
+        AccessTypeValue::named(self.value & 0x03)
     }
 
     /// De-registration-specific access type (bits 1-2).
     pub fn deregistration_access_type(&self) -> Option<DeregistrationAccessType> {
-        DeregistrationAccessType::try_from(self.value & 0x03).ok()
+        DeregistrationAccessType::named(self.value & 0x03)
     }
 
     /// Raw access type (bits 1-2).
@@ -1598,12 +1427,12 @@ impl DeRegistrationType {
 
     /// Mutating setter for the access type.
     pub fn set_access_type(&mut self, t: AccessTypeValue) {
-        self.value = (self.value & 0xFC) | (t as u8 & 0x03);
+        self.value = (self.value & 0xFC) | (u8::from(t) & 0x03);
     }
 
     /// Mutating setter for the de-registration-specific access type.
     pub fn set_deregistration_access_type(&mut self, t: DeregistrationAccessType) {
-        self.value = (self.value & 0xFC) | (t as u8 & 0x03);
+        self.value = (self.value & 0xFC) | (u8::from(t) & 0x03);
     }
 
     /// Mutating setter for the switch-off bit.
@@ -1628,22 +1457,19 @@ impl DeRegistrationType {
 impl Default for DeRegistrationType {
     /// 3GPP access, without switch-off or re-registration.
     fn default() -> Self {
-        Self::new(AccessTypeValue::ThreeGppAccess as u8)
+        Self::new(u8::from(AccessTypeValue::ThreeGppAccess))
     }
 }
 
-crate::common::enums::nas_enum! {
+oxirush_utils::named_values! {
     /// De-registration type access type values (TS 24.501 §9.11.3.20, bits 1-2).
-    #[non_exhaustive]
-    pub enum DeregistrationAccessType {
-        /// 3GPP access.
-        ThreeGppAccess = 0x01,
-        /// Non-3GPP access.
-        Non3GppAccess = 0x02,
-        /// 3GPP access and non-3GPP access.
-        ThreeGppAccessAndNon3GppAccess = 0x03,
+    pub enum DeregistrationAccessType "§9.11.3.20" bits 2 {
+        0x01 ThreeGppAccess "3gpp access" tree "3gpp-access",
+        0x02 Non3GppAccess "non 3gpp access" tree "non-3gpp-access",
+        0x03 ThreeGppAccessAndNon3GppAccess "3gpp access and non 3gpp access" tree "3gpp-access-and-non-3gpp-access",
     }
 }
+crate::common::enums::values_readable!(DeregistrationAccessType);
 
 // ---------------------------------------------------------------------------
 // 5GS Registration Result (§9.11.3.6)
@@ -1653,12 +1479,15 @@ impl RegistrationResult {
     /// The IE of a registration result, with none of its flags set:
     /// `from_result(RegistrationResultValue::ThreeGppAccess)`.
     pub fn from_result(result: RegistrationResultValue) -> Self {
-        Self::new(vec![result as u8])
+        Self::new(vec![u8::from(result)])
     }
 
     /// Registration result value (bits 1-3 of first byte).
-    pub fn result_value(&self) -> Option<RegistrationResultValue> {
-        RegistrationResultValue::received(self.value.first().copied().unwrap_or(0) & 0x07)
+    ///
+    /// The value as the IE has it: `effective()` is the value as a receiver
+    /// reads it.
+    pub fn result_value(&self) -> RegistrationResultValue {
+        RegistrationResultValue::from_value(self.value.first().copied().unwrap_or(0) & 0x07)
     }
 
     /// Raw registration result value (bits 1-3 of first byte).
@@ -1712,7 +1541,7 @@ impl RegistrationResult {
 
     /// Set what [`Self::result_value`] reads.
     pub fn set_result_value(&mut self, r: RegistrationResultValue) {
-        let b = (self.first_byte() & 0xF8) | (r as u8 & 0x07);
+        let b = (self.first_byte() & 0xF8) | (u8::from(r) & 0x07);
         self.set_first_byte(b);
     }
 
@@ -1766,14 +1595,14 @@ impl RegistrationResult {
     pub(crate) const SENDER_RULE: &'static str = "one octet with bit 8 clear and a defined result";
     /// Whether this mandatory LV has its exact sender length and defined value.
     pub fn is_well_formed(&self) -> bool {
-        self.value.len() == 1 && self.value[0] & 0x80 == 0 && self.result_value().is_some()
+        self.value.len() == 1 && self.value[0] & 0x80 == 0 && self.result_value().name().is_some()
     }
 }
 
 impl Default for RegistrationResult {
     /// Default: 3GPP access registration result, no flags set.
     fn default() -> Self {
-        Self::new(vec![RegistrationResultValue::ThreeGppAccess as u8])
+        Self::new(vec![u8::from(RegistrationResultValue::ThreeGppAccess)])
     }
 }
 
@@ -1781,45 +1610,37 @@ impl Default for RegistrationResult {
 // Service type (§9.11.3.50)
 // ---------------------------------------------------------------------------
 
-crate::common::enums::nas_enum! {
+oxirush_utils::named_values! {
     /// Service type values per TS 24.501 §9.11.3.50.
-    #[non_exhaustive]
-    pub enum ServiceTypeValue {
-        /// Signalling.
-        Signalling = 0x00,
-        /// Data.
-        Data = 0x01,
-        /// Mobile terminated services.
-        MobileTerminatedServices = 0x02,
-        /// Emergency services.
-        EmergencyServices = 0x03,
-        /// Emergency services fallback.
-        EmergencyServicesFallback = 0x04,
-        /// High priority access.
-        HighPriorityAccess = 0x05,
-        /// Elevated signalling.
-        ElevatedSignalling = 0x06,
-    }
-    received {
-        0x07 | 0x08 => Signalling,
-        0x09..=0x0B => Data,
+    pub enum ServiceTypeValue "§9.11.3.50" bits 4 read [0x07 ..= 0x07 as 0x00, 0x08 ..= 0x08 as 0x00, 0x09 ..= 0x0B as 0x01] {
+        0x00 Signalling "signalling" tree "signalling",
+        0x01 Data "data" tree "data",
+        0x02 MobileTerminatedServices "mobile terminated services" tree "mobile-terminated-services",
+        0x03 EmergencyServices "emergency services" tree "emergency-services",
+        0x04 EmergencyServicesFallback "emergency services fallback" tree "emergency-services-fallback",
+        0x05 HighPriorityAccess "high priority access" tree "high-priority-access",
+        0x06 ElevatedSignalling "elevated signalling" tree "elevated-signalling",
     }
 }
+crate::common::enums::values_readable!(ServiceTypeValue);
 
 impl ServiceType {
     /// Build from a typed service type.
     pub fn from_service_type(value: ServiceTypeValue) -> Self {
-        Self::new(value as u8)
+        Self::new(u8::from(value))
     }
 
     /// Service type with the receive fallbacks of the network (§9.11.3.50).
-    pub fn service_type(&self) -> Option<ServiceTypeValue> {
-        ServiceTypeValue::received(self.value & 0x0F)
+    ///
+    /// The value as the IE has it: `effective()` is the value as a receiver
+    /// reads it.
+    pub fn service_type(&self) -> ServiceTypeValue {
+        ServiceTypeValue::from_value(self.value & 0x0F)
     }
 
     /// Service type, only for a defined value.
     pub fn service_type_strict(&self) -> Option<ServiceTypeValue> {
-        ServiceTypeValue::try_from(self.value & 0x0F).ok()
+        ServiceTypeValue::named(self.value & 0x0F)
     }
 
     /// Raw service type (bits 4-1).
@@ -1829,7 +1650,7 @@ impl ServiceType {
 
     /// Set the service type.
     pub fn set_service_type(&mut self, value: ServiceTypeValue) -> &mut Self {
-        self.value = value as u8;
+        self.value = u8::from(value);
         self
     }
 }
@@ -2241,72 +2062,43 @@ crate::common::readable::readable!(struct SessionAmbrValue { dl_kbps, ul_kbps })
 #[cfg(feature = "tree")]
 crate::common::readable::serde_by_readable!(SessionAmbrValue);
 
-crate::common::enums::nas_enum! {
+oxirush_utils::named_values! {
     /// Session-AMBR unit values.
-    #[non_exhaustive]
-    pub enum SessionAmbrUnit {
-        /// The value is not used (unit `0x00`).
-        NotUsed = 0x00,
-        /// The value counts multiples of 1 kbit/s (unit `0x01`).
-        Kbps1 = 0x01,
-        /// The value counts multiples of 4 kbit/s (unit `0x02`).
-        Kbps4 = 0x02,
-        /// The value counts multiples of 16 kbit/s (unit `0x03`).
-        Kbps16 = 0x03,
-        /// The value counts multiples of 64 kbit/s (unit `0x04`).
-        Kbps64 = 0x04,
-        /// The value counts multiples of 256 kbit/s (unit `0x05`).
-        Kbps256 = 0x05,
-        /// The value counts multiples of 1 Mbit/s (unit `0x06`).
-        Mbps1 = 0x06,
-        /// The value counts multiples of 4 Mbit/s (unit `0x07`).
-        Mbps4 = 0x07,
-        /// The value counts multiples of 16 Mbit/s (unit `0x08`).
-        Mbps16 = 0x08,
-        /// The value counts multiples of 64 Mbit/s (unit `0x09`).
-        Mbps64 = 0x09,
-        /// The value counts multiples of 256 Mbit/s (unit `0x0A`).
-        Mbps256 = 0x0A,
-        /// The value counts multiples of 1 Gbit/s (unit `0x0B`).
-        Gbps1 = 0x0B,
-        /// The value counts multiples of 4 Gbit/s (unit `0x0C`).
-        Gbps4 = 0x0C,
-        /// The value counts multiples of 16 Gbit/s (unit `0x0D`).
-        Gbps16 = 0x0D,
-        /// The value counts multiples of 64 Gbit/s (unit `0x0E`).
-        Gbps64 = 0x0E,
-        /// The value counts multiples of 256 Gbit/s (unit `0x0F`).
-        Gbps256 = 0x0F,
-        /// The value counts multiples of 1 Tbit/s (unit `0x10`).
-        Tbps1 = 0x10,
-        /// The value counts multiples of 4 Tbit/s (unit `0x11`).
-        Tbps4 = 0x11,
-        /// The value counts multiples of 16 Tbit/s (unit `0x12`).
-        Tbps16 = 0x12,
-        /// The value counts multiples of 64 Tbit/s (unit `0x13`).
-        Tbps64 = 0x13,
-        /// The value counts multiples of 256 Tbit/s (unit `0x14`).
-        Tbps256 = 0x14,
-        /// The value counts multiples of 1 Pbit/s (unit `0x15`).
-        Pbps1 = 0x15,
-        /// The value counts multiples of 4 Pbit/s (unit `0x16`).
-        Pbps4 = 0x16,
-        /// The value counts multiples of 16 Pbit/s (unit `0x17`).
-        Pbps16 = 0x17,
-        /// The value counts multiples of 64 Pbit/s (unit `0x18`).
-        Pbps64 = 0x18,
-        /// The value counts multiples of 256 Pbit/s (unit `0x19`).
-        Pbps256 = 0x19,
-    }
-    received {
-        0x1A..=0xFF => Pbps256,
+    pub enum SessionAmbrUnit "" bits 8 read [0x1A ..= 0xFF as 0x19] {
+        0x00 NotUsed "not used" tree "not-used",
+        0x01 Kbps1 "kbps1" tree "kbps1",
+        0x02 Kbps4 "kbps4" tree "kbps4",
+        0x03 Kbps16 "kbps16" tree "kbps16",
+        0x04 Kbps64 "kbps64" tree "kbps64",
+        0x05 Kbps256 "kbps256" tree "kbps256",
+        0x06 Mbps1 "mbps1" tree "mbps1",
+        0x07 Mbps4 "mbps4" tree "mbps4",
+        0x08 Mbps16 "mbps16" tree "mbps16",
+        0x09 Mbps64 "mbps64" tree "mbps64",
+        0x0A Mbps256 "mbps256" tree "mbps256",
+        0x0B Gbps1 "gbps1" tree "gbps1",
+        0x0C Gbps4 "gbps4" tree "gbps4",
+        0x0D Gbps16 "gbps16" tree "gbps16",
+        0x0E Gbps64 "gbps64" tree "gbps64",
+        0x0F Gbps256 "gbps256" tree "gbps256",
+        0x10 Tbps1 "tbps1" tree "tbps1",
+        0x11 Tbps4 "tbps4" tree "tbps4",
+        0x12 Tbps16 "tbps16" tree "tbps16",
+        0x13 Tbps64 "tbps64" tree "tbps64",
+        0x14 Tbps256 "tbps256" tree "tbps256",
+        0x15 Pbps1 "pbps1" tree "pbps1",
+        0x16 Pbps4 "pbps4" tree "pbps4",
+        0x17 Pbps16 "pbps16" tree "pbps16",
+        0x18 Pbps64 "pbps64" tree "pbps64",
+        0x19 Pbps256 "pbps256" tree "pbps256",
     }
 }
+crate::common::enums::values_readable!(SessionAmbrUnit);
 
 impl SessionAmbrUnit {
     /// Return kbps multiplier.
     pub fn kbps_multiplier(self) -> Option<u64> {
-        ambr_unit_to_kbps(self as u8)
+        ambr_unit_to_kbps(u8::from(self))
     }
 }
 
@@ -2323,8 +2115,11 @@ impl SessionAmbr {
     }
 
     /// Downlink unit decoded as a known AMBR unit, if recognized.
-    pub fn downlink_unit(&self) -> Option<SessionAmbrUnit> {
-        SessionAmbrUnit::received(self.downlink_unit_raw())
+    ///
+    /// The value as the IE has it: `effective()` is the value as a receiver
+    /// reads it.
+    pub fn downlink_unit(&self) -> SessionAmbrUnit {
+        SessionAmbrUnit::from_value(self.downlink_unit_raw())
     }
 
     /// Downlink raw 16-bit value field.
@@ -2349,8 +2144,11 @@ impl SessionAmbr {
     }
 
     /// Uplink unit decoded as a known AMBR unit, if recognized.
-    pub fn uplink_unit(&self) -> Option<SessionAmbrUnit> {
-        SessionAmbrUnit::received(self.uplink_unit_raw())
+    ///
+    /// The value as the IE has it: `effective()` is the value as a receiver
+    /// reads it.
+    pub fn uplink_unit(&self) -> SessionAmbrUnit {
+        SessionAmbrUnit::from_value(self.uplink_unit_raw())
     }
 
     /// Uplink raw 16-bit value field.
@@ -2496,50 +2294,38 @@ crate::common::ts24301::nas_security_algorithms_ie!(EpsNasSecurityAlgorithms, 0x
 // 5GS Network Feature Support (§9.11.3.5)
 // ---------------------------------------------------------------------------
 
-crate::common::enums::nas_enum! {
-    #[non_exhaustive]
+oxirush_utils::named_values! {
     /// Emergency service support values.
-    pub enum EmergencyServiceSupport {
-        /// Emergency services not supported.
-        NotSupported = 0x00,
-        /// Emergency services supported in NR connected to 5GCN only.
-        NrOnly = 0x01,
-        /// Emergency services supported in E-UTRA connected to 5GCN only.
-        EutraOnly = 0x02,
-        /// Emergency services supported in NR connected to 5GCN and E-UTRA connected to 5GCN.
-        NrAndEutra = 0x03,
+    pub enum EmergencyServiceSupport "" bits 2 {
+        0x00 NotSupported "not supported" tree "not-supported",
+        0x01 NrOnly "nr only" tree "nr-only",
+        0x02 EutraOnly "eutra only" tree "eutra-only",
+        0x03 NrAndEutra "nr and eutra" tree "nr-and-eutra",
     }
 }
+crate::common::enums::values_readable!(EmergencyServiceSupport);
 
-crate::common::enums::nas_enum! {
-    #[non_exhaustive]
+oxirush_utils::named_values! {
     /// Emergency fallback support values.
-    pub enum EmergencyFallbackSupport {
-        /// Emergency services fallback not supported.
-        NotSupported = 0x00,
-        /// Emergency services fallback supported in NR connected to 5GCN only.
-        NrOnly = 0x01,
-        /// Emergency services fallback supported in E-UTRA connected to 5GCN only.
-        EutraOnly = 0x02,
-        /// Emergency services fallback supported in NR connected to 5GCN and E-UTRA connected to 5GCN.
-        NrAndEutra = 0x03,
+    pub enum EmergencyFallbackSupport "" bits 2 {
+        0x00 NotSupported "not supported" tree "not-supported",
+        0x01 NrOnly "nr only" tree "nr-only",
+        0x02 EutraOnly "eutra only" tree "eutra-only",
+        0x03 NrAndEutra "nr and eutra" tree "nr-and-eutra",
     }
 }
+crate::common::enums::values_readable!(EmergencyFallbackSupport);
 
-crate::common::enums::nas_enum! {
+oxirush_utils::named_values! {
     /// Restriction on enhanced coverage support value carried in octet 4 of the IE.
-    #[non_exhaustive]
-    pub enum RestrictionOnEnhancedCoverage {
-        /// Enhanced coverage is not restricted.
-        NotRestricted = 0x00,
-        /// Enhanced coverage is restricted.
-        Restricted = 0x01,
-        /// CE mode B is restricted.
-        CeModeBRestricted = 0x02,
-        /// Reserved value.
-        Reserved = 0x03,
+    pub enum RestrictionOnEnhancedCoverage "" bits 2 {
+        0x00 NotRestricted "not restricted" tree "not-restricted",
+        0x01 Restricted "restricted" tree "restricted",
+        0x02 CeModeBRestricted "ce mode b restricted" tree "ce-mode-b-restricted",
+        0x03 Reserved "reserved" tree "reserved",
     }
 }
+crate::common::enums::values_readable!(RestrictionOnEnhancedCoverage);
 
 impl NetworkFeatureSupport {
     /// IMS VoPS support (bit 1 of octet 1).
@@ -2572,7 +2358,7 @@ impl NetworkFeatureSupport {
 
     /// Emergency services support as a typed value.
     pub fn emc_value(&self) -> Option<EmergencyServiceSupport> {
-        EmergencyServiceSupport::try_from(self.emc() & 0x03).ok()
+        EmergencyServiceSupport::named(self.emc() & 0x03)
     }
 
     /// Write the two bits `code` at bit `shift` of the octet `index`.
@@ -2591,7 +2377,7 @@ impl NetworkFeatureSupport {
 
     /// Set what [`Self::emc_value`] reads.
     pub fn set_emc_value(&mut self, value: EmergencyServiceSupport) {
-        self.write_two_bits(0, 2, value as u8);
+        self.write_two_bits(0, 2, u8::from(value));
     }
 
     /// Emergency services fallback (bits 5-6 of octet 1).
@@ -2601,7 +2387,7 @@ impl NetworkFeatureSupport {
 
     /// Emergency services fallback support as a typed value.
     pub fn emf_value(&self) -> Option<EmergencyFallbackSupport> {
-        EmergencyFallbackSupport::try_from(self.emf() & 0x03).ok()
+        EmergencyFallbackSupport::named(self.emf() & 0x03)
     }
 
     /// Set the code of the emergency services fallback, 0 to 3.
@@ -2612,7 +2398,7 @@ impl NetworkFeatureSupport {
 
     /// Set what [`Self::emf_value`] reads.
     pub fn set_emf_value(&mut self, value: EmergencyFallbackSupport) {
-        self.write_two_bits(0, 4, value as u8);
+        self.write_two_bits(0, 4, u8::from(value));
     }
 
     /// Interworking without N26 (bit 7 of octet 1).
@@ -2681,7 +2467,7 @@ impl NetworkFeatureSupport {
 
     /// Return restrict ec value.
     pub fn restrict_ec_value(&self) -> Option<RestrictionOnEnhancedCoverage> {
-        RestrictionOnEnhancedCoverage::try_from(self.restrict_ec() & 0x03).ok()
+        RestrictionOnEnhancedCoverage::named(self.restrict_ec() & 0x03)
     }
 
     /// Set the code of the restriction on enhanced coverage, 0 to 3.
@@ -2692,7 +2478,7 @@ impl NetworkFeatureSupport {
 
     /// Set what [`Self::restrict_ec_value`] reads.
     pub fn set_restrict_ec_value(&mut self, value: RestrictionOnEnhancedCoverage) {
-        self.write_two_bits(1, 2, value as u8);
+        self.write_two_bits(1, 2, u8::from(value));
     }
 
     /// 5G CP CIoT support (bit 5 of octet 2).
@@ -2916,8 +2702,8 @@ impl NetworkFeatureSupport {
         if ims_vops_n3gpp {
             b0 |= 0x02;
         }
-        b0 |= (emc as u8) << 2;
-        b0 |= (emf as u8) << 4;
+        b0 |= (u8::from(emc)) << 2;
+        b0 |= (u8::from(emf)) << 4;
         if iwk_n26 {
             b0 |= 0x40;
         }
@@ -3047,45 +2833,40 @@ impl ConfigurationUpdateIndication {
     }
 }
 
-crate::common::enums::nas_enum! {
+oxirush_utils::named_values! {
     /// Control plane service type per TS 24.501 §9.11.3.18D.
-    #[non_exhaustive]
-    pub enum ControlPlaneServiceTypeValue {
-        /// Mobile originating request.
-        MobileOriginatingRequest = 0x00,
-        /// Mobile terminating request.
-        MobileTerminatingRequest = 0x01,
-        /// Emergency services.
-        EmergencyServices = 0x02,
-        /// Emergency services fallback.
-        EmergencyServicesFallback = 0x03,
-    }
-    received {
-        _ => MobileOriginatingRequest,
+    pub enum ControlPlaneServiceTypeValue "§9.11.3.18D" bits 3 others as 0x00 {
+        0x00 MobileOriginatingRequest "mobile originating request" tree "mobile-originating-request",
+        0x01 MobileTerminatingRequest "mobile terminating request" tree "mobile-terminating-request",
+        0x02 EmergencyServices "emergency services" tree "emergency-services",
+        0x03 EmergencyServicesFallback "emergency services fallback" tree "emergency-services-fallback",
     }
 }
+crate::common::enums::values_readable!(ControlPlaneServiceTypeValue);
 
 impl Default for ControlPlaneServiceType {
     /// Mobile originating request.
     fn default() -> Self {
-        Self::new(ControlPlaneServiceTypeValue::MobileOriginatingRequest as u8)
+        Self::new(u8::from(
+            ControlPlaneServiceTypeValue::MobileOriginatingRequest,
+        ))
     }
 }
 
 impl ControlPlaneServiceType {
     /// Build from a control plane service type.
     pub fn from_service_type(service_type: ControlPlaneServiceTypeValue) -> Self {
-        Self::new(service_type as u8 & 0x07)
+        Self::new(u8::from(service_type) & 0x07)
     }
 
     /// Service type with the mobile-originating receive fallback.
     pub fn service_type(&self) -> ControlPlaneServiceTypeValue {
-        ControlPlaneServiceTypeValue::received(self.value & 0x07)
+        ControlPlaneServiceTypeValue::from_value(self.value & 0x07).effective()
     }
 
     /// Service type, only for a defined value.
     pub fn service_type_strict(&self) -> Option<ControlPlaneServiceTypeValue> {
-        ControlPlaneServiceTypeValue::try_from(self.value & 0x07).ok()
+        ControlPlaneServiceTypeValue::named(self.value & 0x07)
     }
 
     /// Raw control plane service type value (lower nibble bits 1-3).
@@ -3095,7 +2876,7 @@ impl ControlPlaneServiceType {
 
     /// Mutating setter for the control plane service type.
     pub fn set_service_type(&mut self, service_type: ControlPlaneServiceTypeValue) -> &mut Self {
-        self.value = (self.value & 0xF8) | (service_type as u8 & 0x07);
+        self.value = (self.value & 0xF8) | (u8::from(service_type) & 0x07);
         self
     }
 }
@@ -3117,21 +2898,19 @@ pub use crate::common::ts24301::DownlinkDataExpected;
 pub use crate::common::ts24301::{IpHdrCompAdditionalSetupType, IpHdrCompProfiles};
 crate::common::ts24301::header_compression_configuration_ie!(IpHeaderCompressionConfiguration);
 
-crate::common::enums::nas_enum! {
+oxirush_utils::named_values! {
     /// MA PDU session information value per TS 24.501 §9.11.3.31A.
-    #[non_exhaustive]
-    pub enum MaPduSessionInfoValue {
-        /// No additional information.
-        NoAdditionalInformation = 0x00,
-        /// MA PDU session network upgrade is allowed.
-        NetworkUpgradeAllowed = 0x01,
+    pub enum MaPduSessionInfoValue "§9.11.3.31A" bits 4 {
+        0x00 NoAdditionalInformation "no additional information" tree "no-additional-information",
+        0x01 NetworkUpgradeAllowed "network upgrade allowed" tree "network-upgrade-allowed",
     }
 }
+crate::common::enums::values_readable!(MaPduSessionInfoValue);
 
 impl MaPduSessionInformation {
     /// Typed MA PDU session information value (bits 1-4).
     pub fn info(&self) -> Option<MaPduSessionInfoValue> {
-        MaPduSessionInfoValue::try_from(self.value & 0x0F).ok()
+        MaPduSessionInfoValue::named(self.value & 0x0F)
     }
 
     /// Raw MA PDU session information value (bits 1-4).
@@ -3141,13 +2920,13 @@ impl MaPduSessionInformation {
 
     /// Mutating setter for the typed MA PDU session information.
     pub fn set_info(&mut self, info: MaPduSessionInfoValue) -> &mut Self {
-        self.value = (self.value & !0x0F) | (info as u8 & 0x0F);
+        self.value = (self.value & !0x0F) | (u8::from(info) & 0x0F);
         self
     }
 
     /// Construct a value from info.
     pub fn from_info(info: MaPduSessionInfoValue) -> Self {
-        Self::new(info as u8)
+        Self::new(u8::from(info))
     }
 }
 
@@ -3212,18 +2991,18 @@ impl NetworkSlicingIndication {
 impl NssaiInclusionMode {
     /// NSSAI inclusion mode (bits 1-2).
     pub fn mode(&self) -> NssaiInclusionModeValue {
-        NssaiInclusionModeValue::received(self.value & 0x03)
+        NssaiInclusionModeValue::from_value(self.value & 0x03).effective()
     }
 
     /// Mutating setter for the typed NSSAI inclusion mode.
     pub fn set_mode(&mut self, mode: NssaiInclusionModeValue) -> &mut Self {
-        self.value = (self.value & !0x03) | (mode as u8 & 0x03);
+        self.value = (self.value & !0x03) | (u8::from(mode) & 0x03);
         self
     }
 
     /// Construct a value from mode.
     pub fn from_mode(mode: NssaiInclusionModeValue) -> Self {
-        Self::new(mode as u8)
+        Self::new(u8::from(mode))
     }
 }
 
@@ -3256,8 +3035,11 @@ impl PriorityIndicator {
 
 impl RequestType {
     /// Request type value (bits 1-3).
-    pub fn request_type(&self) -> Option<RequestTypeValue> {
-        RequestTypeValue::received(self.value & 0x07)
+    ///
+    /// The value as the IE has it: `effective()` is the value as a receiver
+    /// reads it.
+    pub fn request_type(&self) -> RequestTypeValue {
+        RequestTypeValue::from_value(self.value & 0x07)
     }
 
     /// Raw request type value (bits 1-3).
@@ -3267,41 +3049,39 @@ impl RequestType {
 
     /// Whether this is an initial request (value = 1).
     pub fn is_initial(&self) -> bool {
-        self.request_type() == Some(RequestTypeValue::InitialRequest)
+        self.request_type().effective() == RequestTypeValue::InitialRequest
     }
 
     /// Whether this is an existing PDU session (value = 2).
     pub fn is_existing(&self) -> bool {
-        self.request_type() == Some(RequestTypeValue::ExistingPduSession)
+        self.request_type().effective() == RequestTypeValue::ExistingPduSession
     }
 
     /// Whether this is an emergency request (value = 3 or 4).
     pub fn is_emergency(&self) -> bool {
         matches!(
-            self.request_type(),
-            Some(
-                RequestTypeValue::InitialEmergencyRequest
-                    | RequestTypeValue::ExistingEmergencyPduSession
-            )
+            self.request_type().effective(),
+            RequestTypeValue::InitialEmergencyRequest
+                | RequestTypeValue::ExistingEmergencyPduSession
         )
     }
 
     /// Mutating setter for the typed request type.
     pub fn set_request_type(&mut self, request_type: RequestTypeValue) -> &mut Self {
-        self.value = request_type as u8 & 0x07;
+        self.value = u8::from(request_type) & 0x07;
         self
     }
 
     /// Construct a value from request type.
     pub fn from_request_type(rt: RequestTypeValue) -> Self {
-        Self::new(rt as u8)
+        Self::new(u8::from(rt))
     }
 
     /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
     pub(crate) const SENDER_RULE: &'static str = "a defined request type, bit 4 clear";
     /// Whether this is a defined sender code with the spare bit cleared.
     pub fn is_well_formed(&self) -> bool {
-        self.value & !0x07 == 0 && RequestTypeValue::try_from(self.value & 0x07).ok().is_some()
+        self.value & !0x07 == 0 && RequestTypeValue::named(self.value & 0x07).is_some()
     }
 }
 
@@ -3319,8 +3099,11 @@ impl SmsIndication {
 
 impl SscMode {
     /// SSC mode value (bits 1-3).
-    pub fn mode(&self) -> Option<SscModeValue> {
-        SscModeValue::received(self.value & 0x07)
+    ///
+    /// The value as the IE has it: `effective()` is the value as a receiver
+    /// reads it.
+    pub fn mode(&self) -> SscModeValue {
+        SscModeValue::from_value(self.value & 0x07)
     }
 
     /// Raw SSC mode value (bits 1-3).
@@ -3330,20 +3113,20 @@ impl SscMode {
 
     /// Mutating setter for the typed SSC mode.
     pub fn set_mode(&mut self, mode: SscModeValue) -> &mut Self {
-        self.value = mode as u8 & 0x07;
+        self.value = u8::from(mode) & 0x07;
         self
     }
 
     /// Construct a value from mode.
     pub fn from_mode(mode: SscModeValue) -> Self {
-        Self::new(mode as u8)
+        Self::new(u8::from(mode))
     }
 
     /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
     pub(crate) const SENDER_RULE: &'static str = "a defined SSC mode, bit 4 clear";
     /// Whether this value uses a defined sender code with the spare bit cleared.
     pub fn is_well_formed(&self) -> bool {
-        self.value & !0x07 == 0 && SscModeValue::try_from(self.value & 0x07).ok().is_some()
+        self.value & !0x07 == 0 && SscModeValue::named(self.value & 0x07).is_some()
     }
 }
 
@@ -3374,11 +3157,11 @@ impl PduSessionIdentity2 {
 impl IntegrityProtectionMaximumDataRate {
     /// Maximum data rate for UL.
     pub fn ul(&self) -> Option<MaxDataRate> {
-        Some(MaxDataRate::received((self.value >> 8) as u8))
+        Some(MaxDataRate::from_value((self.value >> 8) as u8).effective())
     }
     /// Maximum data rate for DL.
     pub fn dl(&self) -> Option<MaxDataRate> {
-        Some(MaxDataRate::received((self.value & 0xFF) as u8))
+        Some(MaxDataRate::from_value((self.value & 0xFF) as u8).effective())
     }
     /// Raw UL byte.
     pub fn ul_raw(&self) -> u8 {
@@ -3391,15 +3174,14 @@ impl IntegrityProtectionMaximumDataRate {
 
     /// Build from typed rates per TS 24.501 §9.11.4.7. Octet 3 is UL, octet 4 is DL.
     pub fn from_rates(ul: MaxDataRate, dl: MaxDataRate) -> Self {
-        Self::new(((ul as u16) << 8) | (dl as u16))
+        Self::new(((u16::from(u8::from(ul))) << 8) | (u16::from(u8::from(dl))))
     }
 
     /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
     pub(crate) const SENDER_RULE: &'static str = "a defined rate for uplink and for downlink";
     /// Whether both direction octets use sender-defined rate codes.
     pub fn is_well_formed(&self) -> bool {
-        MaxDataRate::try_from(self.ul_raw()).ok().is_some()
-            && MaxDataRate::try_from(self.dl_raw()).ok().is_some()
+        MaxDataRate::named(self.ul_raw()).is_some() && MaxDataRate::named(self.dl_raw()).is_some()
     }
 }
 
@@ -4068,32 +3850,22 @@ impl GmmCapability {
     }
 }
 
-crate::common::enums::nas_enum! {
+oxirush_utils::named_values! {
     /// 5GS DRX cycle length per TS 24.501 §9.11.3.2A.
-    #[non_exhaustive]
-    pub enum DrxValue {
-        /// DRX value not specified.
-        NotSpecified = 0x00,
-        /// DRX cycle T = 32.
-        Cycle32 = 0x01,
-        /// DRX cycle T = 64.
-        Cycle64 = 0x02,
-        /// DRX cycle T = 128.
-        Cycle128 = 0x03,
-        /// DRX cycle T = 256.
-        Cycle256 = 0x04,
-    }
-    received {
-        _ => NotSpecified,
+    pub enum DrxValue "§9.11.3.2A" bits 4 others as 0x00 {
+        0x00 NotSpecified "not specified" tree "not-specified",
+        0x01 Cycle32 "cycle32" tree "cycle32",
+        0x02 Cycle64 "cycle64" tree "cycle64",
+        0x03 Cycle128 "cycle128" tree "cycle128",
+        0x04 Cycle256 "cycle256" tree "cycle256",
     }
 }
+crate::common::enums::values_readable!(DrxValue);
 
 impl DrxParameters {
     /// Typed DRX value (bits 1-4 of octet 1).
     pub fn drx_value(&self) -> Option<DrxValue> {
-        Some(DrxValue::received(
-            self.value.first().copied().unwrap_or(0) & 0x0F,
-        ))
+        Some(DrxValue::from_value(self.value.first().copied().unwrap_or(0) & 0x0F).effective())
     }
 
     /// Raw DRX value (bits 1-4 of octet 1).
@@ -4103,7 +3875,7 @@ impl DrxParameters {
 
     /// Construct a value from drx value.
     pub fn from_drx_value(drx: DrxValue) -> Self {
-        Self::new(vec![drx as u8])
+        Self::new(vec![u8::from(drx)])
     }
 }
 
@@ -4142,7 +3914,7 @@ impl UpdateType {
     /// 5GS-PNB-CIoT, the preferred CIoT network behaviour for 5GS (bits
     /// 4-3); reserved is `None`.
     pub fn pnb_ciot(&self) -> Option<PreferredCiotBehavior> {
-        PreferredCiotBehavior::try_from(self.pnb_ciot_raw() & 0x03).ok()
+        PreferredCiotBehavior::named(self.pnb_ciot_raw() & 0x03)
     }
 
     /// Raw 5GS-PNB-CIoT field.
@@ -4152,7 +3924,7 @@ impl UpdateType {
 
     /// Set the preferred CIoT network behaviour for 5GS.
     pub fn set_pnb_ciot(&mut self, value: PreferredCiotBehavior) -> &mut Self {
-        let b = (self.fb() & !0x0C) | ((value as u8) << 2);
+        let b = (self.fb() & !0x0C) | ((u8::from(value)) << 2);
         self.write_first(b);
         self
     }
@@ -4160,7 +3932,7 @@ impl UpdateType {
     /// EPS-PNB-CIoT, the preferred CIoT network behaviour for EPS (bits
     /// 6-5); reserved is `None`.
     pub fn eps_pnb_ciot(&self) -> Option<PreferredCiotBehavior> {
-        PreferredCiotBehavior::try_from(self.eps_pnb_ciot_raw() & 0x03).ok()
+        PreferredCiotBehavior::named(self.eps_pnb_ciot_raw() & 0x03)
     }
 
     /// Raw EPS-PNB-CIoT field.
@@ -4170,7 +3942,7 @@ impl UpdateType {
 
     /// Set the preferred CIoT network behaviour for EPS.
     pub fn set_eps_pnb_ciot(&mut self, value: PreferredCiotBehavior) -> &mut Self {
-        let b = (self.fb() & !0x30) | ((value as u8) << 4);
+        let b = (self.fb() & !0x30) | ((u8::from(value)) << 4);
         self.write_first(b);
         self
     }
@@ -4213,7 +3985,7 @@ impl GsmCapability {
 
     /// Return atsss st value.
     pub fn atsss_st_value(&self) -> Option<AtsssSteeringFunctionality> {
-        AtsssSteeringFunctionality::try_from(self.atsss_st()).ok()
+        AtsssSteeringFunctionality::named(self.atsss_st())
     }
 
     /// Set the ATSSS-ST.
@@ -4221,7 +3993,7 @@ impl GsmCapability {
         if self.value.is_empty() {
             self.value.resize(1, 0);
         }
-        self.value[0] = (self.value[0] & !0x78) | ((value as u8) << 3);
+        self.value[0] = (self.value[0] & !0x78) | ((u8::from(value)) << 3);
     }
 
     /// EPT-S1 (octet 3 bit 3 = mask 0x04): Ethernet PDU type over S1 mode.
@@ -4292,14 +4064,14 @@ impl GsmCapability {
     }
     /// Return atsss ll value.
     pub fn atsss_ll_value(&self) -> Option<AtsssLowLayerFunctionality> {
-        AtsssLowLayerFunctionality::try_from(self.atsss_ll()).ok()
+        AtsssLowLayerFunctionality::named(self.atsss_ll())
     }
     /// Set the ATSSS-LL.
     pub fn set_atsss_ll_value(&mut self, v: AtsssLowLayerFunctionality) {
         if self.value.len() < 2 {
             self.value.resize(2, 0);
         }
-        self.value[1] = (self.value[1] & !0x18) | ((v as u8) << 3);
+        self.value[1] = (self.value[1] & !0x18) | ((u8::from(v)) << 3);
     }
     /// RTPMMII — Reflective QoS over multiple media identification information
     /// (octet 4 bit 3, mask 0x04).
@@ -4358,7 +4130,7 @@ impl GsmCapability {
         if tpmic {
             b |= 0x80;
         }
-        b |= (atsss_st as u8) << 3;
+        b |= (u8::from(atsss_st)) << 3;
         if ept_s1 {
             b |= 0x04;
         }
@@ -4376,16 +4148,11 @@ impl GsmCapability {
         sized("5gsm-capability", "octets", octets.len(), 1, 13)?;
         let defined = "a defined value";
         let steering = (octets[0] >> 3) & 0x0F;
-        if AtsssSteeringFunctionality::try_from(steering)
-            .ok()
-            .is_none()
-        {
+        if AtsssSteeringFunctionality::named(steering).is_none() {
             return Err(ValueError::value("atsss-st", steering, defined));
         }
         if let Some(low_layer) = octets.get(1).map(|octet| (octet >> 3) & 0x03)
-            && AtsssLowLayerFunctionality::try_from(low_layer)
-                .ok()
-                .is_none()
+            && AtsssLowLayerFunctionality::named(low_layer).is_none()
         {
             return Err(ValueError::value("atsss-low-layer", low_layer, defined));
         }
@@ -4420,36 +4187,27 @@ impl Default for GsmCapability {
     }
 }
 
-crate::common::enums::nas_enum! {
+oxirush_utils::named_values! {
     /// ATSSS steering functionality support advertised in the 5GSM capability IE
     /// (TS 24.501 Table 9.11.4.1.1, ATSSS-ST).
-    #[non_exhaustive]
-    pub enum AtsssSteeringFunctionality {
-        /// ATSSS not supported.
-        NotSupported = 0x00,
-        /// ATSSS Low-Layer functionality with any steering mode allowed for ATSSS-LL supported.
-        LowLayerAnySteering = 0x01,
-        /// MPTCP functionality with any steering mode and ATSSS-LL functionality with only
-        /// active-standby steering mode supported.
-        MptcpAnyAndLowLayerActiveStandby = 0x02,
-        /// MPTCP functionality with any steering mode and ATSSS-LL functionality with any steering mode
-        /// allowed for ATSSS-LL supported.
-        MptcpAnyAndLowLayerAny = 0x03,
+    pub enum AtsssSteeringFunctionality "Table 9.11.4.1.1" bits 8 {
+        0x00 NotSupported "not supported" tree "not-supported",
+        0x01 LowLayerAnySteering "low layer any steering" tree "low-layer-any-steering",
+        0x02 MptcpAnyAndLowLayerActiveStandby "mptcp any and low layer active standby" tree "mptcp-any-and-low-layer-active-standby",
+        0x03 MptcpAnyAndLowLayerAny "mptcp any and low layer any" tree "mptcp-any-and-low-layer-any",
     }
 }
+crate::common::enums::values_readable!(AtsssSteeringFunctionality);
 
-crate::common::enums::nas_enum! {
+oxirush_utils::named_values! {
     /// ATSSS low-layer functionality support advertised in the 5GSM capability IE.
-    #[non_exhaustive]
-    pub enum AtsssLowLayerFunctionality {
-        /// Not supported.
-        NotSupported = 0x00,
-        /// Active standby only.
-        ActiveStandbyOnly = 0x01,
-        /// Any steering.
-        AnySteering = 0x02,
+    pub enum AtsssLowLayerFunctionality "" bits 8 {
+        0x00 NotSupported "not supported" tree "not-supported",
+        0x01 ActiveStandbyOnly "active standby only" tree "active-standby-only",
+        0x02 AnySteering "any steering" tree "any-steering",
     }
 }
+crate::common::enums::values_readable!(AtsssLowLayerFunctionality);
 
 impl GsmCongestionReAttemptIndicator {
     /// ABO (bit 1, mask 0x01) — back-off timer applied in all PLMNs/SNPNs vs registered only.
@@ -4588,7 +4346,7 @@ impl PduAddress {
     /// PDU address-specific session type. Only IPv4, IPv6, and IPv4v6 are valid
     /// in TS 24.501 §9.11.4.10.
     pub fn address_type(&self) -> Option<PduAddressTypeValue> {
-        PduAddressTypeValue::try_from(self.session_type_raw() & 0x07).ok()
+        PduAddressTypeValue::named(self.session_type_raw() & 0x07)
     }
 
     /// Raw session type (bits 1-3 of first byte).
@@ -4644,21 +4402,21 @@ impl PduAddress {
 
     /// Build an IPv4 PDU address.
     pub fn from_ipv4(addr: [u8; 4]) -> Self {
-        let mut v = vec![PduSessionTypeValue::Ipv4 as u8];
+        let mut v = vec![u8::from(PduSessionTypeValue::Ipv4)];
         v.extend_from_slice(&addr);
         Self::new(v)
     }
 
     /// Build an IPv6 PDU address from the interface identifier (8 bytes).
     pub fn from_ipv6_iid(iid: [u8; 8]) -> Self {
-        let mut v = vec![PduSessionTypeValue::Ipv6 as u8];
+        let mut v = vec![u8::from(PduSessionTypeValue::Ipv6)];
         v.extend_from_slice(&iid);
         Self::new(v)
     }
 
     /// Build an IPv4v6 PDU address from IPv6 interface identifier and IPv4 address.
     pub fn from_ipv4v6(iid: [u8; 8], ipv4: [u8; 4]) -> Self {
-        let mut v = vec![PduSessionTypeValue::Ipv4v6 as u8];
+        let mut v = vec![u8::from(PduSessionTypeValue::Ipv4v6)];
         v.extend_from_slice(&iid);
         v.extend_from_slice(&ipv4);
         Self::new(v)
@@ -4682,7 +4440,7 @@ impl PduAddress {
         addr: [u8; 4],
         smf_ipv6_link_local_address: [u8; 16],
     ) -> Self {
-        let mut v = vec![(PduSessionTypeValue::Ipv4 as u8) | 0x08];
+        let mut v = vec![(u8::from(PduSessionTypeValue::Ipv4)) | 0x08];
         v.extend_from_slice(&addr);
         v.extend_from_slice(&smf_ipv6_link_local_address);
         Self::new(v)
@@ -4693,7 +4451,7 @@ impl PduAddress {
         iid: [u8; 8],
         smf_ipv6_link_local_address: [u8; 16],
     ) -> Self {
-        let mut v = vec![(PduSessionTypeValue::Ipv6 as u8) | 0x08];
+        let mut v = vec![(u8::from(PduSessionTypeValue::Ipv6)) | 0x08];
         v.extend_from_slice(&iid);
         v.extend_from_slice(&smf_ipv6_link_local_address);
         Self::new(v)
@@ -4705,7 +4463,7 @@ impl PduAddress {
         ipv4: [u8; 4],
         smf_ipv6_link_local_address: [u8; 16],
     ) -> Self {
-        let mut v = vec![(PduSessionTypeValue::Ipv4v6 as u8) | 0x08];
+        let mut v = vec![(u8::from(PduSessionTypeValue::Ipv4v6)) | 0x08];
         v.extend_from_slice(&iid);
         v.extend_from_slice(&ipv4);
         v.extend_from_slice(&smf_ipv6_link_local_address);
@@ -4716,6 +4474,7 @@ impl PduAddress {
         // Bits 5 to 8 of octet 3 are spare (Table 9.11.4.10.1).
         let first = *self.value.first()?;
         let base = match self.address_type()? {
+            PduAddressTypeValue::Other(_) => return None,
             PduAddressTypeValue::Ipv4 => 5,
             PduAddressTypeValue::Ipv6 => 9,
             PduAddressTypeValue::Ipv4v6 => 13,
@@ -4739,18 +4498,15 @@ impl PduAddress {
     }
 }
 
-crate::common::enums::nas_enum! {
+oxirush_utils::named_values! {
     /// PDU address type value per TS 24.501 §9.11.4.10.
-    #[non_exhaustive]
-    pub enum PduAddressTypeValue {
-        /// IPv4.
-        Ipv4 = 0x01,
-        /// IPv6.
-        Ipv6 = 0x02,
-        /// IPv4v6.
-        Ipv4v6 = 0x03,
+    pub enum PduAddressTypeValue "§9.11.4.10" bits 3 {
+        0x01 Ipv4 "ipv4" tree "ipv4",
+        0x02 Ipv6 "ipv6" tree "ipv6",
+        0x03 Ipv4v6 "ipv4v6" tree "ipv4v6",
     }
 }
+crate::common::enums::values_readable!(PduAddressTypeValue);
 
 impl PduSessionReactivationResult {
     /// Whether reactivation was unsuccessful or not performed for a PDU session in 1..=15.
@@ -4780,18 +4536,15 @@ impl PduSessionReactivationResult {
     }
 }
 
-crate::common::enums::nas_enum! {
+oxirush_utils::named_values! {
     /// Rejected S-NSSAI cause per TS 24.501 §9.11.3.46.
-    #[non_exhaustive]
-    pub enum RejectedNssaiCause {
-        /// The S-NSSAI is unavailable in the current PLMN or SNPN.
-        NotAvailableInPlmnOrSnpn = 0,
-        /// The S-NSSAI is unavailable in the current registration area.
-        NotAvailableInRegistrationArea = 1,
-        /// Network-slice authentication and authorization failed or was revoked.
-        AuthenticationOrAuthorizationFailedOrRevoked = 2,
+    pub enum RejectedNssaiCause "§9.11.3.46" bits 8 {
+        0 NotAvailableInPlmnOrSnpn "not available in plmn or snpn" tree "not-available-in-plmn-or-snpn",
+        1 NotAvailableInRegistrationArea "not available in registration area" tree "not-available-in-registration-area",
+        2 AuthenticationOrAuthorizationFailedOrRevoked "authentication or authorization failed or revoked" tree "authentication-or-authorization-failed-or-revoked",
     }
 }
+crate::common::enums::values_readable!(RejectedNssaiCause);
 
 impl RejectedNssai {
     fn try_entries_raw(&self) -> Option<Vec<(u8, SNssai)>> {
@@ -4833,7 +4586,7 @@ impl RejectedNssai {
             .unwrap_or_default()
             .into_iter()
             .filter_map(|(cause, snssai)| {
-                Some((RejectedNssaiCause::try_from(cause).ok()?, snssai.parse()?))
+                Some((RejectedNssaiCause::named(cause)?, snssai.parse()?))
             })
             .collect()
     }
@@ -4853,7 +4606,7 @@ impl RejectedNssai {
     ) -> core::result::Result<Self, ValueError> {
         let raw = entries
             .iter()
-            .map(|(cause, snssai)| (*cause as u8, *snssai))
+            .map(|(cause, snssai)| (u8::from(*cause), *snssai))
             .collect::<Vec<_>>();
         Self::from_entries_raw(&raw)
     }
@@ -4866,7 +4619,7 @@ impl RejectedNssai {
         let mut value = Vec::new();
         for (entry, &(cause, snssai)) in entries.iter().enumerate() {
             let len = snssai.value.len();
-            if RejectedNssaiCause::try_from(cause).ok().is_none() {
+            if RejectedNssaiCause::named(cause).is_none() {
                 return Err(ValueError::value("cause", cause, "a defined cause").at(entry));
             }
             if (len != 1 && len != 4) || snssai.parse().is_none() {
@@ -4888,7 +4641,7 @@ impl RejectedNssai {
             entries.len() <= 8
                 && entries
                     .iter()
-                    .all(|(cause, _)| RejectedNssaiCause::try_from(*cause).ok().is_some())
+                    .all(|(cause, _)| RejectedNssaiCause::named(*cause).is_some())
         })
     }
 
@@ -4975,21 +4728,19 @@ impl ReAttemptIndicator {
     }
 }
 
-crate::common::enums::nas_enum! {
+oxirush_utils::named_values! {
     /// Redundant sequence number per TS 24.501 §9.11.4.33.
-    #[non_exhaustive]
-    pub enum RsnValue {
-        /// RSN version 1.
-        V1 = 0x00,
-        /// RSN version 2.
-        V2 = 0x01,
+    pub enum RsnValue "§9.11.4.33" bits 8 {
+        0x00 V1 "v1" tree "v1",
+        0x01 V2 "v2" tree "v2",
     }
 }
+crate::common::enums::values_readable!(RsnValue);
 
 impl Rsn {
     /// Typed RSN value.
     pub fn rsn(&self) -> Option<RsnValue> {
-        self.value.first().and_then(|b| RsnValue::try_from(*b).ok())
+        self.value.first().and_then(|b| RsnValue::named(*b))
     }
 
     /// Raw RSN value.
@@ -4999,7 +4750,7 @@ impl Rsn {
 
     /// Construct a value from rsn.
     pub fn from_rsn(rsn: RsnValue) -> Self {
-        Self::new(vec![rsn as u8])
+        Self::new(vec![u8::from(rsn)])
     }
 
     /// Construct a value from rsn raw.
@@ -5022,24 +4773,18 @@ crate::common::ts24301::ue_security_capability_ie!(S1UeSecurityCapability, S1UeN
 
 // ── EAP / NAS container IEs ─────────────────────────────────────────────────
 
-crate::common::enums::nas_enum! {
+oxirush_utils::named_values! {
     /// EAP code per RFC 3748 §4.
-    #[non_exhaustive]
-    pub enum EapCode {
-        /// Request.
-        Request = 1,
-        /// Response.
-        Response = 2,
-        /// Success.
-        Success = 3,
-        /// Failure.
-        Failure = 4,
-        /// Initiate (RFC 5296 §3.2 — ERP Initiate).
-        Initiate = 5,
-        /// Finish (RFC 5296 §3.2 — ERP Finish).
-        Finish = 6,
+    pub enum EapCode "§4" bits 8 {
+        1 Request "request" tree "request",
+        2 Response "response" tree "response",
+        3 Success "success" tree "success",
+        4 Failure "failure" tree "failure",
+        5 Initiate "initiate" tree "initiate",
+        6 Finish "finish" tree "finish",
     }
 }
+crate::common::enums::values_readable!(EapCode);
 
 impl EapMessage {
     /// Check the EAP packet size and its internal length (TS 24.501 §9.11.2.2).
@@ -5056,7 +4801,7 @@ impl EapMessage {
 
     /// EAP code (first byte).
     pub fn eap_code(&self) -> Option<EapCode> {
-        self.value.first().and_then(|&b| EapCode::try_from(b).ok())
+        self.value.first().and_then(|&b| EapCode::named(b))
     }
 
     /// EAP identifier.
@@ -5167,49 +4912,31 @@ fn eps_container_message_is_supported(message: &crate::nas_eps::Message) -> bool
     )
 }
 
-crate::common::enums::nas_enum! {
+oxirush_utils::named_values! {
     /// QoS rule operation code per TS 24.501 §9.11.4.13.
-    #[non_exhaustive]
-    pub enum QosRuleOpCode {
-        /// 000 — Reserved.
-        Reserved = 0,
-        /// 001 — Create new QoS rule.
-        Create = 1,
-        /// 010 — Delete existing QoS rule.
-        Delete = 2,
-        /// 011 — Modify existing QoS rule and add packet filters.
-        ModifyAdd = 3,
-        /// 100 — Modify existing QoS rule and replace all packet filters.
-        ModifyReplace = 4,
-        /// 101 — Modify existing QoS rule and delete packet filters.
-        ModifyDelete = 5,
-        /// 110 — Modify existing QoS rule without modifying packet filters.
-        ModifyNoFilters = 6,
-        /// 111 — Reserved.
-        ReservedHigh = 7,
-    }
-    received {
-        _ => ReservedHigh,
+    pub enum QosRuleOpCode "§9.11.4.13" bits 3 others as 7 {
+        0 Reserved "reserved" tree "reserved",
+        1 Create "create" tree "create",
+        2 Delete "delete" tree "delete",
+        3 ModifyAdd "modify add" tree "modify-add",
+        4 ModifyReplace "modify replace" tree "modify-replace",
+        5 ModifyDelete "modify delete" tree "modify-delete",
+        6 ModifyNoFilters "modify no filters" tree "modify-no-filters",
+        7 ReservedHigh "reserved high" tree "reserved-high",
     }
 }
+crate::common::enums::values_readable!(QosRuleOpCode);
 
-crate::common::enums::nas_enum! {
+oxirush_utils::named_values! {
     /// Packet filter direction in a QoS rule per TS 24.501 §9.11.4.13.
-    #[non_exhaustive]
-    pub enum QosPacketFilterDirection {
-        /// Reserved.
-        Reserved = 0,
-        /// Downlink only.
-        Downlink = 1,
-        /// Uplink only.
-        Uplink = 2,
-        /// Bidirectional.
-        Bidirectional = 3,
-    }
-    received {
-        _ => Bidirectional,
+    pub enum QosPacketFilterDirection "§9.11.4.13" bits 2 others as 3 {
+        0 Reserved "reserved" tree "reserved",
+        1 Downlink "downlink" tree "downlink",
+        2 Uplink "uplink" tree "uplink",
+        3 Bidirectional "bidirectional" tree "bidirectional",
     }
 }
+crate::common::enums::values_readable!(QosPacketFilterDirection);
 
 /// One decoded `(S)RTP multiplexed media identification information` entry.
 #[non_exhaustive]
@@ -6394,7 +6121,7 @@ fn parse_qos_rule(
 fn parse_qos_rule_body(rule_id: u8, body: &[u8]) -> core::result::Result<QosRule, QosError> {
     use QosError::{SyntacticalPacketFilter, SyntacticalQosOperation};
     let header = body[0];
-    let op_code = QosRuleOpCode::received((header >> 5) & 0x07);
+    let op_code = QosRuleOpCode::from_value((header >> 5) & 0x07).effective();
     let filter_count = header & 0x0F;
     if matches!(
         op_code,
@@ -6449,7 +6176,7 @@ fn parse_qos_rule_body(rule_id: u8, body: &[u8]) -> core::result::Result<QosRule
             packet_filters.push(QosPacketFilter::Delete { identifier });
             continue;
         };
-        let direction = QosPacketFilterDirection::received((first >> 4) & 0x03);
+        let direction = QosPacketFilterDirection::from_value((first >> 4) & 0x03).effective();
         let components = parse_qos_packet_filter_components(contents)
             .filter(|components| {
                 !matches!(direction, QosPacketFilterDirection::Reserved)
@@ -6491,7 +6218,7 @@ impl QosRules {
 
             let rule_end = pos + length;
             let header = data[pos];
-            let op_code = QosRuleOpCode::received((header >> 5) & 0x07);
+            let op_code = QosRuleOpCode::from_value((header >> 5) & 0x07).effective();
             let dqr = header & 0x10 != 0;
             let num_filters = (header & 0x0F) as usize;
             pos += 1;
@@ -6525,7 +6252,8 @@ impl QosRules {
                     continue;
                 }
 
-                let direction = QosPacketFilterDirection::received((id_byte >> 4) & 0x03);
+                let direction =
+                    QosPacketFilterDirection::from_value((id_byte >> 4) & 0x03).effective();
                 let identifier = id_byte & 0x0F;
                 let pf_len = match data.get(pos) {
                     Some(len) => *len as usize,
@@ -6665,14 +6393,14 @@ impl QosRules {
                     }
                     rule.packet_filters.len() as u8
                 }
-                QosRuleOpCode::Reserved | QosRuleOpCode::ReservedHigh => {
+                QosRuleOpCode::Reserved | QosRuleOpCode::ReservedHigh | QosRuleOpCode::Other(_) => {
                     return Err(at(ValueError::combination("rule-operation-code", reserved)));
                 }
             };
 
             let mut body = Vec::new();
             body.push(
-                ((rule.op_code as u8) << 5)
+                ((u8::from(rule.op_code)) << 5)
                     | (if rule.dqr { 0x10 } else { 0 })
                     | header_filter_count,
             );
@@ -6693,7 +6421,7 @@ impl QosRules {
                         });
                         let pf_len = pf_len.ok_or_else(refused)?;
                         sized("components", "octets", pf_len, 0, 255).map_err(at)?;
-                        body.push(((*direction as u8) << 4) | (identifier & 0x0F));
+                        body.push(((u8::from(*direction)) << 4) | (identifier & 0x0F));
                         body.push(pf_len as u8);
                         for component in components {
                             encode_qos_packet_filter_component(&mut body, component)
@@ -6765,44 +6493,30 @@ impl QosRules {
     }
 }
 
-crate::common::enums::nas_enum! {
+oxirush_utils::named_values! {
     /// QoS flow description operation code per TS 24.501 §9.11.4.12.
-    #[non_exhaustive]
-    pub enum QosFlowOpCode {
-        /// 000 — Reserved.
-        Reserved = 0,
-        /// 001 — Create new QoS flow description.
-        Create = 1,
-        /// 010 — Delete existing QoS flow description.
-        Delete = 2,
-        /// 011 — Modify existing QoS flow description.
-        Modify = 3,
-    }
-    received {
-        _ => Reserved,
+    pub enum QosFlowOpCode "§9.11.4.12" bits 3 others as 0 {
+        0 Reserved "reserved" tree "reserved",
+        1 Create "create" tree "create",
+        2 Delete "delete" tree "delete",
+        3 Modify "modify" tree "modify",
     }
 }
+crate::common::enums::values_readable!(QosFlowOpCode);
 
-crate::common::enums::nas_enum! {
+oxirush_utils::named_values! {
     /// QoS flow parameter identifier per TS 24.501 §9.11.4.12.
-    #[non_exhaustive]
-    pub enum QosFlowParamId {
-        /// 5QI — 5G QoS Identifier (1 byte).
-        FiveQi = 0x01,
-        /// GFBR uplink (3 bytes: unit + 2 byte value).
-        GfbrUl = 0x02,
-        /// GFBR downlink.
-        GfbrDl = 0x03,
-        /// MFBR uplink.
-        MfbrUl = 0x04,
-        /// MFBR downlink.
-        MfbrDl = 0x05,
-        /// Averaging window (2 bytes).
-        AveragingWindow = 0x06,
-        /// EPS bearer identity (1 byte).
-        EpsBearerId = 0x07,
+    pub enum QosFlowParamId "§9.11.4.12" bits 8 {
+        0x01 FiveQi "5qi" tree "5qi",
+        0x02 GfbrUl "gfbr ul" tree "gfbr-ul",
+        0x03 GfbrDl "gfbr dl" tree "gfbr-dl",
+        0x04 MfbrUl "mfbr ul" tree "mfbr-ul",
+        0x05 MfbrDl "mfbr dl" tree "mfbr-dl",
+        0x06 AveragingWindow "averaging window" tree "averaging-window",
+        0x07 EpsBearerId "eps bearer id" tree "eps-bearer-id",
     }
 }
+crate::common::enums::values_readable!(QosFlowParamId);
 
 /// One AMBR-style bit-rate parameter inside a QoS flow description.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -6820,8 +6534,11 @@ crate::common::readable::serde_by_readable!(QosFlowBitRate);
 
 impl QosFlowBitRate {
     /// Return unit value.
-    pub fn unit_value(&self) -> Option<SessionAmbrUnit> {
-        SessionAmbrUnit::received(self.unit)
+    ///
+    /// The value as the IE has it: `effective()` is the value as a receiver
+    /// reads it.
+    pub fn unit_value(&self) -> SessionAmbrUnit {
+        SessionAmbrUnit::from_value(self.unit)
     }
 
     /// Return kbps.
@@ -6874,13 +6591,13 @@ impl QosFlowParameter {
     /// Return param identifier.
     pub fn param_id(&self) -> u8 {
         match self {
-            Self::FiveQi(_) => QosFlowParamId::FiveQi as u8,
-            Self::GfbrUl(_) => QosFlowParamId::GfbrUl as u8,
-            Self::GfbrDl(_) => QosFlowParamId::GfbrDl as u8,
-            Self::MfbrUl(_) => QosFlowParamId::MfbrUl as u8,
-            Self::MfbrDl(_) => QosFlowParamId::MfbrDl as u8,
-            Self::AveragingWindow(_) => QosFlowParamId::AveragingWindow as u8,
-            Self::EpsBearerId(_) => QosFlowParamId::EpsBearerId as u8,
+            Self::FiveQi(_) => u8::from(QosFlowParamId::FiveQi),
+            Self::GfbrUl(_) => u8::from(QosFlowParamId::GfbrUl),
+            Self::GfbrDl(_) => u8::from(QosFlowParamId::GfbrDl),
+            Self::MfbrUl(_) => u8::from(QosFlowParamId::MfbrUl),
+            Self::MfbrDl(_) => u8::from(QosFlowParamId::MfbrDl),
+            Self::AveragingWindow(_) => u8::from(QosFlowParamId::AveragingWindow),
+            Self::EpsBearerId(_) => u8::from(QosFlowParamId::EpsBearerId),
             Self::Unknown { param_id, .. } => *param_id,
         }
     }
@@ -6975,7 +6692,7 @@ fn parse_qos_flow_description(
     let Some(&[_, op_byte, count_byte]) = data.get(pos..pos + 3) else {
         return (Err(error), None);
     };
-    let op_code = QosFlowOpCode::received((op_byte >> 5) & 0x07);
+    let op_code = QosFlowOpCode::from_value((op_byte >> 5) & 0x07).effective();
     let e_flag = count_byte & 0x40 != 0;
     let num_params = (count_byte & 0x3f) as usize;
     let mut valid = !(matches!(op_code, QosFlowOpCode::Reserved)
@@ -6994,7 +6711,7 @@ fn parse_qos_flow_description(
             return (Err(error), None);
         };
         pos = end;
-        let parameter = match (QosFlowParamId::try_from(param_id).ok(), contents) {
+        let parameter = match (QosFlowParamId::named(param_id), contents) {
             (Some(QosFlowParamId::FiveQi), &[five_qi]) => QosFlowParameter::FiveQi(five_qi),
             (Some(QosFlowParamId::GfbrUl), &[unit, high, low]) => {
                 QosFlowParameter::GfbrUl(QosFlowBitRate {
@@ -7134,7 +6851,7 @@ impl QosFlowDescriptions {
                     | QosFlowParameter::GfbrDl(rate)
                     | QosFlowParameter::MfbrUl(rate)
                     | QosFlowParameter::MfbrDl(rate) => {
-                        if SessionAmbrUnit::try_from(rate.unit).is_err() {
+                        if SessionAmbrUnit::named(rate.unit).is_none() {
                             let defined = "a unit from 1 kbps to 256 Pbps";
                             return Err(at(ValueError::value("unit", rate.unit, defined)));
                         }
@@ -7157,7 +6874,7 @@ impl QosFlowDescriptions {
             }
 
             value.push(d.qfi);
-            value.push((d.op_code as u8) << 5);
+            value.push((u8::from(d.op_code)) << 5);
             let mut count = (d.params.len() as u8) & 0x3F;
             if d.e_flag {
                 count |= 0x40;
@@ -7200,20 +6917,16 @@ impl QosFlowDescriptions {
 
 // ── Protocol Configuration / Container IEs ──────────────────────────────────
 
-crate::common::enums::nas_enum! {
+oxirush_utils::named_values! {
     /// Service-level-AA server address type per TS 24.501 §9.11.2.12.
-    #[non_exhaustive]
-    pub enum ServiceLevelAaServerAddressType {
-        /// IPv4.
-        Ipv4 = 0x01,
-        /// IPv6.
-        Ipv6 = 0x02,
-        /// IPv4v6.
-        Ipv4v6 = 0x03,
-        /// FQDN.
-        Fqdn = 0x04,
+    pub enum ServiceLevelAaServerAddressType "§9.11.2.12" bits 8 {
+        0x01 Ipv4 "ipv4" tree "ipv4",
+        0x02 Ipv6 "ipv6" tree "ipv6",
+        0x03 Ipv4v6 "ipv4v6" tree "ipv4v6",
+        0x04 Fqdn "fqdn" tree "fqdn",
     }
 }
+crate::common::enums::values_readable!(ServiceLevelAaServerAddressType);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 /// Service level aa server address values.
@@ -7246,41 +6959,27 @@ crate::common::readable::readable!(enum ServiceLevelAaServerAddress { Ipv4([u8; 
 #[cfg(feature = "tree")]
 crate::common::readable::serde_by_readable!(ServiceLevelAaServerAddress);
 
-crate::common::enums::nas_enum! {
-    #[non_exhaustive]
+oxirush_utils::named_values! {
     /// Service level aa response c 2 authorization result values.
-    pub enum ServiceLevelAaResponseC2AuthorizationResult {
-        /// No information.
-        NoInformation = 0,
-        /// Successful.
-        Successful = 1,
-        /// Not successful or revoked.
-        NotSuccessfulOrRevoked = 2,
-        /// Reserved.
-        Reserved = 3,
-    }
-    received {
-        _ => Reserved,
+    pub enum ServiceLevelAaResponseC2AuthorizationResult "" bits 2 others as 3 {
+        0 NoInformation "no information" tree "no-information",
+        1 Successful "successful" tree "successful",
+        2 NotSuccessfulOrRevoked "not successful or revoked" tree "not-successful-or-revoked",
+        3 Reserved "reserved" tree "reserved",
     }
 }
+crate::common::enums::values_readable!(ServiceLevelAaResponseC2AuthorizationResult);
 
-crate::common::enums::nas_enum! {
-    #[non_exhaustive]
+oxirush_utils::named_values! {
     /// Service level aa response result values.
-    pub enum ServiceLevelAaResponseResult {
-        /// No information.
-        NoInformation = 0,
-        /// Successful.
-        Successful = 1,
-        /// Not successful or revoked.
-        NotSuccessfulOrRevoked = 2,
-        /// Reserved.
-        Reserved = 3,
-    }
-    received {
-        _ => Reserved,
+    pub enum ServiceLevelAaResponseResult "" bits 8 others as 3 {
+        0 NoInformation "no information" tree "no-information",
+        1 Successful "successful" tree "successful",
+        2 NotSuccessfulOrRevoked "not successful or revoked" tree "not-successful-or-revoked",
+        3 Reserved "reserved" tree "reserved",
     }
 }
+crate::common::enums::values_readable!(ServiceLevelAaResponseResult);
 
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -7308,16 +7007,14 @@ impl ServiceLevelAaResponse {
     }
 }
 
-crate::common::enums::nas_enum! {
-    #[non_exhaustive]
+oxirush_utils::named_values! {
     /// Service level aa payload type values.
-    pub enum ServiceLevelAaPayloadType {
-        /// UUAA.
-        Uuaa = 0x01,
-        /// C2 authorization.
-        C2Authorization = 0x02,
+    pub enum ServiceLevelAaPayloadType "" bits 8 {
+        0x01 Uuaa "uuaa" tree "uuaa",
+        0x02 C2Authorization "c2 authorization" tree "c2-authorization",
     }
 }
+crate::common::enums::values_readable!(ServiceLevelAaPayloadType);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 /// Service level aa parameter values.
@@ -7456,10 +7153,12 @@ impl ServiceLevelAaContainer {
                 }
                 0x30 if contents.len() == 1 => {
                     ServiceLevelAaParameter::Response(ServiceLevelAaResponse {
-                        c2ar: ServiceLevelAaResponseC2AuthorizationResult::received(
+                        c2ar: ServiceLevelAaResponseC2AuthorizationResult::from_value(
                             (contents[0] >> 2) & 0x03,
-                        ),
-                        slar: ServiceLevelAaResponseResult::received(contents[0] & 0x03),
+                        )
+                        .effective(),
+                        slar: ServiceLevelAaResponseResult::from_value(contents[0] & 0x03)
+                            .effective(),
                     })
                 }
                 0x30 => {
@@ -7469,7 +7168,7 @@ impl ServiceLevelAaContainer {
                     )));
                 }
                 0x40 if contents.len() == 1 => {
-                    match ServiceLevelAaPayloadType::try_from(contents[0]).ok() {
+                    match ServiceLevelAaPayloadType::named(contents[0]) {
                         Some(payload_type) => ServiceLevelAaParameter::PayloadType(payload_type),
                         None => ServiceLevelAaParameter::Unknown {
                             parameter_type,
@@ -7676,20 +7375,20 @@ impl ServiceLevelAaContainer {
                     let mut contents = Vec::new();
                     match address {
                         ServiceLevelAaServerAddress::Ipv4(ipv4) => {
-                            contents.push(ServiceLevelAaServerAddressType::Ipv4 as u8);
+                            contents.push(u8::from(ServiceLevelAaServerAddressType::Ipv4));
                             contents.extend_from_slice(ipv4);
                         }
                         ServiceLevelAaServerAddress::Ipv6(ipv6) => {
-                            contents.push(ServiceLevelAaServerAddressType::Ipv6 as u8);
+                            contents.push(u8::from(ServiceLevelAaServerAddressType::Ipv6));
                             contents.extend_from_slice(ipv6);
                         }
                         ServiceLevelAaServerAddress::Ipv4v6 { ipv4, ipv6 } => {
-                            contents.push(ServiceLevelAaServerAddressType::Ipv4v6 as u8);
+                            contents.push(u8::from(ServiceLevelAaServerAddressType::Ipv4v6));
                             contents.extend_from_slice(ipv4);
                             contents.extend_from_slice(ipv6);
                         }
                         ServiceLevelAaServerAddress::Fqdn(fqdn) => {
-                            contents.push(ServiceLevelAaServerAddressType::Fqdn as u8);
+                            contents.push(u8::from(ServiceLevelAaServerAddressType::Fqdn));
                             let labels = crate::common::encode_labels("fqdn", fqdn, 254);
                             contents.extend_from_slice(&labels.map_err(at)?);
                         }
@@ -7720,12 +7419,12 @@ impl ServiceLevelAaContainer {
                     }
                     value.push(0x30);
                     value.push(1);
-                    value.push(((response.c2ar as u8) << 2) | (response.slar as u8));
+                    value.push(((u8::from(response.c2ar)) << 2) | (u8::from(response.slar)));
                 }
                 ServiceLevelAaParameter::PayloadType(payload_type) => {
                     value.push(0x40);
                     value.push(1);
-                    value.push(*payload_type as u8);
+                    value.push(u8::from(*payload_type));
                 }
                 ServiceLevelAaParameter::Payload(payload) => {
                     value.push(0x70);
@@ -8301,42 +8000,33 @@ impl SorTransparentContainer {
     }
 }
 
-crate::common::enums::nas_enum! {
+oxirush_utils::named_values! {
     /// Mapped EPS bearer context operation code per TS 24.501 §9.11.4.8.
-    #[non_exhaustive]
-    pub enum MappedEpsBearerOpCode {
-        /// Reserved.
-        Reserved = 0x00,
-        /// Create new EPS bearer.
-        Create = 0x01,
-        /// Delete existing EPS bearer.
-        Delete = 0x02,
-        /// Modify existing EPS bearer.
-        Modify = 0x03,
+    pub enum MappedEpsBearerOpCode "§9.11.4.8" bits 2 {
+        0x00 Reserved "reserved" tree "reserved",
+        0x01 Create "create" tree "create",
+        0x02 Delete "delete" tree "delete",
+        0x03 Modify "modify" tree "modify",
     }
 }
+crate::common::enums::values_readable!(MappedEpsBearerOpCode);
 
-crate::common::enums::nas_enum! {
+oxirush_utils::named_values! {
     /// EPS parameter identifier in a mapped EPS bearer context per TS 24.501 §9.11.4.8.
-    #[non_exhaustive]
-    pub enum MappedEpsBearerParamId {
-        /// Mapped EPS QoS parameters.
-        EpsQos = 0x01,
-        /// Mapped extended EPS QoS parameters.
-        ExtendedEpsQos = 0x02,
-        /// Traffic flow template (TFT).
-        TrafficFlowTemplate = 0x03,
-        /// APN-AMBR.
-        ApnAmbr = 0x04,
-        /// Extended APN-AMBR.
-        ExtendedApnAmbr = 0x05,
+    pub enum MappedEpsBearerParamId "§9.11.4.8" bits 8 {
+        0x01 EpsQos "eps qos" tree "eps-qos",
+        0x02 ExtendedEpsQos "extended eps qos" tree "extended-eps-qos",
+        0x03 TrafficFlowTemplate "traffic flow template" tree "traffic-flow-template",
+        0x04 ApnAmbr "apn ambr" tree "apn-ambr",
+        0x05 ExtendedApnAmbr "extended apn ambr" tree "extended-apn-ambr",
     }
 }
+crate::common::enums::values_readable!(MappedEpsBearerParamId);
 
 /// One EPS parameter inside a mapped EPS bearer context.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MappedEpsBearerParam {
-    /// Raw parameter identifier (use [`|code| MappedEpsBearerParamId::try_from(code).ok()`] for typed value).
+    /// Raw parameter identifier (use [`|code| MappedEpsBearerParamId::named(code)`] for typed value).
     pub param_id: u8,
     /// Opaque parameter contents (the format depends on `param_id`).
     pub contents: Vec<u8>,
@@ -8349,7 +8039,7 @@ crate::common::readable::serde_by_readable!(MappedEpsBearerParam);
 
 impl MappedEpsBearerParam {
     fn contents_for(&self, id: MappedEpsBearerParamId) -> Option<&[u8]> {
-        (self.param_id == id as u8).then_some(self.contents.as_slice())
+        (self.param_id == u8::from(id)).then_some(self.contents.as_slice())
     }
 
     /// Mapped EPS QoS parameters (TS 24.301 §9.9.4.3).
@@ -8385,13 +8075,13 @@ impl MappedEpsBearerParam {
 
     /// Typed parameter identifier, or `None` for a future/unsupported identifier.
     pub fn parameter_id(&self) -> Option<MappedEpsBearerParamId> {
-        MappedEpsBearerParamId::try_from(self.param_id).ok()
+        MappedEpsBearerParamId::named(self.param_id)
     }
 
     /// Build mapped EPS QoS parameters.
     pub fn from_eps_qos(value: crate::nas_eps::EpsQos) -> core::result::Result<Self, ValueError> {
         Ok(Self {
-            param_id: MappedEpsBearerParamId::EpsQos as u8,
+            param_id: u8::from(MappedEpsBearerParamId::EpsQos),
             contents: value.to_bytes()?,
         })
     }
@@ -8399,7 +8089,7 @@ impl MappedEpsBearerParam {
     /// Build mapped extended EPS QoS parameters.
     pub fn from_extended_eps_qos(value: crate::nas_eps::ExtendedEpsQos) -> Self {
         Self {
-            param_id: MappedEpsBearerParamId::ExtendedEpsQos as u8,
+            param_id: u8::from(MappedEpsBearerParamId::ExtendedEpsQos),
             contents: value.to_bytes().to_vec(),
         }
     }
@@ -8407,7 +8097,7 @@ impl MappedEpsBearerParam {
     /// Build a mapped traffic-flow template.
     pub fn from_tft(value: &crate::nas_eps::Tft) -> core::result::Result<Self, ValueError> {
         Ok(Self {
-            param_id: MappedEpsBearerParamId::TrafficFlowTemplate as u8,
+            param_id: u8::from(MappedEpsBearerParamId::TrafficFlowTemplate),
             contents: value.to_bytes()?,
         })
     }
@@ -8415,7 +8105,7 @@ impl MappedEpsBearerParam {
     /// Build mapped APN-AMBR parameters.
     pub fn from_apn_ambr(value: crate::nas_eps::ApnAmbr) -> core::result::Result<Self, ValueError> {
         Ok(Self {
-            param_id: MappedEpsBearerParamId::ApnAmbr as u8,
+            param_id: u8::from(MappedEpsBearerParamId::ApnAmbr),
             contents: value.to_bytes()?,
         })
     }
@@ -8423,7 +8113,7 @@ impl MappedEpsBearerParam {
     /// Build mapped extended APN-AMBR parameters.
     pub fn from_extended_apn_ambr(value: crate::nas_eps::ExtendedApnAmbr) -> Self {
         Self {
-            param_id: MappedEpsBearerParamId::ExtendedApnAmbr as u8,
+            param_id: u8::from(MappedEpsBearerParamId::ExtendedApnAmbr),
             contents: value.to_bytes().to_vec(),
         }
     }
@@ -8448,7 +8138,7 @@ impl MappedEpsBearerParam {
                     == Some(self.contents.as_slice())
             }
             Some(MappedEpsBearerParamId::ExtendedApnAmbr) => self.contents.len() == 6,
-            None => false,
+            Some(MappedEpsBearerParamId::Other(_)) | None => false,
         }
     }
 }
@@ -8475,8 +8165,7 @@ crate::common::readable::serde_by_readable!(MappedEpsBearerContext);
 impl MappedEpsBearerContext {
     /// Typed operation code.
     pub fn operation(&self) -> Option<MappedEpsBearerOpCode> {
-        MappedEpsBearerOpCode::try_from(self.op_code & 0x03)
-            .ok()
+        MappedEpsBearerOpCode::named(self.op_code & 0x03)
             .filter(|operation| *operation != MappedEpsBearerOpCode::Reserved)
     }
 
@@ -8489,7 +8178,7 @@ impl MappedEpsBearerContext {
     ) -> core::result::Result<Self, ValueError> {
         let context = Self {
             eps_bearer_id,
-            op_code: operation as u8,
+            op_code: u8::from(operation),
             e_flag,
             params,
         };
@@ -8522,7 +8211,7 @@ impl MappedEpsBearerContext {
             Some(MappedEpsBearerOpCode::Create) => self.e_flag && !self.params.is_empty(),
             Some(MappedEpsBearerOpCode::Delete) => !self.e_flag && self.params.is_empty(),
             Some(MappedEpsBearerOpCode::Modify) => !self.params.is_empty(),
-            Some(MappedEpsBearerOpCode::Reserved) | None => false,
+            Some(MappedEpsBearerOpCode::Reserved | MappedEpsBearerOpCode::Other(_)) | None => false,
         }
     }
 }
@@ -8663,16 +8352,14 @@ crate::common::readable::readable!(struct MbsTmgi { service_id, plmn as plmn_opt
 #[cfg(feature = "tree")]
 crate::common::readable::serde_by_readable!(MbsTmgi);
 
-crate::common::enums::nas_enum! {
+oxirush_utils::named_values! {
     /// Requested MBS operation.
-    #[non_exhaustive]
-    pub enum RequestedMbsOperation {
-        /// Join the multicast session.
-        Join = 1,
-        /// Leave the multicast session.
-        Leave = 2,
+    pub enum RequestedMbsOperation "" bits 8 {
+        1 Join "join" tree "join",
+        2 Leave "leave" tree "leave",
     }
 }
+crate::common::enums::values_readable!(RequestedMbsOperation);
 
 /// Requested multicast-session identifier.
 #[non_exhaustive]
@@ -8727,24 +8414,18 @@ impl RequestedMbsSession {
     }
 }
 
-crate::common::enums::nas_enum! {
+oxirush_utils::named_values! {
     /// Network MBS decision. Reserved received values fall back to NoIndication.
-    #[non_exhaustive]
-    pub enum MbsDecision {
-        /// Receiver fallback/no defined decision.
-        NoIndication = 0,
-        /// MBS service-area update.
-        ServiceAreaUpdate = 1,
-        /// Join accepted.
-        JoinAccepted = 2,
-        /// Join rejected.
-        JoinRejected = 3,
-        /// Remove the UE from the multicast session.
-        RemoveUe = 4,
-        /// Security-information update.
-        SecurityInformationUpdate = 5,
+    pub enum MbsDecision "" bits 8 {
+        0 NoIndication "no indication" tree "no-indication",
+        1 ServiceAreaUpdate "service area update" tree "service-area-update",
+        2 JoinAccepted "join accepted" tree "join-accepted",
+        3 JoinRejected "join rejected" tree "join-rejected",
+        4 RemoveUe "remove ue" tree "remove-ue",
+        5 SecurityInformationUpdate "security information update" tree "security-information-update",
     }
 }
+crate::common::enums::values_readable!(MbsDecision);
 
 impl MbsDecision {
     fn from_received(value: u8) -> Self {
@@ -8759,26 +8440,19 @@ impl MbsDecision {
     }
 }
 
-crate::common::enums::nas_enum! {
+oxirush_utils::named_values! {
     /// MBS rejection/removal cause. Reserved received values fall back to NoAdditionalInformation.
-    #[non_exhaustive]
-    pub enum MbsRejectionCause {
-        /// No additional information.
-        NoAdditionalInformation = 0,
-        /// Insufficient resources.
-        InsufficientResources = 1,
-        /// UE is not authorized.
-        NotAuthorized = 2,
-        /// Session has not started or will not start soon.
-        SessionNotStarted = 3,
-        /// UE is outside the local service area.
-        OutsideServiceArea = 4,
-        /// Session context not found.
-        ContextNotFound = 5,
-        /// Session was released.
-        SessionReleased = 6,
+    pub enum MbsRejectionCause "" bits 8 {
+        0 NoAdditionalInformation "no additional information" tree "no-additional-information",
+        1 InsufficientResources "insufficient resources" tree "insufficient-resources",
+        2 NotAuthorized "not authorized" tree "not-authorized",
+        3 SessionNotStarted "session not started" tree "session-not-started",
+        4 OutsideServiceArea "outside service area" tree "outside-service-area",
+        5 ContextNotFound "context not found" tree "context-not-found",
+        6 SessionReleased "session released" tree "session-released",
     }
 }
+crate::common::enums::values_readable!(MbsRejectionCause);
 
 impl MbsRejectionCause {
     fn from_received(value: u8) -> Self {
@@ -9205,7 +8879,7 @@ impl ReceivedMbsContainer {
                 Some(MbsServiceArea::NrCgiList(_)) => 2,
                 Some(MbsServiceArea::TaiAndNrCgi { .. }) => 3,
             };
-            let header = record.decision as u8 | (area_kind << 3) | ((cause as u8) << 5);
+            let header = u8::from(record.decision) | (area_kind << 3) | ((u8::from(cause)) << 5);
 
             let (ip_present, ip_is_v6) = match (&record.ipv4, &record.ipv6) {
                 (None, None) => (false, false),
@@ -9367,7 +9041,7 @@ impl RequestedMbsContainer {
                 RequestedMbsSessionId::Ipv4 { .. } => 2,
                 RequestedMbsSessionId::Ipv6 { .. } => 3,
             };
-            value.push(id_type | (record.operation as u8) << 2);
+            value.push(id_type | (u8::from(record.operation)) << 2);
             match &record.session_id {
                 RequestedMbsSessionId::Tmgi(tmgi) => encode_mbs_tmgi(tmgi, &mut value),
                 RequestedMbsSessionId::Ipv4 {
@@ -9404,25 +9078,21 @@ impl RequestedMbsContainer {
 
 // ── NSSAI / Slice related IEs ───────────────────────────────────────────────
 
-crate::common::enums::nas_enum! {
+oxirush_utils::named_values! {
     /// Cause value for an entry in [`ExtendedRejectedNssai`] per TS 24.501 §9.11.3.75.
-    #[non_exhaustive]
-    pub enum ExtendedRejectedSNssaiCause {
-        /// S-NSSAI not available in the current PLMN or SNPN.
-        NotAvailableInPlmn = 0x00,
-        /// S-NSSAI not available in the current registration area.
-        NotAvailableInRegArea = 0x01,
-        /// S-NSSAI not available due to failed/revoked NSSAA.
-        FailedOrRevokedAuth = 0x02,
-        /// S-NSSAI not available due to maximum number of UEs reached.
-        MaxUesReached = 0x03,
+    pub enum ExtendedRejectedSNssaiCause "§9.11.3.75" bits 8 {
+        0x00 NotAvailableInPlmn "not available in plmn" tree "not-available-in-plmn",
+        0x01 NotAvailableInRegArea "not available in reg area" tree "not-available-in-reg-area",
+        0x02 FailedOrRevokedAuth "failed or revoked auth" tree "failed-or-revoked-auth",
+        0x03 MaxUesReached "max ues reached" tree "max-ues-reached",
     }
 }
+crate::common::enums::values_readable!(ExtendedRejectedSNssaiCause);
 
 /// One rejected S-NSSAI entry inside an extended rejected NSSAI partial list.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExtendedRejectedSNssai {
-    /// Raw cause value (use [`|code| ExtendedRejectedSNssaiCause::try_from(code).ok()`] for typed value).
+    /// Raw cause value (use [`|code| ExtendedRejectedSNssaiCause::named(code)`] for typed value).
     pub cause: u8,
     /// S-NSSAI bytes (raw value, see [`SNssaiContents`]).
     pub s_nssai: Vec<u8>,
@@ -9436,7 +9106,7 @@ crate::common::readable::serde_by_readable!(ExtendedRejectedSNssai);
 impl ExtendedRejectedSNssai {
     /// Typed cause, or `None` when a receiver preserved a reserved value.
     pub fn cause_value(&self) -> Option<ExtendedRejectedSNssaiCause> {
-        ExtendedRejectedSNssaiCause::try_from(self.cause).ok()
+        ExtendedRejectedSNssaiCause::named(self.cause)
     }
 
     /// Parsed S-NSSAI including an optional mapped HPLMN value.
@@ -10951,11 +10621,7 @@ impl PduSessionReactivationResultErrorCause {
     pub fn entries(&self) -> Vec<(u8, GmmCauseValue)> {
         self.entries_raw()
             .into_iter()
-            .filter_map(|(psi, cause)| {
-                GmmCauseValue::try_from(cause)
-                    .ok()
-                    .map(|cause| (psi, cause))
-            })
+            .filter_map(|(psi, cause)| GmmCauseValue::named(cause).map(|cause| (psi, cause)))
             .collect()
     }
 
@@ -10977,7 +10643,7 @@ impl PduSessionReactivationResultErrorCause {
     pub fn from_entries(entries: &[(u8, GmmCauseValue)]) -> core::result::Result<Self, ValueError> {
         let raw = entries
             .iter()
-            .map(|(psi, cause)| (*psi, *cause as u8))
+            .map(|(psi, cause)| (*psi, u8::from(*cause)))
             .collect::<Vec<_>>();
         Self::from_entries_raw(&raw)
     }
@@ -11016,27 +10682,23 @@ impl PduSessionReactivationResultErrorCause {
             && entries.len() <= 15
             && entries
                 .iter()
-                .all(|(_, cause)| GmmCauseValue::try_from(*cause).ok().is_some())
+                .all(|(_, cause)| GmmCauseValue::named(*cause).is_some())
             && Self::from_entries_raw(&entries).is_ok_and(|canonical| canonical.value == self.value)
     }
 }
 
 // ── Registration / Paging IEs ───────────────────────────────────────────────
 
-crate::common::enums::nas_enum! {
+oxirush_utils::named_values! {
     /// Paging restriction type per TS 24.501 §9.11.3.77.
-    #[non_exhaustive]
-    pub enum PagingRestrictionType {
-        /// All paging is restricted.
-        AllRestricted = 0x01,
-        /// All paging is restricted except for voice service.
-        AllRestrictedExceptVoice = 0x02,
-        /// All paging is restricted except for specified PDU session(s) (TS 24.501 §9.11.3.77).
-        AllRestrictedExceptSpecifiedPduSessions = 0x03,
-        /// All paging is restricted except for voice service and specified PDU session(s).
-        AllRestrictedExceptVoiceAndSpecifiedPduSessions = 0x04,
+    pub enum PagingRestrictionType "§9.11.3.77" bits 8 {
+        0x01 AllRestricted "all restricted" tree "all-restricted",
+        0x02 AllRestrictedExceptVoice "all restricted except voice" tree "all-restricted-except-voice",
+        0x03 AllRestrictedExceptSpecifiedPduSessions "all restricted except specified pdu sessions" tree "all-restricted-except-specified-pdu-sessions",
+        0x04 AllRestrictedExceptVoiceAndSpecifiedPduSessions "all restricted except voice and specified pdu sessions" tree "all-restricted-except-voice-and-specified-pdu-sessions",
     }
 }
+crate::common::enums::values_readable!(PagingRestrictionType);
 
 crate::common::ts24301::paging_restriction_ie!(
     PagingRestriction,
@@ -11051,28 +10713,22 @@ crate::common::ts24301::paging_restriction_ie!(
 
 // ── Header Compression IEs ──────────────────────────────────────────────────
 
-crate::common::enums::nas_enum! {
+oxirush_utils::named_values! {
     /// Ethernet header compression CID length per TS 24.501 §9.11.4.28.
-    #[non_exhaustive]
-    pub enum EthHdrCompCidLen {
-        /// Ethernet header compression not used.
-        NotUsed = 0x00,
-        /// 7-bit context identifiers.
-        SevenBits = 0x01,
-        /// 15-bit context identifiers.
-        FifteenBits = 0x02,
-    }
-    received {
-        _ => SevenBits,
+    pub enum EthHdrCompCidLen "§9.11.4.28" bits 2 others as 0x01 {
+        0x00 NotUsed "not used" tree "not-used",
+        0x01 SevenBits "seven bits" tree "seven-bits",
+        0x02 FifteenBits "fifteen bits" tree "fifteen-bits",
     }
 }
+crate::common::enums::values_readable!(EthHdrCompCidLen);
 
 impl EthernetHeaderCompressionConfiguration {
     /// Typed CID length value (octet 1 bits 1–2, mask 0x03).
     pub fn cid_length(&self) -> Option<EthHdrCompCidLen> {
         self.value
             .first()
-            .map(|b| EthHdrCompCidLen::received(*b & 0x03))
+            .map(|b| EthHdrCompCidLen::from_value(*b & 0x03).effective())
     }
 
     /// Raw CID length value.
@@ -11082,7 +10738,7 @@ impl EthernetHeaderCompressionConfiguration {
 
     /// Build from a typed CID length value.
     pub fn from_cid_length(cid: EthHdrCompCidLen) -> Self {
-        Self::new(vec![cid as u8])
+        Self::new(vec![u8::from(cid)])
     }
 }
 
@@ -11140,16 +10796,14 @@ impl DsTtEthernetPortMacAddress {
     }
 }
 
-crate::common::enums::nas_enum! {
+oxirush_utils::named_values! {
     /// "Allowed type" for a partial service area list per TS 24.501 §9.11.3.49.
-    #[non_exhaustive]
-    pub enum ServiceAreaListAllowedType {
-        /// TAIs in the list are in the allowed area.
-        Allowed = 0,
-        /// TAIs in the list are in the non-allowed area.
-        NonAllowed = 1,
+    pub enum ServiceAreaListAllowedType "§9.11.3.49" bits 8 {
+        0 Allowed "allowed" tree "allowed",
+        1 NonAllowed "non allowed" tree "non-allowed",
     }
 }
+crate::common::enums::values_readable!(ServiceAreaListAllowedType);
 
 /// One partial service area list entry per TS 24.501 §9.11.3.49.
 ///
@@ -11545,34 +11199,26 @@ impl ServiceAreaList {
 
 pub use crate::common::ts24008::MsRevisionLevel;
 
-crate::common::enums::nas_enum! {
+oxirush_utils::named_values! {
     /// NB-N1 mode DRX value per TS 24.501 §9.11.3.73.
-    #[non_exhaustive]
-    pub enum NbN1DrxValue {
-        /// DRX value not specified.
-        NotSpecified = 0x00,
-        /// DRX cycle parameter T = 32.
-        T32 = 0x01,
-        /// DRX cycle parameter T = 64.
-        T64 = 0x02,
-        /// DRX cycle parameter T = 128.
-        T128 = 0x03,
-        /// DRX cycle parameter T = 256.
-        T256 = 0x04,
-        /// DRX cycle parameter T = 512.
-        T512 = 0x05,
-        /// DRX cycle parameter T = 1024.
-        T1024 = 0x07,
-    }
-    received {
-        _ => NotSpecified,
+    pub enum NbN1DrxValue "§9.11.3.73" bits 4 others as 0x00 {
+        0x00 NotSpecified "not specified" tree "not-specified",
+        0x01 T32 "t32" tree "t32",
+        0x02 T64 "t64" tree "t64",
+        0x03 T128 "t128" tree "t128",
+        0x04 T256 "t256" tree "t256",
+        0x05 T512 "t512" tree "t512",
+        0x07 T1024 "t1024" tree "t1024",
     }
 }
+crate::common::enums::values_readable!(NbN1DrxValue);
 
 impl NbN1ModeDrxParameters {
     /// Typed NB-N1 mode DRX value (bits 0-3 of first byte).
     pub fn drx_value(&self) -> Option<NbN1DrxValue> {
-        self.value.first().map(|b| NbN1DrxValue::received(b & 0x0F))
+        self.value
+            .first()
+            .map(|b| NbN1DrxValue::from_value(b & 0x0F).effective())
     }
 
     /// Raw NB-N1 mode DRX value (bits 0-3 of first byte).
@@ -11582,7 +11228,7 @@ impl NbN1ModeDrxParameters {
 
     /// Build from typed DRX value.
     pub fn from_drx_value(drx: NbN1DrxValue) -> Self {
-        Self::new(vec![drx as u8])
+        Self::new(vec![u8::from(drx)])
     }
 }
 
@@ -11846,16 +11492,14 @@ impl PeipsAssistanceInformation {
     }
 }
 
-crate::common::enums::nas_enum! {
+oxirush_utils::named_values! {
     /// PEIPS assistance information type per TS 24.501 §9.11.3.80.
-    #[non_exhaustive]
-    pub enum PeipsAssistanceInformationType {
-        /// Paging subgroup identifier.
-        PagingSubgroupId = 0x00,
-        /// UE paging probability information.
-        UePagingProbabilityInformation = 0x01,
+    pub enum PeipsAssistanceInformationType "§9.11.3.80" bits 8 {
+        0x00 PagingSubgroupId "paging subgroup id" tree "paging-subgroup-id",
+        0x01 UePagingProbabilityInformation "ue paging probability information" tree "ue-paging-probability-information",
     }
 }
+crate::common::enums::values_readable!(PeipsAssistanceInformationType);
 
 /// One PEIPS assistance information entry.
 #[non_exhaustive]
@@ -11883,14 +11527,14 @@ impl PeipsAssistanceInformationEntry {
     fn from_byte(byte: u8) -> Self {
         let info_type_raw = (byte >> 5) & 0x07;
         let value = byte & 0x1F;
-        match PeipsAssistanceInformationType::try_from(info_type_raw).ok() {
+        match PeipsAssistanceInformationType::named(info_type_raw) {
             Some(PeipsAssistanceInformationType::PagingSubgroupId) => {
                 Self::PagingSubgroupId(if value <= 7 { value } else { 0 })
             }
             Some(PeipsAssistanceInformationType::UePagingProbabilityInformation) => {
                 Self::UePagingProbabilityInformation(value.min(20))
             }
-            None => Self::Reserved {
+            Some(PeipsAssistanceInformationType::Other(_)) | None => Self::Reserved {
                 info_type_raw,
                 value,
             },
@@ -11920,16 +11564,14 @@ impl PeipsAssistanceInformationEntry {
 // and several are best treated as opaque byte containers at this layer:
 // their value is their octets.
 
-crate::common::enums::nas_enum! {
-    #[non_exhaustive]
+oxirush_utils::named_values! {
     /// UE parameters update data type values.
-    pub enum UeParametersUpdateDataType {
-        /// Update list.
-        UpdateList = 0x00,
-        /// Acknowledgement.
-        Acknowledgement = 0x01,
+    pub enum UeParametersUpdateDataType "" bits 1 {
+        0x00 UpdateList "update list" tree "update-list",
+        0x01 Acknowledgement "acknowledgement" tree "acknowledgement",
     }
 }
+crate::common::enums::values_readable!(UeParametersUpdateDataType);
 
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -12180,7 +11822,7 @@ impl UeParametersUpdateTransparentContainer {
 
     /// Return data type.
     pub fn data_type(&self) -> Option<UeParametersUpdateDataType> {
-        UeParametersUpdateDataType::try_from((self.header_octet()?) & 0x01).ok()
+        UeParametersUpdateDataType::named((self.header_octet()?) & 0x01)
     }
 
     /// Return acknowledgement requested.
@@ -12205,6 +11847,7 @@ impl UeParametersUpdateTransparentContainer {
     pub fn parse(&self) -> Option<UeParametersUpdateTransparentContainerContents> {
         let header = self.header_octet()?;
         match self.data_type()? {
+            UeParametersUpdateDataType::Other(_) => None,
             UeParametersUpdateDataType::UpdateList => {
                 if self.value.len() < 19 {
                     return None;
@@ -12262,7 +11905,7 @@ impl UeParametersUpdateTransparentContainer {
                         }
                         UeParametersUpdateDataSetType::ProtectedUeParametersUpdateHeaderInformation => {
                             if contents.len() != 1
-                                || UeParametersUpdateDataType::try_from(contents[0] & 0x01).ok()
+                                || UeParametersUpdateDataType::named(contents[0] & 0x01)
                                     != Some(UeParametersUpdateDataType::UpdateList)
                             {
                                 return None;
@@ -12317,7 +11960,7 @@ impl UeParametersUpdateTransparentContainer {
         let mut value = Vec::new();
         match contents {
             UeParametersUpdateTransparentContainerContents::UpdateList(update) => {
-                let mut header = UeParametersUpdateDataType::UpdateList as u8;
+                let mut header = u8::from(UeParametersUpdateDataType::UpdateList);
                 if update.acknowledgement_requested {
                     header |= 0x02;
                 }
@@ -12396,7 +12039,7 @@ impl UeParametersUpdateTransparentContainer {
                                     rule,
                                 ));
                             }
-                            let mut octet = protected_header.data_type as u8;
+                            let mut octet = u8::from(protected_header.data_type);
                             if protected_header.acknowledgement_requested {
                                 octet |= 0x02;
                             }
@@ -12422,7 +12065,7 @@ impl UeParametersUpdateTransparentContainer {
                 }
             }
             UeParametersUpdateTransparentContainerContents::Acknowledgement(ack) => {
-                let mut header = UeParametersUpdateDataType::Acknowledgement as u8;
+                let mut header = u8::from(UeParametersUpdateDataType::Acknowledgement);
                 if ack.header_protection_supported {
                     header |= 0x02;
                 }
@@ -12438,35 +12081,27 @@ impl UeParametersUpdateTransparentContainer {
 
 // ── 9.11.4.34 ECS address ───────────────────────────────────────────────────
 
-crate::common::enums::nas_enum! {
+oxirush_utils::named_values! {
     /// Type of ECS address (TS 24.501 §9.11.4.34, octet 4 bits 1-4).
-    #[non_exhaustive]
-    pub enum EcsAddressType {
-        /// IPv4.
-        Ipv4 = 0x00,
-        /// IPv6.
-        Ipv6 = 0x01,
-        /// FQDN.
-        Fqdn = 0x02,
-        /// Unspecified.
-        Unspecified = 0x0F,
+    pub enum EcsAddressType "§9.11.4.34" bits 4 {
+        0x00 Ipv4 "ipv4" tree "ipv4",
+        0x01 Ipv6 "ipv6" tree "ipv6",
+        0x02 Fqdn "fqdn" tree "fqdn",
+        0x0F Unspecified "unspecified" tree "unspecified",
     }
 }
+crate::common::enums::values_readable!(EcsAddressType);
 
-crate::common::enums::nas_enum! {
+oxirush_utils::named_values! {
     /// Type of spatial validity condition (TS 24.501 §9.11.4.34, octet 4 bits 5-8).
-    #[non_exhaustive]
-    pub enum EcsSpatialValidityType {
-        /// None.
-        None = 0x00,
-        /// Geographical service area.
-        GeographicalServiceArea = 0x01,
-        /// Tracking area.
-        TrackingArea = 0x02,
-        /// Country-wide.
-        CountryWide = 0x03,
+    pub enum EcsSpatialValidityType "§9.11.4.34" bits 4 {
+        0x00 None "none" tree "none",
+        0x01 GeographicalServiceArea "geographical service area" tree "geographical-service-area",
+        0x02 TrackingArea "tracking area" tree "tracking-area",
+        0x03 CountryWide "country wide" tree "country-wide",
     }
 }
+crate::common::enums::values_readable!(EcsSpatialValidityType);
 
 impl EcsAddress {
     /// First content octet (octet 4 in the wire format) — type fields.
@@ -12476,12 +12111,12 @@ impl EcsAddress {
 
     /// Type of ECS address (octet 4 bits 1-4).
     pub fn address_type(&self) -> Option<EcsAddressType> {
-        EcsAddressType::try_from(self.type_octet()? & 0x0F).ok()
+        EcsAddressType::named(self.type_octet()? & 0x0F)
     }
 
     /// Type of spatial validity condition (octet 4 bits 5-8).
     pub fn spatial_validity_type(&self) -> Option<EcsSpatialValidityType> {
-        EcsSpatialValidityType::try_from((self.type_octet()? >> 4) & 0x0F).ok()
+        EcsSpatialValidityType::named((self.type_octet()? >> 4) & 0x0F)
     }
 
     /// Bytes of the ECS address itself (octets 5..a), without spatial validity or trailing fields.
@@ -12491,6 +12126,7 @@ impl EcsAddress {
     pub fn ecs_address_bytes(&self) -> Option<&[u8]> {
         let body = self.value.get(1..)?;
         match self.address_type()? {
+            EcsAddressType::Other(_) => None,
             EcsAddressType::Ipv4 => body.get(..4),
             EcsAddressType::Ipv6 => body.get(..16),
             EcsAddressType::Fqdn => {
@@ -12798,9 +12434,9 @@ impl N3QaiParameter {
 
     /// Construct a parameter from typed contents.
     pub fn from_value(value: N3QaiParameterValue) -> core::result::Result<Self, ValueError> {
-        let unit = |unit: u8| match SessionAmbrUnit::try_from(unit) {
-            Ok(_) => Ok(()),
-            Err(_) => Err(ValueError::value(
+        let unit = |unit: u8| match SessionAmbrUnit::named(unit) {
+            Some(_) => Ok(()),
+            None => Err(ValueError::value(
                 "unit",
                 unit,
                 "a unit from 1 kbps to 256 Pbps",
@@ -13285,7 +12921,7 @@ impl Non3GppDeviceInformation {
             let rule = "is IPv4, IPv6, IPv4v6 or Ethernet";
             return Err(ValueError::combination("pdu-session-type", rule));
         }
-        let mut value = vec![session_type as u8 & 0x07];
+        let mut value = vec![u8::from(session_type) & 0x07];
         for (at, entry) in entries.iter().enumerate() {
             let at = |error: ValueError| error.at(at);
             let octets = entry.device_identifier.len();
@@ -13550,7 +13186,7 @@ fn non_3gpp_device_connection_flags_spare_bits_are_zero(
             flags & !0x01 == 0
                 && (flags & 0x01 == 0 || data.get(8).is_some_and(|octet| octet & 0x0f == 0))
         }
-        PduSessionTypeValue::Unstructured => false,
+        PduSessionTypeValue::Unstructured | PduSessionTypeValue::Other(_) => false,
     }
 }
 
@@ -14314,7 +13950,7 @@ fn parse_single_qos_match_packet_filter(data: &[u8]) -> Option<(QosPacketFilter,
     if data.len() < 2 + packet_filter_len {
         return None;
     }
-    let direction = QosPacketFilterDirection::received((id_byte >> 4) & 0x03);
+    let direction = QosPacketFilterDirection::from_value((id_byte >> 4) & 0x03).effective();
     let identifier = id_byte & 0x0F;
     let components = parse_qos_packet_filter_components(&data[2..2 + packet_filter_len])?;
     Some((
@@ -14348,7 +13984,7 @@ fn encode_qos_match_packet_filters(packet_filters: &[QosPacketFilter]) -> Option
         for component in components {
             encode_qos_packet_filter_component(&mut contents, component)?;
         }
-        out.push(((*direction as u8 & 0x03) << 4) | (*identifier & 0x0F));
+        out.push(((u8::from(*direction) & 0x03) << 4) | (*identifier & 0x0F));
         out.push(contents.len().try_into().ok()?);
         out.extend_from_slice(&contents);
     }
@@ -14840,36 +14476,26 @@ impl ProtocolDescription {
 
 // ── 9.11.3.18B CIoT small data container ───────────────────────────────────
 
-crate::common::enums::nas_enum! {
-    #[non_exhaustive]
+oxirush_utils::named_values! {
     /// CIoT small data container type values.
-    pub enum CiotSmallDataContainerType {
-        /// Control plane user data.
-        ControlPlaneUserData = 0x00,
-        /// SMS.
-        Sms = 0x01,
-        /// Location services message container.
-        LocationServicesMessageContainer = 0x02,
+    pub enum CiotSmallDataContainerType "" bits 3 {
+        0x00 ControlPlaneUserData "control plane user data" tree "control-plane-user-data",
+        0x01 Sms "sms" tree "sms",
+        0x02 LocationServicesMessageContainer "location services message container" tree "location-services-message-container",
     }
 }
+crate::common::enums::values_readable!(CiotSmallDataContainerType);
 
-crate::common::enums::nas_enum! {
-    #[non_exhaustive]
+oxirush_utils::named_values! {
     /// CIoT small data downlink data expected values.
-    pub enum CiotSmallDataDownlinkDataExpected {
-        /// No information available.
-        NoInformationAvailable = 0x00,
-        /// No further uplink or downlink.
-        NoFurtherUplinkOrDownlink = 0x01,
-        /// Single downlink no further uplink.
-        SingleDownlinkNoFurtherUplink = 0x02,
-        /// Reserved.
-        Reserved = 0x03,
-    }
-    received {
-        _ => Reserved,
+    pub enum CiotSmallDataDownlinkDataExpected "" bits 2 others as 0x03 {
+        0x00 NoInformationAvailable "no information available" tree "no-information-available",
+        0x01 NoFurtherUplinkOrDownlink "no further uplink or downlink" tree "no-further-uplink-or-downlink",
+        0x02 SingleDownlinkNoFurtherUplink "single downlink no further uplink" tree "single-downlink-no-further-uplink",
+        0x03 Reserved "reserved" tree "reserved",
     }
 }
+crate::common::enums::values_readable!(CiotSmallDataDownlinkDataExpected);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 /// CIoT small data container contents values.
@@ -14921,12 +14547,13 @@ impl CiotSmallDataContainer {
         let first = *self.value.first()?;
         let data_type_raw = (first >> 5) & 0x07;
         Some(
-            match CiotSmallDataContainerType::try_from(data_type_raw & 0x07).ok() {
+            match CiotSmallDataContainerType::named(data_type_raw & 0x07) {
                 Some(CiotSmallDataContainerType::ControlPlaneUserData) => {
                     CiotSmallDataContainerContents::ControlPlaneUserData {
-                        downlink_data_expected: CiotSmallDataDownlinkDataExpected::received(
+                        downlink_data_expected: CiotSmallDataDownlinkDataExpected::from_value(
                             (first >> 3) & 0x03,
-                        ),
+                        )
+                        .effective(),
                         pdu_session_id: first & 0x07,
                         data: self.value[1..].to_vec(),
                     }
@@ -14948,14 +14575,15 @@ impl CiotSmallDataContainer {
                         return None;
                     }
                     CiotSmallDataContainerContents::LocationServicesMessageContainer {
-                        downlink_data_expected: CiotSmallDataDownlinkDataExpected::received(
+                        downlink_data_expected: CiotSmallDataDownlinkDataExpected::from_value(
                             (first >> 3) & 0x03,
-                        ),
+                        )
+                        .effective(),
                         additional_information: self.value[2..2 + add_info_len].to_vec(),
                         data: self.value[2 + add_info_len..].to_vec(),
                     }
                 }
-                None => return None,
+                Some(CiotSmallDataContainerType::Other(_)) | None => return None,
             },
         )
     }
@@ -14979,14 +14607,14 @@ impl CiotSmallDataContainer {
                     return Err(ValueError::combination("ddx", reserved));
                 }
                 value.push(
-                    ((CiotSmallDataContainerType::ControlPlaneUserData as u8) << 5)
-                        | ((*downlink_data_expected as u8 & 0x03) << 3)
+                    ((u8::from(CiotSmallDataContainerType::ControlPlaneUserData)) << 5)
+                        | ((u8::from(*downlink_data_expected) & 0x03) << 3)
                         | (*pdu_session_id & 0x07),
                 );
                 value.extend_from_slice(data);
             }
             CiotSmallDataContainerContents::Sms { data } => {
-                value.push((CiotSmallDataContainerType::Sms as u8) << 5);
+                value.push((u8::from(CiotSmallDataContainerType::Sms)) << 5);
                 value.extend_from_slice(data);
             }
             CiotSmallDataContainerContents::LocationServicesMessageContainer {
@@ -15001,8 +14629,8 @@ impl CiotSmallDataContainer {
                     return Err(ValueError::combination("ddx", reserved));
                 }
                 value.push(
-                    ((CiotSmallDataContainerType::LocationServicesMessageContainer as u8) << 5)
-                        | ((*downlink_data_expected as u8 & 0x03) << 3),
+                    ((u8::from(CiotSmallDataContainerType::LocationServicesMessageContainer)) << 5)
+                        | ((u8::from(*downlink_data_expected) & 0x03) << 3),
                 );
                 let octets = additional_information.len();
                 sized("additional-information", "octets", octets, 0, 255)?;
@@ -15030,13 +14658,14 @@ impl CiotSmallDataContainer {
             ));
         }
         let first = self.value[0];
-        let data_type = CiotSmallDataContainerType::try_from((first >> 5) & 0x07)
-            .ok()
-            .ok_or_else(|| {
+        let data_type =
+            CiotSmallDataContainerType::named((first >> 5) & 0x07).ok_or_else(|| {
                 Error::DecodingError("CIoT small data container type is reserved".into())
             })?;
-        let dde = CiotSmallDataDownlinkDataExpected::received((first >> 3) & 0x03);
+        let dde = CiotSmallDataDownlinkDataExpected::from_value((first >> 3) & 0x03).effective();
         match data_type {
+            // `named()` names the type.
+            CiotSmallDataContainerType::Other(_) => {}
             CiotSmallDataContainerType::ControlPlaneUserData => {
                 if matches!(dde, CiotSmallDataDownlinkDataExpected::Reserved) {
                     return Err(Error::DecodingError(
@@ -15636,32 +15265,22 @@ impl SNssaiLocationValidityInformation {
 
 // ── 9.11.3.101 S-NSSAI time validity information ───────────────────────────
 
-crate::common::enums::nas_enum! {
-    #[non_exhaustive]
+oxirush_utils::named_values! {
     /// S NSSAI time window recurrence pattern values.
-    pub enum SNssaiTimeWindowRecurrencePattern {
-        /// Everyday.
-        Everyday = 0,
-        /// Every weekday.
-        EveryWeekday = 1,
-        /// Every week.
-        EveryWeek = 2,
-        /// Every 2 weeks.
-        EveryTwoWeeks = 3,
-        /// Every month (absolute).
-        EveryMonthAbsolute = 4,
-        /// Every month (relative).
-        EveryMonthRelative = 5,
-        /// Every quarter (absolute).
-        EveryQuarterAbsolute = 6,
-        /// Every quarter (relative).
-        EveryQuarterRelative = 7,
-        /// Every 6 months (absolute).
-        EverySixMonthsAbsolute = 8,
-        /// Every 6 months (relative).
-        EverySixMonthsRelative = 9,
+    pub enum SNssaiTimeWindowRecurrencePattern "" bits 4 {
+        0 Everyday "everyday" tree "everyday",
+        1 EveryWeekday "every weekday" tree "every-weekday",
+        2 EveryWeek "every week" tree "every-week",
+        3 EveryTwoWeeks "every two weeks" tree "every-two-weeks",
+        4 EveryMonthAbsolute "every month absolute" tree "every-month-absolute",
+        5 EveryMonthRelative "every month relative" tree "every-month-relative",
+        6 EveryQuarterAbsolute "every quarter absolute" tree "every-quarter-absolute",
+        7 EveryQuarterRelative "every quarter relative" tree "every-quarter-relative",
+        8 EverySixMonthsAbsolute "every six months absolute" tree "every-six-months-absolute",
+        9 EverySixMonthsRelative "every six months relative" tree "every-six-months-relative",
     }
 }
+crate::common::enums::values_readable!(SNssaiTimeWindowRecurrencePattern);
 
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -15776,8 +15395,7 @@ impl SNssaiTimeValidityInformation {
                 pos += 16;
 
                 let recurrence_pattern = if time_window_len >= 17 {
-                    let pattern =
-                        SNssaiTimeWindowRecurrencePattern::try_from(data[pos] & 0x0F).ok();
+                    let pattern = SNssaiTimeWindowRecurrencePattern::named(data[pos] & 0x0F);
                     pos += 1;
                     match pattern {
                         Some(pattern) => Some(pattern),
@@ -15839,7 +15457,7 @@ impl SNssaiTimeValidityInformation {
                 time_info.extend_from_slice(&time_window.start_time);
                 time_info.extend_from_slice(&time_window.stop_time);
                 if let Some(recurrence_pattern) = time_window.recurrence_pattern {
-                    time_info.push(recurrence_pattern as u8);
+                    time_info.push(u8::from(recurrence_pattern));
                 }
                 if let Some(recurrence_end_time) = time_window.recurrence_end_time {
                     time_info.extend_from_slice(&recurrence_end_time);
@@ -15859,20 +15477,16 @@ impl SNssaiTimeValidityInformation {
 
 // ── 9.11.3.93 N3IWF identifier ──────────────────────────────────────────────
 
-crate::common::enums::nas_enum! {
+oxirush_utils::named_values! {
     /// N3IWF identifier address type per TS 24.501 §9.11.3.93.
-    #[non_exhaustive]
-    pub enum N3iwfIdentifierType {
-        /// IPv4 address.
-        Ipv4 = 0x01,
-        /// IPv6 address.
-        Ipv6 = 0x02,
-        /// Both IPv4 and IPv6 addresses.
-        Ipv4v6 = 0x03,
-        /// FQDN.
-        Fqdn = 0x04,
+    pub enum N3iwfIdentifierType "§9.11.3.93" bits 8 {
+        0x01 Ipv4 "ipv4" tree "ipv4",
+        0x02 Ipv6 "ipv6" tree "ipv6",
+        0x03 Ipv4v6 "ipv4v6" tree "ipv4v6",
+        0x04 Fqdn "fqdn" tree "fqdn",
     }
 }
+crate::common::enums::values_readable!(N3iwfIdentifierType);
 
 /// One decoded N3IWF identifier value per TS 24.501 §9.11.3.93.
 #[non_exhaustive]
@@ -15903,7 +15517,7 @@ impl N3iwfIdentifier {
     pub fn id_type(&self) -> Option<N3iwfIdentifierType> {
         self.value
             .first()
-            .and_then(|b| N3iwfIdentifierType::try_from(*b).ok())
+            .and_then(|b| N3iwfIdentifierType::named(*b))
     }
 
     /// Parse the address payload starting at octet 2.
@@ -15911,6 +15525,7 @@ impl N3iwfIdentifier {
         let id_type = self.id_type()?;
         let body = self.value.get(1..)?;
         match id_type {
+            N3iwfIdentifierType::Other(_) => None,
             N3iwfIdentifierType::Ipv4 => {
                 if body.len() != 4 {
                     return None;
@@ -15946,20 +15561,20 @@ impl N3iwfIdentifier {
         let mut value = Vec::new();
         match addr {
             N3iwfAddress::Ipv4(ip) => {
-                value.push(N3iwfIdentifierType::Ipv4 as u8);
+                value.push(u8::from(N3iwfIdentifierType::Ipv4));
                 value.extend_from_slice(ip);
             }
             N3iwfAddress::Ipv6(ip) => {
-                value.push(N3iwfIdentifierType::Ipv6 as u8);
+                value.push(u8::from(N3iwfIdentifierType::Ipv6));
                 value.extend_from_slice(ip);
             }
             N3iwfAddress::Ipv4v6 { ipv4, ipv6 } => {
-                value.push(N3iwfIdentifierType::Ipv4v6 as u8);
+                value.push(u8::from(N3iwfIdentifierType::Ipv4v6));
                 value.extend_from_slice(ipv4);
                 value.extend_from_slice(ipv6);
             }
             N3iwfAddress::Fqdn(bytes) => {
-                value.push(N3iwfIdentifierType::Fqdn as u8);
+                value.push(u8::from(N3iwfIdentifierType::Fqdn));
                 value.extend_from_slice(bytes);
             }
         }
@@ -16153,18 +15768,15 @@ impl Aun3Indication {
 
 // ── 9.11.3.105 Feature authorization indication ─────────────────────────────
 
-crate::common::enums::nas_enum! {
+oxirush_utils::named_values! {
     /// MBSRAI — MBS receiver authorization indicator per TS 24.501 §9.11.3.105.
-    #[non_exhaustive]
-    pub enum FeatureAuthMbsraiValue {
-        /// 0 — no information.
-        NoInformation = 0,
-        /// 1 — not authorized to operate as MBSR but allowed to operate as a UE.
-        NotAuthorizedAsMbsrAllowedAsUe = 1,
-        /// 2 — authorized to operate as MBSR.
-        AuthorizedAsMbsr = 2,
+    pub enum FeatureAuthMbsraiValue "§9.11.3.105" bits 2 {
+        0 NoInformation "no information" tree "no-information",
+        1 NotAuthorizedAsMbsrAllowedAsUe "not authorized as mbsr allowed as ue" tree "not-authorized-as-mbsr-allowed-as-ue",
+        2 AuthorizedAsMbsr "authorized as mbsr" tree "authorized-as-mbsr",
     }
 }
+crate::common::enums::values_readable!(FeatureAuthMbsraiValue);
 
 impl FeatureAuthorizationIndication {
     fn first(&self) -> u8 {
@@ -16184,7 +15796,7 @@ impl FeatureAuthorizationIndication {
 
     /// MBSRAI — MBS receiver authorization indicator (bits 1-2, mask 0x03).
     pub fn mbsrai(&self) -> Option<FeatureAuthMbsraiValue> {
-        FeatureAuthMbsraiValue::try_from(self.first() & 0x03).ok()
+        FeatureAuthMbsraiValue::named(self.first() & 0x03)
     }
 
     /// Raw MBSRAI value.
@@ -16194,7 +15806,7 @@ impl FeatureAuthorizationIndication {
 
     /// Construct a value from flags.
     pub fn from_flags(hpase: bool, mbsrai: FeatureAuthMbsraiValue) -> Self {
-        let mut b = mbsrai as u8 & 0x03;
+        let mut b = u8::from(mbsrai) & 0x03;
         if !hpase {
             b |= 0x04;
         }
@@ -16206,7 +15818,7 @@ impl FeatureAuthorizationIndication {
         not_exempt: bool,
         mbsrai: FeatureAuthMbsraiValue,
     ) -> Self {
-        let mut b = mbsrai as u8 & 0x03;
+        let mut b = u8::from(mbsrai) & 0x03;
         if not_exempt {
             b |= 0x04;
         }
@@ -16230,26 +15842,21 @@ impl PayloadContainerInformation {
 
 // ── 9.11.3.107 AUN3 device security key ────────────────────────────────────
 
-crate::common::enums::nas_enum! {
+oxirush_utils::named_values! {
     /// ASKT — AUN3 Security Key Type per TS 24.501 §9.11.3.107.
-    #[non_exhaustive]
-    pub enum Aun3DeviceSecurityKeyType {
-        /// 0 — Master session key.
-        MasterSessionKey = 0,
-        /// 1 — K_WAGF key.
-        KWagfKey = 1,
-    }
-    received {
-        _ => MasterSessionKey,
+    pub enum Aun3DeviceSecurityKeyType "§9.11.3.107" bits 2 others as 0 {
+        0 MasterSessionKey "master session key" tree "master-session-key",
+        1 KWagfKey "k wagf key" tree "k-wagf-key",
     }
 }
+crate::common::enums::values_readable!(Aun3DeviceSecurityKeyType);
 
 impl Aun3DeviceSecurityKey {
     /// Decoded ASKT (octet 1, bits 1-2, mask 0x03).
     pub fn askt(&self) -> Option<Aun3DeviceSecurityKeyType> {
         self.value
             .first()
-            .map(|b| Aun3DeviceSecurityKeyType::received(*b & 0x03))
+            .map(|b| Aun3DeviceSecurityKeyType::from_value(*b & 0x03).effective())
     }
 
     /// Key length (octet 2).
@@ -16273,7 +15880,7 @@ impl Aun3DeviceSecurityKey {
     ) -> core::result::Result<Self, ValueError> {
         sized("key", "octets", key.len(), 32, 253)?;
         let mut value = Vec::with_capacity(2 + key.len());
-        value.push(askt as u8 & 0x03);
+        value.push(u8::from(askt) & 0x03);
         value.push(key.len() as u8);
         value.extend_from_slice(key);
         Ok(Self::new(value))
@@ -16424,16 +16031,14 @@ impl ExtendedGmmCause {
 
 // ── 9.11.3.111 LP-WUSPS assistance information ──────────────────────────────
 
-crate::common::enums::nas_enum! {
+oxirush_utils::named_values! {
     /// LP-WUSPS assistance information element type per TS 24.501 §9.11.3.111.
-    #[non_exhaustive]
-    pub enum LpWuspsAssistanceInformationType {
-        /// 0 — LP-WUSPS paging subgroup ID.
-        PagingSubgroupId = 0,
-        /// 1 — UE paging probability information.
-        UePagingProbability = 1,
+    pub enum LpWuspsAssistanceInformationType "§9.11.3.111" bits 3 {
+        0 PagingSubgroupId "paging subgroup id" tree "paging-subgroup-id",
+        1 UePagingProbability "ue paging probability" tree "ue-paging-probability",
     }
 }
+crate::common::enums::values_readable!(LpWuspsAssistanceInformationType);
 
 impl LpWuspsAssistanceInformation {
     fn first_octet(&self) -> u8 {
@@ -16442,7 +16047,7 @@ impl LpWuspsAssistanceInformation {
 
     /// Type field (octet 1 bits 8-6) — see [`LpWuspsAssistanceInformationType`].
     pub fn info_type(&self) -> Option<LpWuspsAssistanceInformationType> {
-        LpWuspsAssistanceInformationType::try_from((self.first_octet() >> 5) & 0x07).ok()
+        LpWuspsAssistanceInformationType::named((self.first_octet() >> 5) & 0x07)
     }
 
     /// Raw type value (octet 1 bits 8-6).
@@ -16969,7 +16574,7 @@ mod shown {
     /// A 5GMM cause by its number and its name: `#22 (Congestion)`.
     impl fmt::Display for GmmCause {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            let name = self.cause().map(GmmCauseValue::description);
+            let name = self.cause().and_then(GmmCauseValue::name);
             display::cause(f, self.value, name)
         }
     }
@@ -16977,7 +16582,7 @@ mod shown {
     /// A 5GSM cause by its number and its name: `#26 (Insufficient resources)`.
     impl fmt::Display for GsmCause {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            let name = self.cause().map(GsmCauseValue::description);
+            let name = self.cause().and_then(GsmCauseValue::name);
             display::cause(f, self.value, name)
         }
     }
@@ -16993,8 +16598,8 @@ mod shown {
     impl fmt::Display for SecurityAlgorithms {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
             let (ciphering, integrity) = (self.ciphering_raw(), self.integrity_raw());
-            let ciphering = Coded(CipheringAlgorithm::try_from(ciphering).ok(), ciphering);
-            let integrity = Coded(IntegrityAlgorithm::try_from(integrity).ok(), integrity);
+            let ciphering = Coded(CipheringAlgorithm::named(ciphering), ciphering);
+            let integrity = Coded(IntegrityAlgorithm::named(integrity), integrity);
             write!(f, "{ciphering} {integrity}")
         }
     }
@@ -17004,8 +16609,8 @@ mod shown {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
             use crate::common::ts24301::{CipheringAlgorithm, IntegrityAlgorithm};
             let (ciphering, integrity) = (self.ciphering_raw(), self.integrity_raw());
-            let ciphering = Coded(CipheringAlgorithm::try_from(ciphering).ok(), ciphering);
-            let integrity = Coded(IntegrityAlgorithm::try_from(integrity).ok(), integrity);
+            let ciphering = Coded(CipheringAlgorithm::named(ciphering), ciphering);
+            let integrity = Coded(IntegrityAlgorithm::named(integrity), integrity);
             write!(f, "{ciphering} {integrity}")
         }
     }
@@ -17321,10 +16926,10 @@ mod tests {
         ambr.set_uplink(6, 100);
         encodes(&ambr);
         let mut capability = GsmCapability::new(vec![]);
-        capability.set_atsss_st_value(AtsssSteeringFunctionality::try_from(0x3).ok().unwrap());
+        capability.set_atsss_st_value(AtsssSteeringFunctionality::named(0x3).unwrap());
         encodes(&capability);
         let mut capability = GsmCapability::new(vec![0]);
-        capability.set_atsss_ll_value(AtsssLowLayerFunctionality::try_from(0x1).ok().unwrap());
+        capability.set_atsss_ll_value(AtsssLowLayerFunctionality::named(0x1).unwrap());
         encodes(&capability);
         encodes(&AtsssContainer::new(vec![1, 2, 3]));
         encodes(&PortManagementInformationContainer::new(vec![1, 2, 3]));
@@ -17516,7 +17121,7 @@ mod tests {
             GsmCauseValue::from_u8_for_network(0x01),
             GsmCauseValue::ProtocolErrorUnspecified
         );
-        assert_eq!(GsmCauseValue::try_from(0x01).ok(), None);
+        assert_eq!(GsmCauseValue::named(0x01), None);
     }
 
     #[test]
@@ -17590,7 +17195,10 @@ mod tests {
             GsmCauseValue::ProtocolErrorUnspecified
         );
         assert_eq!(gsm.description(), "Unknown 5GSM cause 0x01");
-        assert_eq!(GmmCauseValue::received(0x03), GmmCauseValue::IllegalUe);
+        assert_eq!(
+            GmmCauseValue::from_value(0x03).effective(),
+            GmmCauseValue::IllegalUe
+        );
     }
 
     #[test]
@@ -17774,8 +17382,8 @@ mod tests {
     fn test_registration_result() {
         let result = RegistrationResult::new(vec![0x09]); // 3GPP access + SMS allowed
         assert_eq!(
-            result.result_value(),
-            Some(RegistrationResultValue::ThreeGppAccess)
+            result.result_value().effective(),
+            RegistrationResultValue::ThreeGppAccess
         );
         assert!(result.sms_allowed());
     }
@@ -17896,9 +17504,9 @@ mod tests {
         // UL: unit=0x06 (1Mbps), value=50  → 50 Mbps  = 50_000 kbps
         let ambr = SessionAmbr::new(vec![0x06, 0x00, 0x64, 0x06, 0x00, 0x32]);
         let parsed = ambr.parse().unwrap();
-        assert_eq!(ambr.downlink_unit(), Some(SessionAmbrUnit::Mbps1));
+        assert_eq!(ambr.downlink_unit().effective(), SessionAmbrUnit::Mbps1);
         assert_eq!(ambr.downlink_value(), 100);
-        assert_eq!(ambr.uplink_unit(), Some(SessionAmbrUnit::Mbps1));
+        assert_eq!(ambr.uplink_unit().effective(), SessionAmbrUnit::Mbps1);
         assert_eq!(ambr.uplink_value(), 50);
         assert_eq!(parsed.dl_kbps, 100_000);
         assert_eq!(parsed.ul_kbps, 50_000);
@@ -17913,28 +17521,25 @@ mod tests {
     #[test]
     fn test_session_ambr_pbps_units() {
         let ambr = SessionAmbr::from_raw_fields(0x16, 0x0002, 0x19, 0x0001);
-        assert_eq!(ambr.downlink_unit(), Some(SessionAmbrUnit::Pbps4));
+        assert_eq!(ambr.downlink_unit().effective(), SessionAmbrUnit::Pbps4);
         assert_eq!(ambr.downlink_kbps(), Some(8_000_000_000_000));
-        assert_eq!(ambr.uplink_unit(), Some(SessionAmbrUnit::Pbps256));
+        assert_eq!(ambr.uplink_unit().effective(), SessionAmbrUnit::Pbps256);
         assert_eq!(ambr.uplink_kbps(), Some(256_000_000_000_000));
 
         // TS 24.501 §9.11.4.14: "Other values shall be interpreted as
         // multiples of 256 Pbps".
         let other = SessionAmbr::from_raw_fields(0x1a, 0x0001, 0xff, 0x0002);
-        assert_eq!(other.downlink_unit(), Some(SessionAmbrUnit::Pbps256));
+        assert_eq!(other.downlink_unit().effective(), SessionAmbrUnit::Pbps256);
         assert_eq!(other.downlink_kbps(), Some(256_000_000_000_000));
-        assert_eq!(other.uplink_unit(), Some(SessionAmbrUnit::Pbps256));
+        assert_eq!(other.uplink_unit().effective(), SessionAmbrUnit::Pbps256);
         assert_eq!(other.uplink_kbps(), Some(512_000_000_000_000));
-        assert_eq!(SessionAmbrUnit::try_from(0x1a), Err(0x1a));
-        assert_eq!(
-            SessionAmbrUnit::try_from(0x19),
-            Ok(SessionAmbrUnit::Pbps256)
-        );
+        assert_eq!(SessionAmbrUnit::named(0x1a), None);
+        assert_eq!(SessionAmbrUnit::named(0x19), Some(SessionAmbrUnit::Pbps256));
         let rate = QosFlowBitRate {
             unit: 0x80,
             value: 1,
         };
-        assert_eq!(rate.unit_value(), Some(SessionAmbrUnit::Pbps256));
+        assert_eq!(rate.unit_value().effective(), SessionAmbrUnit::Pbps256);
         // A sender uses the defined units only.
         assert!(N3QaiParameter::from_value(N3QaiParameterValue::GfbrUplink(rate)).is_err());
         let description = QosFlowDescription {
@@ -18085,7 +17690,7 @@ mod tests {
         assert_eq!(reserved.unrestricted_psis(), None);
 
         let ie = PagingRestriction::new(vec![
-            PagingRestrictionType::AllRestrictedExceptSpecifiedPduSessions as u8,
+            u8::from(PagingRestrictionType::AllRestrictedExceptSpecifiedPduSessions),
             0x01,
             0x80,
             0xFF,
@@ -18282,7 +17887,7 @@ mod tests {
 
         let mut request = RequestType::new(0x0F);
         assert_eq!(request.request_type_raw(), 0x07);
-        assert_eq!(request.request_type(), None);
+        assert_eq!(request.request_type().effective().name(), None);
         request.set_request_type(RequestTypeValue::ExistingPduSession);
         assert_eq!(request.value, 0x02);
     }
@@ -18290,14 +17895,14 @@ mod tests {
     #[test]
     fn test_request_type_reserved_code_is_raw_only() {
         assert_eq!(
-            RequestTypeValue::received(0x00),
-            Some(RequestTypeValue::InitialRequest)
+            RequestTypeValue::from_value(0x00).effective(),
+            RequestTypeValue::InitialRequest
         );
-        assert_eq!(RequestTypeValue::received(0x07), None);
-        assert_eq!(RequestTypeValue::try_from(0x07).ok(), None);
+        assert_eq!(RequestTypeValue::from_value(0x07).effective().name(), None);
+        assert_eq!(RequestTypeValue::named(0x07), None);
 
         let reserved = RequestType::new(0x07);
-        assert_eq!(reserved.request_type(), None);
+        assert_eq!(reserved.request_type().effective().name(), None);
         assert_eq!(reserved.request_type_raw(), 0x07);
     }
 
@@ -18633,41 +18238,41 @@ mod tests {
     fn test_service_type() {
         // Verify 4-bit masking works for all defined values
         assert_eq!(
-            ServiceTypeValue::received(0x00),
-            Some(ServiceTypeValue::Signalling)
+            ServiceTypeValue::from_value(0x00).effective(),
+            ServiceTypeValue::Signalling
         );
         assert_eq!(
-            ServiceTypeValue::received(0x04),
-            Some(ServiceTypeValue::EmergencyServicesFallback)
+            ServiceTypeValue::from_value(0x04).effective(),
+            ServiceTypeValue::EmergencyServicesFallback
         );
         assert_eq!(
-            ServiceTypeValue::received(0x06),
-            Some(ServiceTypeValue::ElevatedSignalling)
+            ServiceTypeValue::from_value(0x06).effective(),
+            ServiceTypeValue::ElevatedSignalling
         );
         assert_eq!(
-            ServiceTypeValue::received(0x07),
-            Some(ServiceTypeValue::Signalling)
+            ServiceTypeValue::from_value(0x07).effective(),
+            ServiceTypeValue::Signalling
         );
         assert_eq!(
-            ServiceTypeValue::received(0x08),
-            Some(ServiceTypeValue::Signalling)
+            ServiceTypeValue::from_value(0x08).effective(),
+            ServiceTypeValue::Signalling
         );
         assert_eq!(
-            ServiceTypeValue::received(0x09),
-            Some(ServiceTypeValue::Data)
+            ServiceTypeValue::from_value(0x09).effective(),
+            ServiceTypeValue::Data
         );
         assert_eq!(
-            ServiceTypeValue::received(0x0A),
-            Some(ServiceTypeValue::Data)
+            ServiceTypeValue::from_value(0x0A).effective(),
+            ServiceTypeValue::Data
         );
         assert_eq!(
-            ServiceTypeValue::received(0x0B),
-            Some(ServiceTypeValue::Data)
+            ServiceTypeValue::from_value(0x0B).effective(),
+            ServiceTypeValue::Data
         );
-        assert_eq!(ServiceTypeValue::try_from(0x07).ok(), None);
-        assert_eq!(ServiceTypeValue::try_from(0x08).ok(), None);
-        assert_eq!(ServiceTypeValue::try_from(0x0B).ok(), None);
-        assert_eq!(ServiceTypeValue::received(0x0F), None); // undefined
+        assert_eq!(ServiceTypeValue::named(0x07), None);
+        assert_eq!(ServiceTypeValue::named(0x08), None);
+        assert_eq!(ServiceTypeValue::named(0x0B), None);
+        assert_eq!(ServiceTypeValue::from_value(0x0F).effective().name(), None); // undefined
     }
 
     #[test]
@@ -18705,10 +18310,19 @@ mod tests {
 
     #[test]
     fn test_drx_value_enum() {
-        assert_eq!(Some(DrxValue::received(0x00)), Some(DrxValue::NotSpecified));
-        assert_eq!(Some(DrxValue::received(0x04)), Some(DrxValue::Cycle256));
-        assert_eq!(Some(DrxValue::received(0x05)), Some(DrxValue::NotSpecified));
-        assert_eq!(DrxValue::try_from(0x05).ok(), None);
+        assert_eq!(
+            Some(DrxValue::from_value(0x00).effective()),
+            Some(DrxValue::NotSpecified)
+        );
+        assert_eq!(
+            Some(DrxValue::from_value(0x04).effective()),
+            Some(DrxValue::Cycle256)
+        );
+        assert_eq!(
+            Some(DrxValue::from_value(0x05).effective()),
+            Some(DrxValue::NotSpecified)
+        );
+        assert_eq!(DrxValue::named(0x05), None);
     }
 
     #[test]
@@ -19693,10 +19307,10 @@ mod tests {
         assert_eq!(ie.key_length(), Some(32));
         assert_eq!(ie.key().unwrap(), key.as_slice());
         assert_eq!(
-            Some(Aun3DeviceSecurityKeyType::received(2)),
+            Some(Aun3DeviceSecurityKeyType::from_value(2).effective()),
             Some(Aun3DeviceSecurityKeyType::MasterSessionKey)
         );
-        assert_eq!(Aun3DeviceSecurityKeyType::try_from(2).ok(), None);
+        assert_eq!(Aun3DeviceSecurityKeyType::named(2), None);
         assert!(
             Aun3DeviceSecurityKey::from_typed(
                 Aun3DeviceSecurityKeyType::MasterSessionKey,
@@ -20031,7 +19645,7 @@ mod tests {
             params: vec![
                 QosFlowParameter::FiveQi(7),
                 QosFlowParameter::GfbrUl(QosFlowBitRate {
-                    unit: SessionAmbrUnit::Mbps1 as u8,
+                    unit: u8::from(SessionAmbrUnit::Mbps1),
                     value: 10,
                 }),
                 QosFlowParameter::AveragingWindow(32),
@@ -20051,7 +19665,7 @@ mod tests {
         // [it] shall consider that as a syntactical error".
         fn rate(value: u16) -> QosFlowBitRate {
             QosFlowBitRate {
-                unit: SessionAmbrUnit::Mbps1 as u8,
+                unit: u8::from(SessionAmbrUnit::Mbps1),
                 value,
             }
         }
@@ -20886,7 +20500,7 @@ mod tests {
     #[test]
     fn test_fgsm_capability_octet_3_bits_correct() {
         // TPMIC=0x80, RQoS=0x01 per TS 24.501 §9.11.4.1.
-        let no_atsss = AtsssSteeringFunctionality::try_from(0).ok().unwrap();
+        let no_atsss = AtsssSteeringFunctionality::named(0).unwrap();
         let cap = GsmCapability::from_flags(true, no_atsss, false, false, true);
         assert!(cap.tpmic());
         assert!(cap.rqos());
@@ -20953,7 +20567,7 @@ mod tests {
         let mut cap = GsmCapability::new(vec![0, 0]);
         cap.set_mpquic_ip(true);
         cap.set_mptcp(true);
-        cap.set_atsss_ll_value(AtsssLowLayerFunctionality::try_from(2).ok().unwrap());
+        cap.set_atsss_ll_value(AtsssLowLayerFunctionality::named(2).unwrap());
         assert!(cap.mpquic_ip());
         assert!(cap.mptcp());
         assert_eq!(cap.atsss_ll(), 2);
@@ -21435,8 +21049,8 @@ mod tests {
         assert_eq!(disaster.plmns(), [plmn]);
 
         assert_eq!(
-            ServiceTypeValue::received(0x0a),
-            Some(ServiceTypeValue::Data)
+            ServiceTypeValue::from_value(0x0a).effective(),
+            ServiceTypeValue::Data
         );
         let sms = SmsIndication::from_sai(true);
         assert_eq!(sms.value, 0x01);
@@ -21633,10 +21247,10 @@ mod tests {
 
         let mapped_context = MappedEpsBearerContext {
             eps_bearer_id: 5,
-            op_code: MappedEpsBearerOpCode::Create as u8,
+            op_code: u8::from(MappedEpsBearerOpCode::Create),
             e_flag: true,
             params: vec![MappedEpsBearerParam {
-                param_id: MappedEpsBearerParamId::ApnAmbr as u8,
+                param_id: u8::from(MappedEpsBearerParamId::ApnAmbr),
                 contents: vec![0xfe, 0x01, 0x10, 0x00],
             }],
         };

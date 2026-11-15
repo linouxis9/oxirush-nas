@@ -105,7 +105,10 @@ fn a_field_of_a_few_bits_is_read_from_its_bits() {
         assert_eq!(service.service_type_raw(), octet & 0x07);
         assert_eq!(MaPduSessionInformation::new(octet).info_raw(), octet & 0x0f);
         let mode = NssaiInclusionMode::new(octet).mode();
-        assert_eq!(mode, NssaiInclusionModeValue::received(octet & 0x03));
+        assert_eq!(
+            mode,
+            NssaiInclusionModeValue::from_value(octet & 0x03).effective()
+        );
         let drx = DrxParameters::new(vec![octet]);
         assert_eq!(drx.drx_value_raw(), Some(octet & 0x0f));
         assert_eq!(Rsn::new(vec![octet]).rsn_raw(), octet);
@@ -120,14 +123,13 @@ fn a_field_of_a_few_bits_is_read_from_its_bits() {
         // The type of identity asked for, of which 000 is none
         let asked = IdentityType::new(octet).identity_type_strict();
         assert_eq!(
-            asked.map(|kind| kind as u8),
+            asked.map(u8::from),
             (value != 0).then_some(value),
             "{octet}"
         );
         // A payload container type of a defined value, with its spare bits 8 to 5
         // clear (TS 24.501 §9.11.3.40)
-        let defined =
-            octet & 0xf0 == 0 && PayloadContainerKind::try_from(octet & 0x0F).ok().is_some();
+        let defined = octet & 0xf0 == 0 && PayloadContainerKind::named(octet & 0x0F).is_some();
         let container = PayloadContainerType::new(octet);
         assert_eq!(container.is_well_formed(), defined, "{octet}");
     }
@@ -146,7 +148,7 @@ fn a_setter_writes_the_bits_of_its_field_and_leaves_the_others() {
         ] {
             let mut container = PayloadContainerType::new(octet);
             container.set_kind(kind);
-            assert_eq!(container.value, octet & 0xf0 | kind as u8, "{octet}");
+            assert_eq!(container.value, octet & 0xf0 | u8::from(kind), "{octet}");
         }
         for info in [
             MaPduSessionInfoValue::NoAdditionalInformation,
@@ -154,12 +156,12 @@ fn a_setter_writes_the_bits_of_its_field_and_leaves_the_others() {
         ] {
             let mut information = MaPduSessionInformation::new(octet);
             information.set_info(info);
-            assert_eq!(information.value, octet & 0xf0 | info as u8, "{octet}");
+            assert_eq!(information.value, octet & 0xf0 | u8::from(info), "{octet}");
         }
         for mode in [NssaiInclusionModeValue::A, NssaiInclusionModeValue::D] {
             let mut inclusion = NssaiInclusionMode::new(octet);
             inclusion.set_mode(mode);
-            assert_eq!(inclusion.value, octet & 0xfc | mode as u8, "{octet}");
+            assert_eq!(inclusion.value, octet & 0xfc | u8::from(mode), "{octet}");
         }
         for service in [
             ControlPlaneServiceTypeValue::MobileOriginatingRequest,
@@ -167,7 +169,7 @@ fn a_setter_writes_the_bits_of_its_field_and_leaves_the_others() {
         ] {
             let mut written = ControlPlaneServiceType::new(octet);
             written.set_service_type(service);
-            assert_eq!(written.value, octet & 0xf8 | service as u8, "{octet}");
+            assert_eq!(written.value, octet & 0xf8 | u8::from(service), "{octet}");
         }
         for asked in [MobileIdentityType5gs::Suci, MobileIdentityType5gs::Imeisv] {
             let mut written = IdentityType::new(octet);
@@ -218,7 +220,7 @@ fn a_t3512_value_is_a_unit_and_a_number_of_it() {
         let (unit, value) = (octet >> 5, octet & 0x1f);
         assert_eq!(
             t3512.unit(),
-            Some(GprsTimer3Unit::received(unit & 0x07)),
+            Some(GprsTimer3Unit::from_value(unit & 0x07).effective()),
             "{octet}"
         );
         assert_eq!(t3512.timer_value(), Some(value), "{octet}");
@@ -277,14 +279,17 @@ fn the_rates_and_the_number_of_packet_filters_are_their_octets() {
         (MaxDataRate::Kbps64, MaxDataRate::Null),
     ] {
         let rate = IntegrityProtectionMaximumDataRate::from_rates(ul, dl);
-        assert_eq!(rate.value, u16::from(ul as u8) << 8 | u16::from(dl as u8));
+        assert_eq!(
+            rate.value,
+            u16::from(u8::from(ul)) << 8 | u16::from(u8::from(dl))
+        );
         assert_eq!((rate.ul(), rate.dl()), (Some(ul), Some(dl)));
     }
     let reserved = IntegrityProtectionMaximumDataRate::new(0x02fe);
     let kbps64 = Some(MaxDataRate::Kbps64);
     assert_eq!((reserved.ul(), reserved.dl()), (kbps64, kbps64));
     assert_eq!(
-        Some(MaxDataRate::received(0xff)),
+        Some(MaxDataRate::from_value(0xff).effective()),
         Some(MaxDataRate::FullRate)
     );
     // Maximum number of supported packet filters (§9.11.4.9): eleven bits from bit 8

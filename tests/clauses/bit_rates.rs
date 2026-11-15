@@ -122,10 +122,7 @@ fn each_unit_of_the_session_ambr_is_its_step() {
         (256, MBPS, 256 * PBPS)
     );
     for unit in 0..=0x19 {
-        let multiplier = SessionAmbrUnit::try_from(unit)
-            .ok()
-            .unwrap()
-            .kbps_multiplier();
+        let multiplier = SessionAmbrUnit::named(unit).unwrap().kbps_multiplier();
         assert_eq!(multiplier, Some(step_of(unit)), "{unit}");
     }
     for unit in 0..=u8::MAX {

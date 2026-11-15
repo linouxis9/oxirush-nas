@@ -750,7 +750,7 @@ impl ConfigurationUnit {
     fn of_session(identifier: u16, contents: &[u8]) -> Option<Self> {
         match (identifier, contents) {
             (0x001a, [identity @ 1..=15]) => Some(Self::PduSessionId(*identity)),
-            (0x0022, [cause]) => GsmCauseValue::try_from(*cause).ok().map(Self::FgsmCause),
+            (0x0022, [cause]) => GsmCauseValue::named(*cause).map(Self::FgsmCause),
             (0x001b, _) => {
                 let (s_nssai, plmn) = contents.split_at(contents.len().checked_sub(3)?);
                 let s_nssai = SNssai::new(s_nssai.to_vec()).parse()?;
@@ -813,7 +813,7 @@ impl ConfigurationUnit {
             Self::NetworkSupportOfLocalAddressInTft => (Some(Downlink), 0x0011, Vec::new()),
             Self::NonIpLinkMtu(octets) => (Some(Downlink), 0x0015, octets.to_be_bytes().to_vec()),
             Self::PduSessionId(identity) => (Some(Uplink), 0x001a, vec![*identity]),
-            Self::FgsmCause(cause) => (Some(Uplink), 0x0022, vec![*cause as u8]),
+            Self::FgsmCause(cause) => (Some(Uplink), 0x0022, vec![u8::from(*cause)]),
             Self::SNssai {
                 sst,
                 sd,
@@ -3121,7 +3121,7 @@ macro_rules! shared_ies {
         code_ie!(
             RequestType,
             RequestTypeValue,
-            |ie| ie.request_type(),
+            |ie| Some(ie.request_type()),
             RequestType::from_request_type
         );
         decoded_ie!(

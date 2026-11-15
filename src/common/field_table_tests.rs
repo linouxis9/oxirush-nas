@@ -34,7 +34,7 @@ macro_rules! row {
             form: Form::Named {
                 show: |raw| {
                     let raw = raw as u8;
-                    readable::to_value(&Code::of(<$kind>::try_from(raw).ok(), raw)).unwrap()
+                    readable::to_value(&Code::of(<$kind>::named(raw), raw)).unwrap()
                 },
                 read: |value| {
                     Ok(match readable::from_value::<Code<$kind>>(value)? {

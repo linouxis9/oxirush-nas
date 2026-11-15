@@ -38,20 +38,17 @@ use crate::common::types::UnavailabilityInformation;
 use crate::common::types::WusAssistanceInformation;
 use crate::prelude::*;
 
-crate::common::enums::nas_enum! {
+oxirush_utils::named_values! {
     /// Preferred CIoT network behaviour: of the additional update type and the
     /// N1 UE network capability (TS 24.301 §9.9.3.0B, §9.9.3.64), and of the
     /// 5GS update type (TS 24.501 §9.11.3.9A).
-    #[non_exhaustive]
-    pub enum PreferredCiotBehavior {
-        /// No preference signalled.
-        NoPreference = 0,
-        /// Control plane optimization is preferred.
-        ControlPlane = 1,
-        /// User plane optimization is preferred.
-        UserPlane = 2,
+    pub enum PreferredCiotBehavior "§9.9.3.0B" bits 2 {
+        0 NoPreference "no preference" tree "no-preference",
+        1 ControlPlane "control plane" tree "control-plane",
+        2 UserPlane "user plane" tree "user-plane",
     }
 }
+crate::common::enums::values_readable!(PreferredCiotBehavior);
 
 /// NAS key set identifier value 111: no key is available (TS 24.301
 /// §9.9.3.21, TS 24.501 §9.11.3.32).
@@ -187,51 +184,35 @@ macro_rules! key_set_identifier_ie {
 
 // ── NAS security algorithms (TS 24.301 §9.9.3.23, TS 33.401 §5.1) ─────────
 
-crate::common::enums::nas_enum! {
+oxirush_utils::named_values! {
     /// EPS NAS ciphering algorithm identifier.
-    #[non_exhaustive]
-    pub(crate) enum CipheringAlgorithm {
-        /// Null ciphering.
-        EEA0 = 0,
-        /// SNOW 3G ciphering.
-        EEA1 = 1,
-        /// AES CTR ciphering.
-        EEA2 = 2,
-        /// ZUC ciphering.
-        EEA3 = 3,
-        /// Reserved for future ciphering use.
-        EEA4 = 4,
-        /// Reserved for future ciphering use.
-        EEA5 = 5,
-        /// Reserved for future ciphering use.
-        EEA6 = 6,
-        /// Reserved for future ciphering use.
-        EEA7 = 7,
+    pub(crate) enum CipheringAlgorithm "" bits 8 {
+        0 EEA0 "eea0" tree "eea0",
+        1 EEA1 "eea1" tree "eea1",
+        2 EEA2 "eea2" tree "eea2",
+        3 EEA3 "eea3" tree "eea3",
+        4 EEA4 "eea4" tree "eea4",
+        5 EEA5 "eea5" tree "eea5",
+        6 EEA6 "eea6" tree "eea6",
+        7 EEA7 "eea7" tree "eea7",
     }
 }
+crate::common::enums::values_readable!(CipheringAlgorithm);
 
-crate::common::enums::nas_enum! {
+oxirush_utils::named_values! {
     /// EPS NAS integrity algorithm identifier.
-    #[non_exhaustive]
-    pub(crate) enum IntegrityAlgorithm {
-        /// Null integrity, used for unauthenticated emergency calls.
-        EIA0 = 0,
-        /// SNOW 3G integrity.
-        EIA1 = 1,
-        /// AES CMAC integrity.
-        EIA2 = 2,
-        /// ZUC integrity.
-        EIA3 = 3,
-        /// Reserved for future integrity use.
-        EIA4 = 4,
-        /// Reserved for future integrity use.
-        EIA5 = 5,
-        /// Reserved for future integrity use.
-        EIA6 = 6,
-        /// Reserved for future integrity use.
-        EIA7 = 7,
+    pub(crate) enum IntegrityAlgorithm "" bits 8 {
+        0 EIA0 "eia0" tree "eia0",
+        1 EIA1 "eia1" tree "eia1",
+        2 EIA2 "eia2" tree "eia2",
+        3 EIA3 "eia3" tree "eia3",
+        4 EIA4 "eia4" tree "eia4",
+        5 EIA5 "eia5" tree "eia5",
+        6 EIA6 "eia6" tree "eia6",
+        7 EIA7 "eia7" tree "eia7",
     }
 }
+crate::common::enums::values_readable!(IntegrityAlgorithm);
 
 /// NAS security algorithms octet (TS 24.301 §9.9.3.23, TS 24.501
 /// §9.11.3.34): the ciphering algorithm in the high nibble and the
@@ -957,25 +938,22 @@ impl ServingPlmnRateControl {
     }
 }
 
-crate::common::enums::nas_enum! {
+oxirush_utils::named_values! {
     /// Downlink data expected (TS 24.301 §9.9.4.25, TS 24.501 §9.11.3.46A).
-    #[non_exhaustive]
-    pub enum DownlinkDataExpected {
-        /// No information available.
-        NoInfo = 0,
-        /// No further uplink or downlink data expected.
-        NoFurtherData = 1,
-        /// One downlink data transmission, then no further data expected.
-        SingleDlThenNone = 2,
+    pub enum DownlinkDataExpected "§9.9.4.25" bits 2 {
+        0 NoInfo "no info" tree "no-info",
+        1 NoFurtherData "no further data" tree "no-further-data",
+        2 SingleDlThenNone "single dl then none" tree "single-dl-then-none",
     }
 }
+crate::common::enums::values_readable!(DownlinkDataExpected);
 
 /// Release assistance indication (TS 24.301 §9.9.4.25, TS 24.501
 /// §9.11.3.46A), a type 1 IE.
 impl ReleaseAssistanceIndication {
     /// Downlink data expected (bits 2-1); `None` for the reserved value.
     pub fn ddx(&self) -> Option<DownlinkDataExpected> {
-        DownlinkDataExpected::try_from(self.value & 0x03).ok()
+        DownlinkDataExpected::named(self.value & 0x03)
     }
 
     /// Raw downlink data expected value (bits 2-1).
@@ -985,12 +963,12 @@ impl ReleaseAssistanceIndication {
 
     /// Build with the spare bits clear.
     pub fn from_ddx(ddx: DownlinkDataExpected) -> Self {
-        Self::new(ddx as u8)
+        Self::new(u8::from(ddx))
     }
 
     /// Set the downlink data expected value and clear the spare bits.
     pub fn set_ddx(&mut self, ddx: DownlinkDataExpected) -> &mut Self {
-        self.value = ddx as u8;
+        self.value = u8::from(ddx);
         self
     }
 }
@@ -1070,31 +1048,22 @@ impl IpHdrCompProfiles {
     }
 }
 
-crate::common::enums::nas_enum! {
+oxirush_utils::named_values! {
     /// Additional header compression context setup parameters type (TS 24.301
     /// Table 9.9.4.22.1). Codes 0x09 to 0xFF are spare.
-    #[non_exhaustive]
-    pub enum IpHdrCompAdditionalSetupType {
-        /// Profile 0x0000 (no compression).
-        NoCompression = 0x00,
-        /// Profile 0x0002 (UDP/IP).
-        RohcUdpIp = 0x01,
-        /// Profile 0x0003 (ESP/IP).
-        RohcEspIp = 0x02,
-        /// Profile 0x0004 (IP).
-        RohcIp = 0x03,
-        /// Profile 0x0006 (TCP/IP).
-        RohcTcpIp = 0x04,
-        /// Profile 0x0102 (UDP/IP).
-        RohcV2UdpIp = 0x05,
-        /// Profile 0x0103 (ESP/IP).
-        RohcV2EspIp = 0x06,
-        /// Profile 0x0104 (IP).
-        RohcV2Ip = 0x07,
-        /// Other profile.
-        Other = 0x08,
+    pub enum IpHdrCompAdditionalSetupType "Table 9.9.4.22.1" bits 8 {
+        0x00 NoCompression "no compression" tree "no-compression",
+        0x01 RohcUdpIp "rohc udp ip" tree "rohc-udp-ip",
+        0x02 RohcEspIp "rohc esp ip" tree "rohc-esp-ip",
+        0x03 RohcIp "rohc ip" tree "rohc-ip",
+        0x04 RohcTcpIp "rohc tcp ip" tree "rohc-tcp-ip",
+        0x05 RohcV2UdpIp "rohc v2 udp ip" tree "rohc-v2-udp-ip",
+        0x06 RohcV2EspIp "rohc v2 esp ip" tree "rohc-v2-esp-ip",
+        0x07 RohcV2Ip "rohc v2 ip" tree "rohc-v2-ip",
+        0x08 OtherProfile "Other" tree "other",
     }
 }
+crate::common::enums::values_readable!(IpHdrCompAdditionalSetupType);
 
 /// Header compression configuration (TS 24.301 §9.9.4.22, TS 24.501
 /// §9.11.4.24): profiles, MAX_CID, and optional additional context setup
@@ -1131,11 +1100,10 @@ macro_rules! header_compression_configuration_ie {
             pub fn is_well_formed(&self) -> bool {
                 self.value.len() >= 3
                     && self.header_constraints_are_valid()
-                    && self.value.get(3).is_none_or(|value| {
-                        IpHdrCompAdditionalSetupType::try_from(*value)
-                            .ok()
-                            .is_some()
-                    })
+                    && self
+                        .value
+                        .get(3)
+                        .is_none_or(|value| IpHdrCompAdditionalSetupType::named(*value).is_some())
             }
 
             /// Raw additional setup parameters type (octet 6).
@@ -1146,7 +1114,7 @@ macro_rules! header_compression_configuration_ie {
             /// Typed additional setup parameters type; `None` if absent or spare.
             pub fn additional_setup_type_value(&self) -> Option<IpHdrCompAdditionalSetupType> {
                 self.additional_setup_type()
-                    .and_then(|code| IpHdrCompAdditionalSetupType::try_from(code).ok())
+                    .and_then(|code| IpHdrCompAdditionalSetupType::named(code))
             }
 
             /// Additional setup parameters container (octets 7 onwards).
@@ -1177,7 +1145,7 @@ macro_rules! header_compression_configuration_ie {
                 let octets = additional_setup_container.len();
                 crate::common::sized("additional-setup-container", "octets", octets, 0, 251)?;
                 let mut value = Self::from_profiles(profiles, max_cid)?.value;
-                value.push(additional_setup_type as u8);
+                value.push(u8::from(additional_setup_type));
                 value.extend_from_slice(additional_setup_container);
                 Ok(Self::new(value))
             }
@@ -1299,63 +1267,39 @@ impl ExtendedEmergencyNumberList {
     }
 }
 
-crate::common::enums::nas_enum! {
+oxirush_utils::named_values! {
     /// UE paging probability of the WUS assistance information (TS 24.301
     /// Table 9.9.3.62.1): `P00` is 0 %, and each step adds up to 5 %.
-    #[non_exhaustive]
-    pub enum UePagingProbability {
-        /// Paging probability 0 %.
-        P00 = 0,
-        /// Paging probability above 0 % up to 5 %.
-        P05 = 1,
-        /// Paging probability above 5 % up to 10 %.
-        P10 = 2,
-        /// Paging probability above 10 % up to 15 %.
-        P15 = 3,
-        /// Paging probability above 15 % up to 20 %.
-        P20 = 4,
-        /// Paging probability above 20 % up to 25 %.
-        P25 = 5,
-        /// Paging probability above 25 % up to 30 %.
-        P30 = 6,
-        /// Paging probability above 30 % up to 35 %.
-        P35 = 7,
-        /// Paging probability above 35 % up to 40 %.
-        P40 = 8,
-        /// Paging probability above 40 % up to 45 %.
-        P45 = 9,
-        /// Paging probability above 45 % up to 50 %.
-        P50 = 10,
-        /// Paging probability above 50 % up to 55 %.
-        P55 = 11,
-        /// Paging probability above 55 % up to 60 %.
-        P60 = 12,
-        /// Paging probability above 60 % up to 65 %.
-        P65 = 13,
-        /// Paging probability above 65 % up to 70 %.
-        P70 = 14,
-        /// Paging probability above 70 % up to 75 %.
-        P75 = 15,
-        /// Paging probability above 75 % up to 80 %.
-        P80 = 16,
-        /// Paging probability above 80 % up to 85 %.
-        P85 = 17,
-        /// Paging probability above 85 % up to 90 %.
-        P90 = 18,
-        /// Paging probability above 90 % up to 95 %.
-        P95 = 19,
-        /// Paging probability above 95 % up to 100 %.
-        P100 = 20,
-    }
-    received {
-        _ => P100,
+    pub enum UePagingProbability "Table 9.9.3.62.1" bits 5 others as 20 {
+        0 P00 "p00" tree "p00",
+        1 P05 "p05" tree "p05",
+        2 P10 "p10" tree "p10",
+        3 P15 "p15" tree "p15",
+        4 P20 "p20" tree "p20",
+        5 P25 "p25" tree "p25",
+        6 P30 "p30" tree "p30",
+        7 P35 "p35" tree "p35",
+        8 P40 "p40" tree "p40",
+        9 P45 "p45" tree "p45",
+        10 P50 "p50" tree "p50",
+        11 P55 "p55" tree "p55",
+        12 P60 "p60" tree "p60",
+        13 P65 "p65" tree "p65",
+        14 P70 "p70" tree "p70",
+        15 P75 "p75" tree "p75",
+        16 P80 "p80" tree "p80",
+        17 P85 "p85" tree "p85",
+        18 P90 "p90" tree "p90",
+        19 P95 "p95" tree "p95",
+        20 P100 "p100" tree "p100",
     }
 }
+crate::common::enums::values_readable!(UePagingProbability);
 
 impl UePagingProbability {
     /// Upper bound of the probability range in percent.
     pub fn percent(self) -> u8 {
-        self as u8 * 5
+        u8::from(self) * 5
     }
 }
 
@@ -1371,7 +1315,7 @@ impl WusAssistanceInformation {
     /// type of information is "UE paging probability information".
     pub fn paging_probability(&self) -> Option<UePagingProbability> {
         let octet = *self.value.first()?;
-        (octet >> 5 == 0).then(|| UePagingProbability::received(octet))
+        (octet >> 5 == 0).then(|| UePagingProbability::from_value(octet).effective())
     }
 
     /// Raw UE paging probability (bits 5-1).
@@ -1381,7 +1325,7 @@ impl WusAssistanceInformation {
 
     /// Build from a UE paging probability.
     pub fn from_paging_probability(probability: UePagingProbability) -> Self {
-        Self::new(vec![probability as u8])
+        Self::new(vec![u8::from(probability)])
     }
 
     /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
@@ -1392,22 +1336,20 @@ impl WusAssistanceInformation {
     }
 }
 
-crate::common::enums::nas_enum! {
+oxirush_utils::named_values! {
     /// MUSIM request type (TS 24.301 Table 9.9.3.65.1).
-    #[non_exhaustive]
-    pub enum UeRequestTypeValue {
-        /// Release the NAS signalling connection.
-        NasSignallingConnectionRelease = 1,
-        /// Reject paging.
-        RejectionOfPaging = 2,
+    pub enum UeRequestTypeValue "Table 9.9.3.65.1" bits 4 {
+        1 NasSignallingConnectionRelease "nas signalling connection release" tree "nas-signalling-connection-release",
+        2 RejectionOfPaging "rejection of paging" tree "rejection-of-paging",
     }
 }
+crate::common::enums::values_readable!(UeRequestTypeValue);
 
 /// UE request type (TS 24.301 §9.9.3.65, TS 24.501 §9.11.3.76).
 impl UeRequestType {
     /// Typed request type; reserved values return `None`.
     pub fn request_type(&self) -> Option<UeRequestTypeValue> {
-        UeRequestTypeValue::try_from((*self.value.first()?) & 0x0f).ok()
+        UeRequestTypeValue::named((*self.value.first()?) & 0x0f)
     }
 
     /// Raw request type (bits 4-1).
@@ -1417,7 +1359,7 @@ impl UeRequestType {
 
     /// Build with the spare bits clear.
     pub fn from_request_type(request_type: UeRequestTypeValue) -> Self {
-        Self::new(vec![request_type as u8])
+        Self::new(vec![u8::from(request_type)])
     }
 
     /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
@@ -1648,19 +1590,16 @@ pub(crate) use {
 
 // ── Tracking area identity list (§9.9.3.33; TS 24.501 §9.11.3.9) ────────────
 
-crate::common::enums::nas_enum! {
+oxirush_utils::named_values! {
     /// The type of a partial list of a tracking area identity list (TS 24.301
     /// Table 9.9.3.33.1, TS 24.501 Table 9.11.3.9.1).
-    #[non_exhaustive]
-    pub enum TaiListType {
-        /// One PLMN, with tracking area codes that are not consecutive.
-        OnePlmnNonConsecutive = 0x00,
-        /// One PLMN, with consecutive tracking area codes.
-        OnePlmnConsecutive = 0x01,
-        /// Tracking areas of different PLMNs.
-        DifferentPlmns = 0x02,
+    pub enum TaiListType "Table 9.9.3.33.1" bits 2 {
+        0x00 OnePlmnNonConsecutive "one plmn non consecutive" tree "one-plmn-non-consecutive",
+        0x01 OnePlmnConsecutive "one plmn consecutive" tree "one-plmn-consecutive",
+        0x02 DifferentPlmns "different plmns" tree "different-plmns",
     }
 }
+crate::common::enums::values_readable!(TaiListType);
 
 /// The most tracking areas that a list has.
 pub(crate) const MAX_TAI_LIST_ELEMENTS: usize = 16;
@@ -1773,7 +1712,7 @@ macro_rules! tai_list_ie {
                 let mut total = 0usize;
                 while pos < data.len() && total < MAX_TAI_LIST_ELEMENTS {
                     let header = data[pos];
-                    let Some(list_type) = TaiListType::try_from((header >> 5) & 0x03).ok() else {
+                    let Some(list_type) = TaiListType::named((header >> 5) & 0x03) else {
                         break;
                     };
                     let count = match header & 0x1f {
@@ -1786,6 +1725,8 @@ macro_rules! tai_list_ie {
                         break;
                     };
                     match list_type {
+                        // `named()` gives none.
+                        TaiListType::Other(_) => break,
                         TaiListType::OnePlmnNonConsecutive => {
                             pos += 3;
                             let mut tacs = Vec::with_capacity(take);
@@ -1850,7 +1791,7 @@ macro_rules! tai_list_ie {
                 let mut total = 0usize;
                 while pos < data.len() && total < MAX_TAI_LIST_ELEMENTS {
                     let header = *data.get(pos)?;
-                    let list_type = TaiListType::try_from((header >> 5) & 0x03).ok()?;
+                    let list_type = TaiListType::named((header >> 5) & 0x03)?;
                     let count = match header & 0x1f {
                         count @ 0..=0x0f => usize::from(count) + 1,
                         _ => MAX_TAI_LIST_ELEMENTS,
@@ -1858,6 +1799,8 @@ macro_rules! tai_list_ie {
                     let take = count.min(MAX_TAI_LIST_ELEMENTS - total);
                     pos += 1;
                     match list_type {
+                        // `named()` gives none.
+                        TaiListType::Other(_) => return None,
                         TaiListType::OnePlmnNonConsecutive => {
                             crate::common::plmn_at(data.get(pos..pos + 3)?)?;
                             pos = (pos + 3).checked_add($tac_len * take)?;
@@ -2093,7 +2036,7 @@ macro_rules! paging_restriction_ie {
             /// The restriction type of bits 4 to 1; `None` for a reserved
             /// one.
             pub fn restriction_type(&self) -> Option<$kind> {
-                $kind::try_from(*self.value.first()? & 0x0f).ok()
+                $kind::named(*self.value.first()? & 0x0f)
             }
 
             /// The code of bits 4 to 1.
@@ -2122,7 +2065,7 @@ macro_rules! paging_restriction_ie {
                 restriction_type: $kind,
                 $ids: &[u8],
             ) -> core::result::Result<Self, crate::common::ValueError> {
-                let mut value = vec![restriction_type as u8];
+                let mut value = vec![u8::from(restriction_type)];
                 if restriction_type.has_bitmap() {
                     value.extend([0, 0]);
                     for (entry, &id) in $ids.iter().enumerate() {
@@ -2156,19 +2099,16 @@ macro_rules! paging_restriction_ie {
 
 pub(crate) use paging_restriction_ie;
 
-crate::common::enums::nas_enum! {
+oxirush_utils::named_values! {
     /// The paging restriction decision of the additional request result of
     /// both systems (TS 24.301 Table 9.9.3.67.1, TS 24.501 Table 9.11.3.81.1).
-    #[non_exhaustive]
-    pub enum PagingRestrictionDecision {
-        /// No additional information.
-        NoAdditionalInformation = 0,
-        /// Paging restriction is accepted.
-        PagingRestrictionIsAccepted = 1,
-        /// Paging restriction is rejected.
-        PagingRestrictionIsRejected = 2,
+    pub enum PagingRestrictionDecision "Table 9.9.3.67.1" bits 8 {
+        0 NoAdditionalInformation "no additional information" tree "no-additional-information",
+        1 PagingRestrictionIsAccepted "paging restriction is accepted" tree "paging-restriction-is-accepted",
+        2 PagingRestrictionIsRejected "paging restriction is rejected" tree "paging-restriction-is-rejected",
     }
 }
+crate::common::enums::values_readable!(PagingRestrictionDecision);
 
 /// The additional request result IE `$ie` of a system: its paging
 /// restriction decision in bits 2 to 1, and spare bits.
@@ -2180,9 +2120,9 @@ macro_rules! additional_request_result_ie {
             pub fn paging_restriction_decision(
                 &self,
             ) -> Option<crate::common::ts24301::PagingRestrictionDecision> {
-                crate::common::ts24301::PagingRestrictionDecision::try_from(
+                crate::common::ts24301::PagingRestrictionDecision::named(
                     self.value.first()? & 0x03,
-                ).ok()
+                )
             }
 
             /// The code of bits 2 to 1.
@@ -2194,7 +2134,7 @@ macro_rules! additional_request_result_ie {
             pub fn from_paging_restriction_decision(
                 decision: crate::common::ts24301::PagingRestrictionDecision,
             ) -> Self {
-                Self::new(vec![decision as u8])
+                Self::new(vec![u8::from(decision)])
             }
 
             /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
@@ -2578,45 +2518,31 @@ mod tests {
             let (two, five) = (code & 0x03, code & 0x1f);
             let below = |end: u8, value: u8| (value < end).then_some(value);
             assert_eq!(
-                PreferredCiotBehavior::try_from(code & 0x03)
-                    .ok()
-                    .map(|value| value as u8),
+                PreferredCiotBehavior::named(code & 0x03).map(u8::from),
                 below(3, two)
             );
             assert_eq!(
-                DownlinkDataExpected::try_from(code & 0x03)
-                    .ok()
-                    .map(|value| value as u8),
+                DownlinkDataExpected::named(code & 0x03).map(u8::from),
                 below(3, two)
             );
             assert_eq!(
-                PagingRestrictionDecision::try_from(code)
-                    .ok()
-                    .map(|value| value as u8),
+                PagingRestrictionDecision::named(code).map(u8::from),
                 below(3, code)
             );
             assert_eq!(
-                CipheringAlgorithm::try_from(code)
-                    .ok()
-                    .map(|value| value as u8),
+                CipheringAlgorithm::named(code).map(u8::from),
                 below(8, code)
             );
             assert_eq!(
-                IntegrityAlgorithm::try_from(code)
-                    .ok()
-                    .map(|value| value as u8),
+                IntegrityAlgorithm::named(code).map(u8::from),
                 below(8, code)
             );
             assert_eq!(
-                IpHdrCompAdditionalSetupType::try_from(code)
-                    .ok()
-                    .map(|value| value as u8),
+                IpHdrCompAdditionalSetupType::named(code).map(u8::from),
                 below(9, code)
             );
             assert_eq!(
-                UePagingProbability::try_from(code & 0x1f)
-                    .ok()
-                    .map(|value| value as u8),
+                UePagingProbability::named(code & 0x1f).map(u8::from),
                 below(21, five)
             );
         }
