@@ -807,7 +807,7 @@ impl Validate for RegistrationRequest {
 
         // Registration type must be 1-7
         let reg_type = self.fgs_registration_type.value & 0x07;
-        if reg_type == 0 || self.fgs_registration_type.registration_type().is_none() {
+        if RegistrationTypeValue::from_value(reg_type).name().is_none() {
             errs.push(ValidationError {
                 severity: Severity::Error,
                 field: "fgs_registration_type",

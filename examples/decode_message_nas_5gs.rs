@@ -47,9 +47,8 @@ fn main() {
     if let Message::Gmm(_, GmmMessage::RegistrationRequest(reg)) = &msg {
         println!("\n=== Typed IE accessors ===");
 
-        if let Some(reg_type) = reg.fgs_registration_type.registration_type() {
-            println!("Registration type: {reg_type:?}");
-        }
+        let reg_type = reg.fgs_registration_type.registration_type();
+        println!("Registration type: {reg_type}");
 
         if let Some(id_type) = reg.fgs_mobile_identity.identity_type() {
             println!("Identity type: {id_type:?}");

@@ -452,51 +452,42 @@ impl N1ModeToS1ModeNasTransparentContainer {
 // 5GS Registration Type (§9.11.3.7)
 // ---------------------------------------------------------------------------
 
-crate::common::enums::nas_enum! {
-    /// 5GS registration type values (TS 24.501 &sect;9.11.3.7, bits 1-3).
-    #[non_exhaustive]
-    pub enum RegistrationTypeValue {
-        /// Initial registration (first attach to the network).
-        InitialRegistration = 0x01,
-        /// Mobility registration updating (TAU equivalent).
-        MobilityRegistrationUpdating = 0x02,
-        /// Periodic registration updating.
-        PeriodicRegistrationUpdating = 0x03,
-        /// Emergency registration.
-        EmergencyRegistration = 0x04,
-        /// SNPN onboarding registration (TS 24.501 Rel-17 §9.11.3.7).
-        SnpnOnboardingRegistration = 0x05,
-        /// Disaster roaming mobility registration updating (Rel-17).
-        DisasterRoamingMobilityRegistrationUpdating = 0x06,
-        /// Disaster roaming initial registration (Rel-17 §9.11.3.7).
-        DisasterRoamingInitialRegistration = 0x07,
-    }
-    received {
-        0x00 => InitialRegistration,
+oxirush_utils::named_values! {
+    /// 5GS registration type values (TS 24.501 §9.11.3.7, bits 1 to 3).
+    pub enum RegistrationTypeValue "Table 9.11.3.7.1" bits 3 others as 1 {
+        1 InitialRegistration "initial registration" tree "initial-registration",
+        2 MobilityRegistrationUpdating "mobility registration updating" tree "mobility-registration-updating",
+        3 PeriodicRegistrationUpdating "periodic registration updating" tree "periodic-registration-updating",
+        4 EmergencyRegistration "emergency registration" tree "emergency-registration",
+        5 SnpnOnboardingRegistration "SNPN onboarding registration" tree "snpn-onboarding-registration",
+        6 DisasterRoamingMobilityRegistrationUpdating "disaster roaming mobility registration updating" tree "disaster-roaming-mobility-registration-updating",
+        7 DisasterRoamingInitialRegistration "disaster roaming initial registration" tree "disaster-roaming-initial-registration",
     }
 }
+crate::common::enums::values_readable!(RegistrationTypeValue);
 
 impl Default for RegistrationType {
     /// Initial registration, without a follow-on request.
     fn default() -> Self {
-        Self::new(RegistrationTypeValue::InitialRegistration as u8)
+        Self::new(RegistrationTypeValue::InitialRegistration.value())
     }
 }
 
 impl RegistrationType {
     /// Build from a registration type, without a follow-on request.
     pub fn from_registration_type(reg_type: RegistrationTypeValue) -> Self {
-        Self::new(reg_type as u8 & 0x07)
+        Self::new(reg_type.value() & 0x07)
     }
 
-    /// Registration type (lower nibble bits 1-3, mask 0x07).
-    pub fn registration_type(&self) -> Option<RegistrationTypeValue> {
-        RegistrationTypeValue::received(self.value & 0x07)
+    /// Registration type (lower nibble bits 1-3, mask 0x07), as it is
+    /// written: `effective()` is the value as a network reads it.
+    pub fn registration_type(&self) -> RegistrationTypeValue {
+        RegistrationTypeValue::from_value(self.value & 0x07)
     }
 
     /// Mutating setter for the registration type.
     pub fn set_registration_type(&mut self, reg_type: RegistrationTypeValue) {
-        self.value = (self.value & 0xF8) | (reg_type as u8 & 0x07);
+        self.value = (self.value & 0xF8) | (reg_type.value() & 0x07);
     }
 
     /// Follow-on request indicator (lower nibble bit 4, mask 0x08).
@@ -17481,7 +17472,7 @@ mod tests {
         assert_eq!(rt.value, 0x09);
         assert_eq!(
             rt.registration_type(),
-            Some(RegistrationTypeValue::InitialRegistration)
+            RegistrationTypeValue::InitialRegistration
         );
         assert!(rt.follow_on_request());
 
@@ -17490,7 +17481,7 @@ mod tests {
         assert_eq!(standalone.value, 0x04);
         assert_eq!(
             standalone.registration_type(),
-            Some(RegistrationTypeValue::EmergencyRegistration)
+            RegistrationTypeValue::EmergencyRegistration
         );
 
         // The ngKSI is the other half of the octet (Table 8.2.6.1.1).

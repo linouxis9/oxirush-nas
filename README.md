@@ -25,7 +25,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Read its IEs through typed accessors
     if let Message::Gmm(_, GmmMessage::RegistrationRequest(reg)) = &msg {
-        let kind = reg.fgs_registration_type.registration_type().ok_or("a reserved type")?;
+        let kind = reg.fgs_registration_type.registration_type();
         let plmn = reg.fgs_mobile_identity.plmn().ok_or("no PLMN")?;
         assert_eq!(kind, RegistrationTypeValue::InitialRegistration);
         assert_eq!((plmn.mcc(), plmn.mnc()), ("208", "93"));

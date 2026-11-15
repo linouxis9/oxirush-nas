@@ -37,6 +37,14 @@ All notable changes to `oxirush-nas` are recorded here.
 
 - The tree of a message holds the names of its members and of the variants
   of its values without copying them, with oxirush-utils at 8f0b227.
+- `RegistrationTypeValue` is a table of `named_values!` of oxirush-utils:
+  it has `Other(u8)` for a value that the table does not name, `from_value()`,
+  `value()`, `name()` (the words of the table), `tree_name()` and
+  `effective()`, the value as a network reads it. `received()` goes, and
+  `TryFrom<u8>` is that of `From<u8>`, which never fails.
+  `RegistrationType::registration_type()` returns the `RegistrationTypeValue`
+  that the IE has, where it returned an `Option` of the value as a network
+  reads it: `effective()` reads it so.
 - `protect()` is written on `protect_into()`, and has one allocation and
   one copy of the message fewer: 476 ns for that REGISTRATION ACCEPT, three
   allocations where it had four.

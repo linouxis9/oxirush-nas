@@ -36,7 +36,7 @@ tree = ["std", "oxirush-utils/tree"]
 [dependencies]
 pastey = "0.2"
 # The identities of the OxiRush crates: PLMN, digits, GUTI, TAI, SUPI, SUCI
-oxirush-utils = { version = "0.2.2", default-features = false, features = ["alloc"] }
+oxirush-utils = { version = "0.2.2", default-features = false, features = ["alloc", "fields"] }
 
 # Optional: NAS security envelope (integrity + ciphering). `alloc` for
 # `build_s`, which returns a `Vec`.
@@ -76,8 +76,8 @@ required-features = ["tree"]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
-# tree::Takes of oxirush-utils, and its trees that hold the names of the crate without
-# copying them, are not released yet: every crate of the build takes oxirush-utils from
-# this revision until its next release.
+# tree::Takes and the fields of oxirush-utils, and its trees that hold the names of the
+# crate without copying them, are not released yet: every crate of the build takes
+# oxirush-utils from this revision until its next release.
 [patch.crates-io]
-oxirush-utils = { git = "https://github.com/linouxis9/oxirush-utils", rev = "4eae6c700f102dbf134e47f758e96799bee3f537" }
+oxirush-utils = { git = "https://github.com/linouxis9/oxirush-utils", rev = "0f94ec72b71dc60df9e0f8565aa281044d85ab45" }

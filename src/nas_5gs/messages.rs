@@ -372,7 +372,7 @@ nas_message! {
     ///     unreachable!()
     /// };
     /// let kind = request.fgs_registration_type.registration_type();
-    /// assert_eq!(kind, Some(RegistrationTypeValue::InitialRegistration));
+    /// assert_eq!(kind, RegistrationTypeValue::InitialRegistration);
     /// assert_eq!(request.ngksi.to_string(), "no key");
     /// let identity = request.fgs_mobile_identity.to_string();
     /// assert_eq!(identity, "suci-0-208-93-0000-0-0-0000000120");
@@ -2300,7 +2300,7 @@ impl Message {
     ///     panic!("another message")
     /// };
     /// let registration = request.fgs_registration_type.registration_type();
-    /// assert_eq!(registration, Some(RegistrationTypeValue::InitialRegistration));
+    /// assert_eq!(registration, RegistrationTypeValue::InitialRegistration);
     /// let identity = String::from_utf8_lossy(&request.fgs_mobile_identity.value[1..]);
     /// assert_eq!(identity, "type1.rid678.schid0.useriduser17@operator");
     ///

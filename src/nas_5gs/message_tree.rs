@@ -1234,7 +1234,10 @@ named_ie!(
 // The fields of an octet.
 fields_ie!(RegistrationType {
 "registration-type":
-    |ie| Code::of(RegistrationTypeValue::try_from(ie.value & 0x07).ok(), ie.value & 0x07),
+    |ie| Code::of(
+        Some(RegistrationTypeValue::from_value(ie.value & 0x07)).filter(|value| value.name().is_some()),
+        ie.value & 0x07,
+    ),
     |ie, code: Code<RegistrationTypeValue>| write_code(
         ie,
         code,

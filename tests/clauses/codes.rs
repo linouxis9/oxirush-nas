@@ -494,7 +494,9 @@ fn each_code_of_a_5gs_field_reads_as_its_table_says() {
         None,
     );
     listed(
-        RegistrationTypeValue::received,
+        // A network reads a value of the three bits that the table does not name as an
+        // initial registration.
+        |code| (code <= 7).then(|| RegistrationTypeValue::from_value(code).effective()),
         &[
             (0x00, Some(RegistrationTypeValue::InitialRegistration)),
             (0x01, Some(RegistrationTypeValue::InitialRegistration)),
@@ -523,7 +525,7 @@ fn each_code_of_a_5gs_field_reads_as_its_table_says() {
         None,
     );
     listed(
-        |code| RegistrationTypeValue::try_from(code).ok(),
+        |code| Some(RegistrationTypeValue::from_value(code)).filter(|value| value.name().is_some()),
         &[
             (0x01, Some(RegistrationTypeValue::InitialRegistration)),
             (

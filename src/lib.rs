@@ -44,7 +44,7 @@
 //!     // Read its IEs through typed accessors
 //!     if let Message::Gmm(_, GmmMessage::RegistrationRequest(reg)) = &msg {
 //!         let kind = reg.fgs_registration_type.registration_type();
-//!         assert_eq!(kind, Some(RegistrationTypeValue::InitialRegistration));
+//!         assert_eq!(kind, RegistrationTypeValue::InitialRegistration);
 //!
 //!         let identity = &reg.fgs_mobile_identity;
 //!         assert_eq!(identity.identity_type(), Some(MobileIdentityType5gs::Suci));
