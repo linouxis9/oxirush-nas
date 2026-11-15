@@ -132,12 +132,21 @@ where
             let mine = table.write(&mut written, tree).map(|()| written.to_vec());
             // The table keeps the spare bits that an edit does not write,
             // where a hand-written setter may clear them.
+            // or every octet that it does not write, where a built IE was written anew
+            // from its constructor.
             let kept = match (&theirs, &mine) {
-                (Ok(theirs), Ok(mine)) if theirs.len() == mine.len() => (0..mine.len()).all(|at| {
-                    let mask = table.mask(at);
-                    (theirs[at] ^ mine[at]) & mask == 0
-                        && mine[at] & !mask == octets.get(at).copied().unwrap_or(0) & !mask
-                }),
+                (Ok(theirs), Ok(mine)) => {
+                    (0..mine.len().max(theirs.len())).all(|at| {
+                        let mask = table.mask(at);
+                        let (their, my) = (
+                            theirs.get(at).copied().unwrap_or(0),
+                            mine.get(at).copied().unwrap_or(0),
+                        );
+                        (their ^ my) & mask == 0
+                            && their & !mask == 0
+                            && my & !mask == octets.get(at).copied().unwrap_or(0) & !mask
+                    }) && (mine.len() == theirs.len() || mine.len() == octets.len())
+                }
                 _ => false,
             };
             // A value written from a tree has the shortest length of its table, where a
@@ -212,50 +221,6 @@ fn a_table_writes_the_tree_of_the_fields_of_security_algorithms() {
     assert!(differences.is_empty(), "{}", differences.join("\n"));
 }
 
-#[test]
-fn a_table_writes_the_tree_of_the_flags_of_mico_indication() {
-    const TABLE: Table = Table {
-        rows: &[row!(raai, 0, 1, 1), row!(sprti, 0, 2, 1)],
-        least: 1,
-        most: 1,
-        receives: 1,
-        trailing: false,
-    };
-    let values: Vec<Vec<u8>> = (0..=15).map(|octet| vec![octet]).collect();
-    let differences = compare(
-        &TABLE,
-        &values,
-        |ie: &nas_5gs::MicoIndication| &ie.value,
-        nas_5gs::MicoIndication::new,
-        false,
-    );
-    assert!(differences.is_empty(), "{}", differences.join("\n"));
-}
-
-#[test]
-fn a_table_writes_the_tree_of_the_flags_of_allowed_ssc_mode() {
-    const TABLE: Table = Table {
-        rows: &[
-            row!(ssc1, 0, 1, 1),
-            row!(ssc2, 0, 2, 1),
-            row!(ssc3, 0, 3, 1),
-        ],
-        least: 1,
-        most: 1,
-        receives: 1,
-        trailing: false,
-    };
-    let values: Vec<Vec<u8>> = (0..=15).map(|octet| vec![octet]).collect();
-    let differences = compare(
-        &TABLE,
-        &values,
-        |ie: &nas_5gs::AllowedSscMode| &ie.value,
-        nas_5gs::AllowedSscMode::new,
-        false,
-    );
-    assert!(differences.is_empty(), "{}", differences.join("\n"));
-}
-
 /// Each value that the table of a type shows writes the IE back, from an IE
 /// without octets: what a tree shows is written as it is.
 fn writes_back<T: Decoded>(make: impl Fn(u8) -> T) {
@@ -302,4 +267,32 @@ fn each_value_that_a_table_shows_writes_its_ie_back() {
     writes_back(crate::nas_eps::EpsUpdateType::new);
     writes_back(crate::nas_eps::ControlPlaneServiceType::new);
     writes_back(crate::nas_eps::DetachType::new);
+    writes_back(|octet| nas_5gs::Additional5gSecurityInformation::new(octets(octet)));
+    writes_back(nas_5gs::AdditionalConfigurationIndication::new);
+    writes_back(|octet| nas_5gs::AdditionalInformationRequested::new(octets(octet)));
+    writes_back(nas_5gs::AllowedSscMode::new);
+    writes_back(nas_5gs::AlwaysOnPduSessionIndication::new);
+    writes_back(nas_5gs::AlwaysOnPduSessionRequested::new);
+    writes_back(|octet| nas_5gs::Aun3Indication::new(octets(octet)));
+    writes_back(nas_5gs::ConfigurationUpdateIndication::new);
+    writes_back(|octet| nas_5gs::ExtendedGmmCause::new(octets(octet)));
+    writes_back(|octet| nas_5gs::GsmCongestionReAttemptIndicator::new(octets(octet)));
+    writes_back(|octet| nas_5gs::GsmNetworkFeatureSupport::new(octets(octet)));
+    writes_back(nas_5gs::LpWusStatus::new);
+    writes_back(nas_5gs::MicoIndication::new);
+    writes_back(nas_5gs::N5gcIndication::new);
+    writes_back(nas_5gs::NetworkSlicingIndication::new);
+    writes_back(|octet| nas_5gs::Non3GppAccessPathSwitchingIndication::new(octets(octet)));
+    writes_back(|octet| nas_5gs::Non3GppPathSwitchingInformation::new(octets(octet)));
+    writes_back(nas_5gs::PayloadContainerInformation::new);
+    writes_back(nas_5gs::PriorityIndicator::new);
+    writes_back(|octet| nas_5gs::RanTimingSynchronization::new(octets(octet)));
+    writes_back(nas_5gs::SmsIndication::new);
+    writes_back(|octet| nas_5gs::UeUsageSetting::new(octets(octet)));
+    writes_back(crate::nas_eps::EsmInformationTransferFlag::new);
+    writes_back(crate::nas_eps::ExtendedEmmCause::new);
+    writes_back(crate::nas_eps::GutiType::new);
+    writes_back(crate::nas_eps::TmsiStatus::new);
+    writes_back(crate::nas_eps::UeInformationRequest::new);
+    writes_back(crate::nas_eps::UeRadioCapabilityInformationUpdateNeeded::new);
 }

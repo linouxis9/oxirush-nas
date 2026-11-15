@@ -1163,23 +1163,6 @@ built_ie!(CsfbResponse, |accepted| Ok(Self::from_accepted(accepted)), {
     accepted: bool = |ie| ie.accepted()
 });
 built_ie!(
-    EsmInformationTransferFlag,
-    |required| Ok(Self::from_required(required)),
-    { is_required: bool }
-);
-built_ie!(
-    ExtendedEmmCause,
-    |eutran, optimization, nb_iot, satellite| {
-        Ok(Self::from_flags(eutran, optimization, nb_iot, satellite))
-    },
-    {
-        eutran_not_allowed: bool,
-        eps_optimization_not_supported: bool,
-        nb_iot_not_allowed: bool,
-        satellite_eutran_not_allowed: bool,
-    }
-);
-built_ie!(
     LcsIndicator,
     |mt_lr: bool| {
         let rule = "is true in an IE that is sent: a message without the IE says false";
@@ -1187,18 +1170,11 @@ built_ie!(
     },
     { is_mt_lr: bool }
 );
-built_ie!(GutiType, |mapped| Ok(Self::from_mapped(mapped)), { is_mapped: bool });
 named_ie!(
     PagingIdentity,
     PagingIdentityValue,
     |ie| Some(ie.paging_identity()),
     PagingIdentity::from_paging_identity
-);
-built_ie!(TmsiStatus, |valid| Ok(Self::from_valid_tmsi(valid)), { has_valid_tmsi: bool });
-built_ie!(
-    UeInformationRequest,
-    |requested| Ok(Self::from_requested(requested)),
-    { requested: bool }
 );
 built_ie!(
     UeRadioCapabilityIdAvailability,
@@ -1209,11 +1185,6 @@ built_ie!(
     UeRadioCapabilityIdRequest,
     |requested| Ok(Self::from_requested(requested)),
     { is_requested: bool = |ie| ie.is_requested() }
-);
-built_ie!(
-    UeRadioCapabilityInformationUpdateNeeded,
-    |needed| Ok(Self::from_update_needed(needed)),
-    { update_needed: bool }
 );
 built_ie!(
     VoiceDomainPreferenceAndUeUsageSetting,

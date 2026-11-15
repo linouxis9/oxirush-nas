@@ -37,6 +37,11 @@ All notable changes to `oxirush-nas` are recorded here.
 
 - The tree of a message holds the names of its members and of the variants
   of its values without copying them, with oxirush-utils at 8f0b227.
+- Twenty-eight indications of one to four flags of TS 24.501 and TS 24.301
+  (MICO indication, network slicing indication, priority indicator, extended
+  EMM cause, and the others) come from tables: each flag has a setter that
+  returns `&mut Self`, and each type `spare_bits_are_zero()`. A tree that edits
+  one of them keeps the bits that it does not write.
 - The 5GS de-registration type, registration result, update type and control
   plane service type, and the EPS update type, control plane service type and
   detach type come from the tables of their figures. `result()`,

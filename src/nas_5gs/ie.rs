@@ -2599,32 +2599,32 @@ impl Default for NetworkFeatureSupport {
 // TV-1 half-byte types
 // ---------------------------------------------------------------------------
 
-impl AdditionalConfigurationIndication {
-    /// SCMR (bit 1): release of N1 NAS signalling connection not required.
-    pub fn scmr(&self) -> bool {
-        self.value & 0x01 != 0
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl AdditionalConfigurationIndication (value) "9.11.3.74" octets 1 {
+        scmr "SCMR": 0 1 1,
     }
+}
+crate::common::field_table::table_ie!(AdditionalConfigurationIndication, octet, 1..=1, receives 1);
 
+impl AdditionalConfigurationIndication {
     /// Build from SCMR flag.
     pub fn from_scmr(scmr: bool) -> Self {
         Self::new(if scmr { 0x01 } else { 0x00 })
     }
 }
 
-impl AllowedSscMode {
-    /// SSC mode 1 allowed (bit 1).
-    pub fn ssc1(&self) -> bool {
-        self.value & 0x01 != 0
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl AllowedSscMode (value) "9.11.4.5" octets 1 {
+        ssc1 "SSC1": 0 1 1,
+        ssc2 "SSC2": 0 2 1,
+        ssc3 "SSC3": 0 3 1,
     }
-    /// SSC mode 2 allowed (bit 2).
-    pub fn ssc2(&self) -> bool {
-        (self.value >> 1) & 0x01 != 0
-    }
-    /// SSC mode 3 allowed (bit 3).
-    pub fn ssc3(&self) -> bool {
-        (self.value >> 2) & 0x01 != 0
-    }
+}
+crate::common::field_table::table_ie!(AllowedSscMode, octet, 1..=1, receives 1);
 
+impl AllowedSscMode {
     /// Build from SSC mode flags.
     pub fn from_modes(ssc1: bool, ssc2: bool, ssc3: bool) -> Self {
         let mut v: u8 = 0;
@@ -2641,40 +2641,46 @@ impl AllowedSscMode {
     }
 }
 
-impl AlwaysOnPduSessionIndication {
-    /// APSI: Always-on PDU session indication value (bit 1).
-    pub fn apsi(&self) -> bool {
-        self.value & 0x01 != 0
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl AlwaysOnPduSessionIndication (value) "" octets 1 {
+        apsi "APSI": 0 1 1,
     }
+}
+crate::common::field_table::table_ie!(AlwaysOnPduSessionIndication, octet, 1..=1, receives 1);
 
+impl AlwaysOnPduSessionIndication {
     /// Construct a value from apsi.
     pub fn from_apsi(apsi: bool) -> Self {
         Self::new(if apsi { 0x01 } else { 0x00 })
     }
 }
 
-impl AlwaysOnPduSessionRequested {
-    /// APSR: Always-on PDU session requested (bit 1).
-    pub fn apsr(&self) -> bool {
-        self.value & 0x01 != 0
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl AlwaysOnPduSessionRequested (value) "" octets 1 {
+        apsr "APSR": 0 1 1,
     }
+}
+crate::common::field_table::table_ie!(AlwaysOnPduSessionRequested, octet, 1..=1, receives 1);
 
+impl AlwaysOnPduSessionRequested {
     /// Construct a value from apsr.
     pub fn from_apsr(apsr: bool) -> Self {
         Self::new(if apsr { 0x01 } else { 0x00 })
     }
 }
 
-impl ConfigurationUpdateIndication {
-    /// ACK: Acknowledgement requested (bit 1).
-    pub fn ack(&self) -> bool {
-        self.value & 0x01 != 0
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl ConfigurationUpdateIndication (value) "9.11.3.18" octets 1 {
+        ack "ACK": 0 1 1,
+        red "RED": 0 2 1,
     }
-    /// RED: Registration requested (bit 2).
-    pub fn red(&self) -> bool {
-        (self.value >> 1) & 0x01 != 0
-    }
+}
+crate::common::field_table::table_ie!(ConfigurationUpdateIndication, octet, 1..=1, receives 1);
 
+impl ConfigurationUpdateIndication {
     /// Construct a value from flags.
     pub fn from_flags(ack: bool, red: bool) -> Self {
         let mut v: u8 = 0;
@@ -2772,16 +2778,16 @@ impl MaPduSessionInformation {
     }
 }
 
-impl MicoIndication {
-    /// RAAI: Registration Area Allocation Indication (bit 1).
-    pub fn raai(&self) -> bool {
-        self.value & 0x01 != 0
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl MicoIndication (value) "9.11.3.31" octets 1 {
+        raai "RAAI": 0 1 1,
+        sprti "SPRTI": 0 2 1,
     }
-    /// SPRTI: MICO mode (bit 2).
-    pub fn sprti(&self) -> bool {
-        (self.value >> 1) & 0x01 != 0
-    }
+}
+crate::common::field_table::table_ie!(MicoIndication, octet, 1..=1, receives 1);
 
+impl MicoIndication {
     /// Construct a value from flags.
     pub fn from_flags(raai: bool, sprti: bool) -> Self {
         let mut v: u8 = 0;
@@ -2795,28 +2801,31 @@ impl MicoIndication {
     }
 }
 
-impl N5gcIndication {
-    /// N5GC indication (bit 1).
-    pub fn n5gc(&self) -> bool {
-        self.value & 0x01 != 0
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl N5gcIndication (value) "9.11.3.72" octets 1 {
+        n5gc "N5GCREG": 0 1 1,
     }
+}
+crate::common::field_table::table_ie!(N5gcIndication, octet, 1..=1, receives 1);
 
+impl N5gcIndication {
     /// Construct a value from n 5 gc.
     pub fn from_n5gc(n5gc: bool) -> Self {
         Self::new(if n5gc { 0x01 } else { 0x00 })
     }
 }
 
-impl NetworkSlicingIndication {
-    /// NSSCI: Network slicing subscription change indication (bit 1).
-    pub fn nssci(&self) -> bool {
-        self.value & 0x01 != 0
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl NetworkSlicingIndication (value) "9.11.3.36" octets 1 {
+        nssci "NSSCI": 0 1 1,
+        dcni "DCNI": 0 2 1,
     }
-    /// DCNI: Default configured NSSAI indication (bit 2).
-    pub fn dcni(&self) -> bool {
-        (self.value >> 1) & 0x01 != 0
-    }
+}
+crate::common::field_table::table_ie!(NetworkSlicingIndication, octet, 1..=1, receives 1);
 
+impl NetworkSlicingIndication {
     /// Construct a value from flags.
     pub fn from_flags(nssci: bool, dcni: bool) -> Self {
         let mut v: u8 = 0;
@@ -2848,17 +2857,16 @@ impl NssaiInclusionMode {
     }
 }
 
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl PriorityIndicator (value) "9.11.3.91" octets 1 {
+        mpsi "MPSI": 0 1 1,
+        mcsi "MCSI": 0 2 1,
+    }
+}
+crate::common::field_table::table_ie!(PriorityIndicator, octet, 1..=1, receives 1);
+
 impl PriorityIndicator {
-    /// MPSI, access identity 1 valid (bit 1).
-    pub fn mpsi(&self) -> bool {
-        self.value & 0x01 != 0
-    }
-
-    /// MCSI, access identity 2 valid (bit 2).
-    pub fn mcsi(&self) -> bool {
-        (self.value >> 1) & 0x01 != 0
-    }
-
     /// Return access identity 1 valid.
     pub fn access_identity_1_valid(&self) -> bool {
         self.mpsi()
@@ -2927,12 +2935,15 @@ impl RequestType {
     }
 }
 
-impl SmsIndication {
-    /// SAI: SMS availability indication (bit 1).
-    pub fn sai(&self) -> bool {
-        self.value & 0x01 != 0
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl SmsIndication (value) "9.11.3.50A" octets 1 {
+        sai "SAI": 0 1 1,
     }
+}
+crate::common::field_table::table_ie!(SmsIndication, octet, 1..=1, receives 1);
 
+impl SmsIndication {
     /// Construct a value from sai.
     pub fn from_sai(sai: bool) -> Self {
         Self::new(if sai { 0x01 } else { 0x00 })
@@ -3095,19 +3106,16 @@ impl Abba {
 // TLV types — commonly used
 // ---------------------------------------------------------------------------
 
-impl Additional5gSecurityInformation {
-    /// RINMR: Retransmission of initial NAS message request (bit 2).
-    pub fn rinmr(&self) -> bool {
-        self.value
-            .first()
-            .map(|b| (b >> 1) & 0x01 != 0)
-            .unwrap_or(false)
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl Additional5gSecurityInformation (value) "" octets 1 {
+        rinmr "RINMR": 0 2 1,
+        hdp "HDP": 0 1 1,
     }
-    /// HDP: Horizontal derivation parameter (bit 1).
-    pub fn hdp(&self) -> bool {
-        self.value.first().map(|b| b & 0x01 != 0).unwrap_or(false)
-    }
+}
+crate::common::field_table::table_ie!(Additional5gSecurityInformation, octets, 1..=1, receives 1);
 
+impl Additional5gSecurityInformation {
     /// Construct a value from flags.
     pub fn from_flags(rinmr: bool, hdp: bool) -> Self {
         let mut v: u8 = 0;
@@ -3707,22 +3715,16 @@ oxirush_utils::named_values! {
 }
 crate::common::enums::values_readable!(AtsssLowLayerFunctionality);
 
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl GsmCongestionReAttemptIndicator (value) "" octets 1 {
+        abo "ABO": 0 1 1,
+        catbo "CATBO": 0 2 1,
+    }
+}
+crate::common::field_table::table_ie!(GsmCongestionReAttemptIndicator, octets, 1..=1, receives 1);
+
 impl GsmCongestionReAttemptIndicator {
-    /// ABO (bit 1, mask 0x01) — back-off timer applied in all PLMNs/SNPNs vs registered only.
-    /// TS 24.501 §9.11.4.21.
-    pub fn abo(&self) -> bool {
-        self.value.first().map(|b| b & 0x01 != 0).unwrap_or(false)
-    }
-
-    /// CATBO (bit 2, mask 0x02) — back-off timer applied in current access type vs both 3GPP
-    /// and non-3GPP access types. TS 24.501 §9.11.4.21.
-    pub fn catbo(&self) -> bool {
-        self.value
-            .first()
-            .map(|b| (b >> 1) & 0x01 != 0)
-            .unwrap_or(false)
-    }
-
     /// Build from both flags.
     pub fn from_flags(abo: bool, catbo: bool) -> Self {
         let mut b = 0u8;
@@ -3736,22 +3738,16 @@ impl GsmCongestionReAttemptIndicator {
     }
 }
 
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl GsmNetworkFeatureSupport (value) "9.11.4.18" octets 1 {
+        ept_s1 "EPT-S1": 0 1 1,
+        naps "NAPS": 0 2 1,
+    }
+}
+crate::common::field_table::table_ie!(GsmNetworkFeatureSupport, octets, 1..=1, receives 1);
+
 impl GsmNetworkFeatureSupport {
-    /// EPT-S1 (bit 1, mask 0x01) — Ethernet PDU type over S1 mode supported.
-    /// TS 24.501 §9.11.4.18.
-    pub fn ept_s1(&self) -> bool {
-        self.value.first().map(|b| b & 0x01 != 0).unwrap_or(false)
-    }
-
-    /// NAPS (bit 2, mask 0x02) — Non-3GPP access path switch supported.
-    /// TS 24.501 §9.11.4.18.
-    pub fn naps(&self) -> bool {
-        self.value
-            .first()
-            .map(|b| (b >> 1) & 0x01 != 0)
-            .unwrap_or(false)
-    }
-
     /// Build from both flags.
     pub fn from_flags(ept_s1: bool, naps: bool) -> Self {
         let mut b = 0u8;
@@ -4149,12 +4145,15 @@ impl RejectedNssai {
     }
 }
 
-impl UeUsageSetting {
-    /// UE usage setting (bit 1): 0=voice centric, 1=data centric.
-    pub fn data_centric(&self) -> bool {
-        self.value.first().map(|b| b & 0x01 != 0).unwrap_or(false)
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl UeUsageSetting (value) "" octets 1 {
+        data_centric "DATA-CENTRIC": 0 1 1,
     }
+}
+crate::common::field_table::table_ie!(UeUsageSetting, octets, 1..=1, receives 1);
 
+impl UeUsageSetting {
     /// Construct a value from data centric.
     pub fn from_data_centric(data_centric: bool) -> Self {
         Self::new(vec![if data_centric { 0x01 } else { 0x00 }])
@@ -10243,27 +10242,15 @@ impl EthernetHeaderCompressionConfiguration {
 
 // ── Additional / Misc TLV IEs ───────────────────────────────────────────────
 
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl AdditionalInformationRequested (value) "9.11.3.12A" octets 1 {
+        cipher_key_data_requested "CipherKey": 0 1 1,
+    }
+}
+crate::common::field_table::table_ie!(AdditionalInformationRequested, octets, 1..=1, receives 1);
+
 impl AdditionalInformationRequested {
-    /// Whether ciphering key data is requested (bit 0).
-    pub fn cipher_key_data_requested(&self) -> bool {
-        !self.value.is_empty() && (self.value[0] & 0x01) != 0
-    }
-
-    /// Set the ciphering-key-data-requested flag.
-    pub fn set_cipher_key_data_requested(&mut self, requested: bool) {
-        let mut byte = self.value.first().copied().unwrap_or(0);
-        if requested {
-            byte |= 0x01;
-        } else {
-            byte &= !0x01;
-        }
-        if self.value.is_empty() {
-            self.value.push(byte);
-        } else {
-            self.value[0] = byte;
-        }
-    }
-
     /// Build from the ciphering-key-data-requested flag.
     pub fn from_cipher_key_data_requested(requested: bool) -> Self {
         Self::new(vec![if requested { 0x01 } else { 0x00 }])
@@ -15211,12 +15198,15 @@ impl TnanInformation {
 
 // ── 9.11.3.95 RAN timing synchronisation ────────────────────────────────────
 
-impl RanTimingSynchronization {
-    /// RECREQ — RAN timing recreation request bit (bit 1, mask 0x01).
-    pub fn recreation_request(&self) -> bool {
-        self.value.first().map(|b| b & 0x01 != 0).unwrap_or(false)
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl RanTimingSynchronization (value) "9.11.3.95" octets 1 {
+        recreation_request "Rec Req": 0 1 1,
     }
+}
+crate::common::field_table::table_ie!(RanTimingSynchronization, octets, 1..=1, receives 1);
 
+impl RanTimingSynchronization {
     /// Construct a value from recreation request.
     pub fn from_recreation_request(req: bool) -> Self {
         Self::new(vec![if req { 0x01 } else { 0x00 }])
@@ -15225,12 +15215,15 @@ impl RanTimingSynchronization {
 
 // ── 9.11.3.99 Non-3GPP access path switching indication ─────────────────────
 
-impl Non3GppAccessPathSwitchingIndication {
-    /// NAPS — Non-3GPP Access Path Switch (bit 1, mask 0x01).
-    pub fn naps(&self) -> bool {
-        self.value.first().map(|b| b & 0x01 != 0).unwrap_or(false)
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl Non3GppAccessPathSwitchingIndication (value) "" octets 1 {
+        naps "NAPS": 0 1 1,
     }
+}
+crate::common::field_table::table_ie!(Non3GppAccessPathSwitchingIndication, octets, 1..=1, receives 1);
 
+impl Non3GppAccessPathSwitchingIndication {
     /// Construct a value from naps.
     pub fn from_naps(naps: bool) -> Self {
         Self::new(vec![if naps { 0x01 } else { 0x00 }])
@@ -15239,12 +15232,15 @@ impl Non3GppAccessPathSwitchingIndication {
 
 // ── 9.11.3.102 Non-3GPP path switching information ──────────────────────────
 
-impl Non3GppPathSwitchingInformation {
-    /// NSONR — Non-3GPP-side Selective ONR (bit 1, mask 0x01).
-    pub fn nsonr(&self) -> bool {
-        self.value.first().map(|b| b & 0x01 != 0).unwrap_or(false)
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl Non3GppPathSwitchingInformation (value) "" octets 1 {
+        nsonr "NSONR": 0 1 1,
     }
+}
+crate::common::field_table::table_ie!(Non3GppPathSwitchingInformation, octets, 1..=1, receives 1);
 
+impl Non3GppPathSwitchingInformation {
     /// Construct a value from nsonr.
     pub fn from_nsonr(nsonr: bool) -> Self {
         Self::new(vec![if nsonr { 0x01 } else { 0x00 }])
@@ -15253,12 +15249,15 @@ impl Non3GppPathSwitchingInformation {
 
 // ── 9.11.3.104 AUN3 indication ──────────────────────────────────────────────
 
-impl Aun3Indication {
-    /// AUN3REG — AUN3 device registration indication (bit 1, mask 0x01).
-    pub fn aun3reg(&self) -> bool {
-        self.value.first().map(|b| b & 0x01 != 0).unwrap_or(false)
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl Aun3Indication (value) "9.11.3.104" octets 1 {
+        aun3reg "AUN3REG": 0 1 1,
     }
+}
+crate::common::field_table::table_ie!(Aun3Indication, octets, 1..=1, receives 1);
 
+impl Aun3Indication {
     /// Construct a value from aun 3 reg.
     pub fn from_aun3reg(aun3reg: bool) -> Self {
         Self::new(vec![if aun3reg { 0x01 } else { 0x00 }])
@@ -15327,12 +15326,15 @@ impl FeatureAuthorizationIndication {
 
 // ── 9.11.3.106 Payload container information ───────────────────────────────
 
-impl PayloadContainerInformation {
-    /// PRU — payload container related to PRU (bit 1, mask 0x01).
-    pub fn pru(&self) -> bool {
-        self.value & 0x01 != 0
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl PayloadContainerInformation (value) "9.11.3.106" octets 1 {
+        pru "PRU": 0 1 1,
     }
+}
+crate::common::field_table::table_ie!(PayloadContainerInformation, octet, 1..=1, receives 1);
 
+impl PayloadContainerInformation {
     /// Construct a value from pru.
     pub fn from_pru(pru: bool) -> Self {
         Self::new(if pru { 0x01 } else { 0x00 })
@@ -15486,15 +15488,18 @@ impl OnDemandNssai {
 
 // ── 9.11.3.109 Extended 5GMM cause ──────────────────────────────────────────
 
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl ExtendedGmmCause (value) "" octets 1 {
+        satellite_nr_not_allowed "SATELLITE-NR-NOT-ALLOWED": 0 1 1,
+    }
+}
+crate::common::field_table::table_ie!(ExtendedGmmCause, octets, 1..=1, receives 1);
+
 impl ExtendedGmmCause {
     /// SAT_NR — Satellite NG-RAN allowed in PLMN (bit 1, mask 0x01).
     pub fn satellite_nr_allowed(&self) -> bool {
         !self.satellite_nr_not_allowed()
-    }
-
-    /// Raw Sat-NR bit: true means satellite NG-RAN is not allowed in the PLMN.
-    pub fn satellite_nr_not_allowed(&self) -> bool {
-        self.value.first().map(|b| b & 0x01 != 0).unwrap_or(false)
     }
 
     /// Construct a value from satellite nr allowed.
@@ -15505,11 +15510,6 @@ impl ExtendedGmmCause {
     /// Construct a value from satellite nr not allowed.
     pub fn from_satellite_nr_not_allowed(not_allowed: bool) -> Self {
         Self::new(vec![if not_allowed { 0x01 } else { 0x00 }])
-    }
-
-    /// Whether spare bits 2-8 are zero.
-    pub fn spare_bits_are_zero(&self) -> bool {
-        self.value.first().copied().unwrap_or(0) & !0x01 == 0
     }
 
     /// Strict validation for exact length and spare bits.
@@ -15601,20 +15601,18 @@ impl LpWuspsAssistanceInformation {
 
 // ── 9.11.3.112 LP-WUS status ────────────────────────────────────────────────
 
-impl LpWusStatus {
-    /// LP-WUS disabled flag (octet 1, bit 1). `false` means LP-WUS enabled, `true` means disabled.
-    pub fn lp_wus_disabled(&self) -> bool {
-        self.value & 0x01 != 0
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl LpWusStatus (value) "" octets 1 {
+        lp_wus_disabled "LP-WUS-DISABLED": 0 1 1,
     }
+}
+crate::common::field_table::table_ie!(LpWusStatus, octet, 1..=1, receives 1);
 
+impl LpWusStatus {
     /// Construct a value from disabled.
     pub fn from_disabled(disabled: bool) -> Self {
         Self::new(if disabled { 0x01 } else { 0x00 })
-    }
-
-    /// Whether spare bits 2-4 of the TV-1 value are zero.
-    pub fn spare_bits_are_zero(&self) -> bool {
-        self.value & !0x01 == 0
     }
 
     /// Strict spare-bit validation for TS 24.501 §9.11.3.112.

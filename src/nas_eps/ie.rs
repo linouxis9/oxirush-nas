@@ -4230,12 +4230,15 @@ impl RequestType {
     }
 }
 
-impl EsmInformationTransferFlag {
-    /// Whether the APN or PCO must be transferred under NAS security (§9.9.4.5).
-    pub fn is_required(&self) -> bool {
-        self.value & 1 != 0
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl EsmInformationTransferFlag (value) "9.9.4.5" octets 1 {
+        is_required "EIT value": 0 1 1,
     }
+}
+crate::common::field_table::table_ie!(EsmInformationTransferFlag, octet, 1..=1, receives 1);
 
+impl EsmInformationTransferFlag {
     /// Construct the EIT value with spare bits clear.
     pub fn from_required(required: bool) -> Self {
         Self::new(u8::from(required))
@@ -4407,12 +4410,15 @@ impl AdditionalUpdateResult {
     }
 }
 
-impl TmsiStatus {
-    /// Whether the UE has a valid TMSI (TS 24.008 §10.5.5.4, bit 1).
-    pub fn has_valid_tmsi(&self) -> bool {
-        self.value & 0x01 != 0
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl TmsiStatus (value) "" octets 1 {
+        has_valid_tmsi "HAS-VALID-TMSI": 0 1 1,
     }
+}
+crate::common::field_table::table_ie!(TmsiStatus, octet, 1..=1, receives 1);
 
+impl TmsiStatus {
     /// Build with spare bits clear.
     pub fn from_valid_tmsi(valid: bool) -> Self {
         Self::new(u8::from(valid))
@@ -5367,27 +5373,18 @@ impl LinkedEpsBearerIdentity {
     }
 }
 
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl ExtendedEmmCause (value) "9.9.3.26A" octets 1 {
+        eutran_not_allowed "E-UTRAN allowed": 0 1 1,
+        eps_optimization_not_supported "EPS optimization info": 0 2 1,
+        nb_iot_not_allowed "NB-IoT allowed": 0 3 1,
+        satellite_eutran_not_allowed "Satellite E-UTRAN allowed": 0 4 1,
+    }
+}
+crate::common::field_table::table_ie!(ExtendedEmmCause, octet, 1..=1, receives 1);
+
 impl ExtendedEmmCause {
-    /// Whether E-UTRAN access is barred (bit 1, §9.9.3.26A).
-    pub fn eutran_not_allowed(&self) -> bool {
-        self.value & 0x01 != 0
-    }
-
-    /// Whether the requested EPS optimization is unsupported (bit 2).
-    pub fn eps_optimization_not_supported(&self) -> bool {
-        self.value & 0x02 != 0
-    }
-
-    /// Whether NB-IoT access is barred (bit 3).
-    pub fn nb_iot_not_allowed(&self) -> bool {
-        self.value & 0x04 != 0
-    }
-
-    /// Whether satellite E-UTRAN access is barred (bit 4).
-    pub fn satellite_eutran_not_allowed(&self) -> bool {
-        self.value & 0x08 != 0
-    }
-
     /// Build all four specified flags.
     pub fn from_flags(eutran: bool, eps_optimization: bool, nb_iot: bool, satellite: bool) -> Self {
         Self::new(
@@ -5457,12 +5454,15 @@ impl NetworkPolicy {
     }
 }
 
-impl GutiType {
-    /// Whether the GUTI is mapped rather than native (§9.9.3.45).
-    pub fn is_mapped(&self) -> bool {
-        self.value & 0x01 != 0
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl GutiType (value) "9.9.3.45" octets 1 {
+        is_mapped "GUTI type": 0 1 1,
     }
+}
+crate::common::field_table::table_ie!(GutiType, octet, 1..=1, receives 1);
 
+impl GutiType {
     /// Build with spare bits clear.
     pub fn from_mapped(mapped: bool) -> Self {
         Self::new(u8::from(mapped))
@@ -5523,24 +5523,30 @@ impl SmsServicesStatus {
     }
 }
 
-impl UeInformationRequest {
-    /// Whether coarse location information is requested (§9.9.3.71).
-    pub fn requested(&self) -> bool {
-        self.value & 0x01 != 0
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl UeInformationRequest (value) "9.9.3.71" octets 1 {
+        requested "UCLIR": 0 1 1,
     }
+}
+crate::common::field_table::table_ie!(UeInformationRequest, octet, 1..=1, receives 1);
 
+impl UeInformationRequest {
     /// Build with spare bits clear.
     pub fn from_requested(requested: bool) -> Self {
         Self::new(u8::from(requested))
     }
 }
 
-impl UeRadioCapabilityInformationUpdateNeeded {
-    /// Whether the MME must delete stored radio capability information (§9.9.3.35).
-    pub fn update_needed(&self) -> bool {
-        self.value & 0x01 != 0
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl UeRadioCapabilityInformationUpdateNeeded (value) "9.9.3.35" octets 1 {
+        update_needed "URC upd": 0 1 1,
     }
+}
+crate::common::field_table::table_ie!(UeRadioCapabilityInformationUpdateNeeded, octet, 1..=1, receives 1);
 
+impl UeRadioCapabilityInformationUpdateNeeded {
     /// Build with spare bits clear.
     pub fn from_update_needed(needed: bool) -> Self {
         Self::new(u8::from(needed))

@@ -1283,95 +1283,11 @@ fields_ie!(EpsNasSecurityAlgorithms {
 });
 
 // The flags of an indication, by the names of its accessors.
-built_ie!(
-    Additional5gSecurityInformation,
-    |rinmr, hdp| Ok(Self::from_flags(rinmr, hdp)),
-    { rinmr: bool, hdp: bool }
-);
-built_ie!(
-    AdditionalConfigurationIndication,
-    |scmr| Ok(Self::from_scmr(scmr)),
-    { scmr: bool }
-);
-built_ie!(
-    AdditionalInformationRequested,
-    |requested| Ok(Self::from_cipher_key_data_requested(requested)),
-    { cipher_key_data_requested: bool }
-);
-built_ie!(
-    AllowedSscMode,
-    |ssc1, ssc2, ssc3| Ok(Self::from_modes(ssc1, ssc2, ssc3)),
-    { ssc1: bool, ssc2: bool, ssc3: bool }
-);
-built_ie!(AlwaysOnPduSessionIndication, |apsi| Ok(Self::from_apsi(apsi)), { apsi: bool });
-built_ie!(AlwaysOnPduSessionRequested, |apsr| Ok(Self::from_apsr(apsr)), { apsr: bool });
-built_ie!(Aun3Indication, |aun3reg| Ok(Self::from_aun3reg(aun3reg)), { aun3reg: bool });
-built_ie!(
-    ConfigurationUpdateIndication,
-    |ack, red| Ok(Self::from_flags(ack, red)),
-    { ack: bool, red: bool }
-);
 built_ie!(ControlPlaneOnlyIndication, Self::from_cpoi, { cpoi: bool });
-built_ie!(
-    ExtendedGmmCause,
-    |not_allowed| Ok(Self::from_satellite_nr_not_allowed(not_allowed)),
-    { satellite_nr_not_allowed: bool }
-);
-built_ie!(
-    GsmCongestionReAttemptIndicator,
-    |abo, catbo| Ok(Self::from_flags(abo, catbo)),
-    { abo: bool, catbo: bool }
-);
-built_ie!(
-    GsmNetworkFeatureSupport,
-    |ept_s1, naps| Ok(Self::from_flags(ept_s1, naps)),
-    { ept_s1: bool, naps: bool }
-);
 built_ie!(
     FeatureAuthorizationIndication,
     |hpase, mbsrai| Ok(Self::from_flags(hpase, mbsrai)),
     { hpase: bool, mbsrai: FeatureAuthMbsraiValue = |ie| ie.mbsrai() }
-);
-built_ie!(LpWusStatus, |disabled| Ok(Self::from_disabled(disabled)), {
-    lp_wus_disabled: bool
-});
-built_ie!(
-    MicoIndication,
-    |raai, sprti| Ok(Self::from_flags(raai, sprti)),
-    { raai: bool, sprti: bool }
-);
-built_ie!(N5gcIndication, |n5gc| Ok(Self::from_n5gc(n5gc)), { n5gc: bool });
-built_ie!(
-    NetworkSlicingIndication,
-    |nssci, dcni| Ok(Self::from_flags(nssci, dcni)),
-    { nssci: bool, dcni: bool }
-);
-built_ie!(
-    Non3GppAccessPathSwitchingIndication,
-    |naps| Ok(Self::from_naps(naps)),
-    { naps: bool }
-);
-built_ie!(
-    Non3GppPathSwitchingInformation,
-    |nsonr| Ok(Self::from_nsonr(nsonr)),
-    { nsonr: bool }
-);
-built_ie!(PayloadContainerInformation, |pru| Ok(Self::from_pru(pru)), { pru: bool });
-built_ie!(
-    PriorityIndicator,
-    |mpsi, mcsi| Ok(Self::from_flags(mpsi, mcsi)),
-    { mpsi: bool, mcsi: bool }
-);
-built_ie!(
-    RanTimingSynchronization,
-    |request| Ok(Self::from_recreation_request(request)),
-    { recreation_request: bool }
-);
-built_ie!(SmsIndication, |sai| Ok(Self::from_sai(sai)), { sai: bool });
-built_ie!(
-    UeUsageSetting,
-    |data_centric| Ok(Self::from_data_centric(data_centric)),
-    { data_centric: bool }
 );
 built_ie!(Truncated5gSTmsiConfiguration, Self::try_from_lengths, {
     truncated_amf_set_id_length: u8 = |ie| ie.truncated_amf_set_id_length(),
