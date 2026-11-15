@@ -4,9 +4,8 @@
 [![Documentation](https://docs.rs/oxirush-nas/badge.svg)](https://docs.rs/oxirush-nas)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-The NAS messages of 5GS and EPS in Rust, per 3GPP TS 24.501 and TS 24.301
-(Release 19): decode, build, check and encode them, edit them as JSON, and
-protect them.
+Decode, build, check, encode and protect the NAS messages of 5GS and EPS in
+Rust, and edit them as JSON (3GPP TS 24.501 and TS 24.301, Release 19).
 
 ```rust
 use oxirush_nas::nas_5gs::*;
@@ -18,8 +17,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let msg = Message::decode(&bytes)?;
     assert_eq!(
         msg.to_string(),
-        "5GMM RegistrationRequest (5gs-registration-type: {registration-type: initial-registration, \
-         follow-on-request: true}, ngksi: no key, 5gs-mobile-identity: \
+        "5GMM RegistrationRequest (5gs-registration-type: {registration-type: \
+         initial-registration, follow-on-request: true}, ngksi: no key, 5gs-mobile-identity: \
          suci-0-208-93-0000-0-0-0000000120, ue-security-capability: EA0 EA2 / IA2)"
     );
 
@@ -49,40 +48,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-Each example shows what it gives with `assert_eq!`, and runs as a test of the crate.
-
 ## Installation
 
 ```toml
 [dependencies]
-oxirush-nas = "0.8"
+oxirush-nas = { version = "0.8", features = ["security", "tree"] }
+oxirush-security = "0.5" # for the keys of the registration below
 hex = "0.4" # for the examples of this page
-# With NAS security and JSON:
-# oxirush-nas = { version = "0.8", features = ["security", "tree"] }
-# The keys of the registration below:
-# oxirush-security = "0.5"
 ```
 
-| Feature | Adds | Dependencies |
-|---------|------|--------------|
-| `std` (default) | The standard library | |
+| Feature | Adds | Needs |
+|---------|------|-------|
 | `security` | `SecurityContext`, which protects and unprotects messages | `oxirush-security` |
-| `tree` | A message as JSON: its tree and its paths, and `Serialize` and `Deserialize` through the tree; takes `std` | `oxirush-utils` with `tree`, `serde_json`, `serde_core` |
-| `idna` | The NAI of a SUCI is checked as an internationalized name too | `idna`, `unicode-normalization` |
+| `tree` | A message as a JSON tree, its paths, and serde through the tree | `std` |
+| `idna` | The NAI of a SUCI checked as an internationalized name | The Unicode tables of `idna` |
 
-Without its default features the crate is `no_std` and needs an allocator;
-`security` still works. Every build depends on oxirush-utils 0.3, whose
-identities and fields the IEs are written with. With `tree`, oxirush-utils
-and serde_json 1 are public dependencies: a tree is an
-`oxirush_utils::tree::Value`.
-
-The minimum supported Rust version is 1.88. Cargo's resolver 3, the
-default of edition 2024, keeps each dependency at a version that 1.88
-builds. Under resolver 2, `aes` 0.9.3 needs 1.89, and a project keeps 0.9.2:
-
-```sh
-cargo update -p aes --precise 0.9.2
-```
+Without default features the crate is `no_std` with `alloc`. With `tree`, a
+tree is an `oxirush_utils::tree::Value`, so oxirush-utils and serde_json are
+public dependencies. The minimum supported Rust version is 1.88.
 
 ## Register a UE, from its REGISTRATION REQUEST to the ACCEPT
 
@@ -269,7 +252,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut ue_context = SecurityContext::from_fresh_kasme(&kasme, eia, eea)?;
 
     // SECURITY MODE COMMAND replays the algorithms of the UE network capability
-    let capability = UeSecurityCapability::from_ue_network_capability(&request.ue_network_capability);
+    let capability =
+        UeSecurityCapability::from_ue_network_capability(&request.ue_network_capability);
     let algorithms = SecurityAlgorithms::from_algorithms(eea, eia);
     let command = Message::new_emm(SecurityModeCommand::new(algorithms, ksi, capability));
     let header = SecurityHeaderType::IntegrityProtectedWithNewEpsSecurityContext;
@@ -286,7 +270,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let header = SecurityHeaderType::IntegrityProtectedAndCipheredWithNewEpsSecurityContext;
     let sent = ue_context.protect(&complete, header, Direction::Uplink)?;
     assert_eq!(mme_context.unprotect(&sent, Direction::Uplink)?.message, complete);
-    let accept = hex::decode("07420121060002f839000100155201c101090908696e7465726e657405010a000001")?;
+    let accept = "07420121060002f839000100155201c101090908696e7465726e657405010a000001";
+    let accept = hex::decode(accept)?;
     let accept = Message::decode(&accept)?;
     let header = SecurityHeaderType::IntegrityProtectedAndCiphered;
     let sent = mme_context.protect(&accept, header, Direction::Downlink)?;
@@ -300,22 +285,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 ```
-
-[`nas_5gs::security`](https://docs.rs/oxirush-nas/latest/oxirush_nas/nas_5gs/security/index.html)
-has an example of each of the other tasks: restore a context after a
-restart, change its algorithms with `reselect_algorithms`, and protect an
-invalid payload for a negative test with `protect_opaque_payload`.
-`protect_into` appends a protected message to a buffer that is used again,
-`set_nas_count` moves the COUNT of a direction, and `replayed_count` gives
-the COUNT that a replayed message was sent with.
-
-## Carry the messages in NGAP and S1AP
-
-Between the RAN and the core, a NAS message is the NAS-PDU of an
-[NGAP](https://github.com/linouxis9/oxirush-ngap) or
-[S1AP](https://github.com/linouxis9/oxirush-s1ap) message: the octets that
-`encode()` writes and `decode()` reads back. The READMEs of those two crates
-put a NAS-PDU in a DOWNLINK NAS TRANSPORT.
 
 ## Change a decoded message
 
@@ -352,7 +321,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-## The table of a message, and the fields of an IE
+## Read a message's IE table and an IE's fields
 
 The IEs of each message come from its table, and the fields of an IE from
 the figure of its clause. A setter refuses a value that the bits of its
@@ -368,16 +337,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .map(|row| format!("{} {:02x?} {}", row.name, row.iei, row.mandatory))
         .collect();
     assert_eq!(rows.len(), 16);
-    assert_eq!(rows[..3], ["5gmm-cause [] true", "t3346-value [5f] false", "t3502-value [16] false"]);
+    let first = ["5gmm-cause [] true", "t3346-value [5f] false", "t3502-value [16] false"];
+    assert_eq!(rows[..3], first);
 
     // The IEs that a SERVICE REQUEST sends in clear, outside its container
     let cleartext = GmmMessageType::ServiceRequest.cleartext_ies();
     assert_eq!(cleartext, Some(&["ngksi", "service-type", "5g-s-tmsi"][..]));
 
-    // A field as the IE has it, and as a network reads it
+    // A field as the IE has it. `effective()` is how a receiver reads a value
+    // that the table does not name: 0 is read as an initial registration
     let mut kind = RegistrationType::default();
     kind.set_registration_type(RegistrationTypeValue::Other(0))?;
-    assert_eq!(kind.registration_type().effective(), RegistrationTypeValue::InitialRegistration);
+    let initial = RegistrationTypeValue::InitialRegistration;
+    assert_eq!(kind.registration_type().effective(), initial);
 
     // 8 does not fit in the three bits of the field
     let refused = kind.set_registration_type(RegistrationTypeValue::Other(8)).unwrap_err();
@@ -390,7 +362,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-## A 5GSM message in UL NAS TRANSPORT
+## Carry a 5GSM message in UL NAS TRANSPORT
 
 A 5GSM message travels inside a 5GMM one: UL NAS TRANSPORT carries it in its
 payload container, and the AMF routes it by the PDU session identity.
@@ -496,8 +468,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     assert_eq!(faults.first(), Some(&error));
     assert_eq!(
         message.to_string(),
-        "5GMM RegistrationRequest (5gs-registration-type: {registration-type: initial-registration, \
-         follow-on-request: true}, ngksi: no key, 5gs-mobile-identity: 5G-GUTI \
+        "5GMM RegistrationRequest (5gs-registration-type: {registration-type: \
+         initial-registration, follow-on-request: true}, ngksi: no key, 5gs-mobile-identity: \
+         5G-GUTI \
          (f202f839cafe00112233), ue-security-capability: EA0 EA2 / IA2)"
     );
 
@@ -509,15 +482,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-## A message as JSON
+## Edit a message as JSON
 
 With the `tree` feature, a message is a tree: its message type and the value
 of each IE by its name. You print a message with it, write one from it, and
-edit one: `with_tree()` encodes the IEs you changed and keeps the octets of
-the others. An IE is written `{"octets": "…"}` to send its octets as they are.
-A tree carries the keys of a message, RES and RES\* among them, which
-`Display` and `Debug` hide: do not log it. `Serialize` and `Deserialize` go
-through the tree, in any format of serde.
+edit one.
+
+`with_tree()` encodes the IEs that you changed and keeps the octets of the
+others. An IE written `{"octets": "…"}` is sent as those octets. A tree
+carries the keys of a message, RES and RES\* among them, which `Display` and
+`Debug` hide: do not log it. `Serialize` and `Deserialize` go through the
+tree, in any serde format.
 
 ```rust
 use oxirush_nas::nas_5gs::Message;
@@ -526,10 +501,12 @@ use oxirush_nas::tree;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // REGISTRATION REJECT: cause #22 and a T3346 value of ten minutes
     let reject = Message::decode(&hex::decode("7e0044165f012a")?)?;
-    assert_eq!(
-        reject.to_tree(),
-        tree!({"message-type": "registration-reject", "5gmm-cause": "congestion", "t3346-value": 600})
-    );
+    let tree = tree!({
+        "message-type": "registration-reject",
+        "5gmm-cause": "congestion",
+        "t3346-value": 600,
+    });
+    assert_eq!(reject.to_tree(), tree);
 
     // An IE is changed by its value, one comes in by its octets, and one goes out
     let mut tree = reject.to_tree();
@@ -537,10 +514,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     tree["t3502-value"] = tree!({"octets": "2c"});
     tree.as_object_mut().unwrap().shift_remove("t3346-value");
     let edited = reject.with_tree(tree)?;
-    assert_eq!(
-        edited.to_tree(),
-        tree!({"message-type": "registration-reject", "5gmm-cause": "illegal-ue", "t3502-value": 720})
-    );
+    let tree = tree!({
+        "message-type": "registration-reject",
+        "5gmm-cause": "illegal-ue",
+        "t3502-value": 720,
+    });
+    assert_eq!(edited.to_tree(), tree);
 
     // A message written from its tree
     let status = tree!({"message-type": "5gmm-status", "5gmm-cause": "congestion"});
@@ -550,13 +529,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-One IE alone is a tree too, the one that a message shows of it: `to_tree()`
-of its type, and `tree::from_value` back, as an NGAP or S1AP IE carries a NAS
-IE such as the NASC of a handover. The
-[`paths`](https://docs.rs/oxirush-nas/latest/oxirush_nas/paths/index.html)
-module has the rules of the tree and the notation of each kind of value, with
-examples: a message in a container, one IE alone, the protocol configuration
-options, a list, a protected message, and octets sent as they are.
+[The `paths` module](https://docs.rs/oxirush-nas/latest/oxirush_nas/paths/index.html)
+has the rules of the tree and more examples, one IE alone among them.
 
 ## Read and edit by path
 
@@ -620,49 +594,46 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
   ([which](https://docs.rs/oxirush-nas/latest/oxirush_nas/paths/index.html#ie-types-that-have-a-value)).
 - Two items follow Release 20 and differ from V19.8.0 on the wire
   ([which](https://docs.rs/oxirush-nas#specification-versions)).
+- Under Cargo's resolver 2, `aes` 0.9.3 needs Rust 1.89: keep 0.9.2 with
+  `cargo update -p aes --precise 0.9.2`.
 
 ## Performance
 
-| Operation, on the messages of the fixtures | Time | Other implementations, time over this crate's |
-|---|---|---|
-| Decode a 5GS message | 224.6 ns | free5GC 3.9x, Open5GS 14x |
-| Encode a 5GS message | 75.5 ns | free5GC 4.5x, Open5GS 44x |
-| Decode an EPS message | 196.1 ns | Open5GS 10x |
-| `to_tree` of a 5GS message | 5.1 µs | |
-| `from_tree` of a 5GS message | 9.9 µs | |
-| `protect`, `unprotect` (128-NIA2, 128-NEA2) | 589 ns, 817 ns | |
+| Operation, on the plain messages of the fixtures | This crate | packet-dissector 0.6.1 | free5GC nas v1.2.3 | Open5GS v2.8.0 |
+|---|---|---|---|---|
+| Decode a 5GS message | 225 ns | 1.1× slower | 3.9× slower | 14× slower |
+| Decode an EPS message | 196 ns | about the same | | 10× slower |
+| Encode a 5GS message | 75.5 ns | | 4.5× slower | 44× slower |
+| Encode an EPS message | 74.5 ns | | | 44× slower |
 
-Medians of ten runs on one core of an Intel Xeon E5-2680 v4 (a KVM guest,
-Linux 7.0, Rust 1.100.0), at 626037a on 2026-11-15; a ratio is given only
-where the ten times of the two do not overlap.
+Medians of ten rounds in turns on one core of an Intel Xeon E5-2680 v4 (a
+KVM guest, Linux 7.0, Rust 1.100.0), at 626037a on 2026-11-15. A cell of
+another implementation says how much slower it is than this crate, and
+"about the same" where the ten times of the two overlap; free5GC has no EPS,
+and packet-dissector only decodes. `to_tree` of a 5GS message takes 5.1 µs,
+`from_tree` 9.9 µs, and `protect` and `unprotect` 589 and 817 ns.
 [`benches/README.md`](benches/README.md) has every figure, the allocations,
-packet-dissector and pycrate, the method and the commands.
+pycrate, the method and the commands.
 
 ## Tests and fuzzing
 
 ```sh
 cargo test --all-features
-cargo test --release --features security --test key_wiping
-./fuzz/seed.sh && cargo +nightly fuzz run decode_5gs -- -max_total_time=60 -max_len=512 -dict=fuzz/nas-5gs.dict
 ```
 
-`tests/fixtures` has at least one message of each 5GMM, 5GSM, EMM and ESM
-type, and 170 messages that Open5GS, free5GC and PacketRusher sent in a
-lab. Each one decodes, validates and encodes back to its octets, also
-through its tree, which is its serde form. `key_wiping` searches the memory of its
-own process for the keys of a dropped security context, in an optimized
-build. Twelve fuzz targets decode, edit and build messages, take any path
-of their trees and protect them, for a minute each at each commit, an hour
-each day but Sunday and four hours on Tuesday. `examples/` has six programs, each for 5GS and for EPS.
-
+Each example of this page checks what it gives with `assert_eq!`, and runs
+as a documentation test. `tests/fixtures` has at least one message of each
+5GMM, 5GSM, EMM and ESM type, and 170 messages that Open5GS, free5GC and
+PacketRusher sent in a lab. Each one decodes, validates and encodes back to
+its octets, also through its tree. A test searches the memory of its own
+process for the keys of a dropped security context.
 [The documentation](https://docs.rs/oxirush-nas) has what the crate covers,
-the rules of the receiver and the sender, the versions of the
-specifications, and the tests.
+the rules of the receiver and the sender, and the versions of the
+specifications.
 
-A pull request comes with a test for what it changes. Sign off your commits
-(`git commit -s`): by contributing you agree to the [Developer Certificate
-of Origin](https://developercertificate.org/). [SECURITY.md](SECURITY.md)
-says how to report a vulnerability.
+[CONTRIBUTING.md](CONTRIBUTING.md) has the fuzz targets, the test of key
+wiping and how to contribute. [SECURITY.md](SECURITY.md) says how to report a
+vulnerability.
 
 ## The OxiRush family
 

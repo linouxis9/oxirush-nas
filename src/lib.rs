@@ -95,10 +95,10 @@
 //! | Register a UE, from its REGISTRATION REQUEST to the ACCEPT | [`nas_5gs::Message`], [`nas_5gs::AuthenticationRequest`], [`nas_5gs::SecurityModeCommand`], [`nas_5gs::SecurityContext`], [`nas_5gs::RegistrationAccept`] |
 //! | Attach a UE to EPS | [`nas_eps::Message`], [`nas_eps::AuthenticationRequest`], [`nas_eps::SecurityContext`] |
 //! | Change a decoded message | the `set_*`, `with_*` and `clear_*` of a message, as [`nas_5gs::RegistrationReject::with_t3346_value`] |
-//! | The table of a message, and the fields of an IE | [`nas_5gs::GmmMessageType::ies`], [`IeRow`], [`nas_5gs::GmmMessageType::cleartext_ies`], [`nas_5gs::RegistrationType::set_registration_type`] |
-//! | A 5GSM message in UL NAS TRANSPORT | [`nas_5gs::UlNasTransport`], [`nas_5gs::PayloadContainer`] |
+//! | Read a message's IE table and an IE's fields | [`nas_5gs::GmmMessageType::ies`], [`IeRow`], [`nas_5gs::GmmMessageType::cleartext_ies`], [`nas_5gs::RegistrationType::set_registration_type`] |
+//! | Carry a 5GSM message in UL NAS TRANSPORT | [`nas_5gs::UlNasTransport`], [`nas_5gs::PayloadContainer`] |
 //! | Validate a message, and answer one that is faulty | [`Validate`], [`nas_5gs::Message::answer_to`], [`nas_5gs::Message::decode_lenient`] |
-//! | A message as JSON, by path, and with serde | [`paths`], [`Message::to_tree`], [`Message::with_tree`] |
+//! | Edit a message as JSON, and read and edit by path | [`paths`], [`Message::to_tree`], [`Message::with_tree`] |
 //!
 //! The four protocols:
 //!
