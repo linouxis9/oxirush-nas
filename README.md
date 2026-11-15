@@ -55,10 +55,10 @@ Each example shows what it gives with `assert_eq!`, and runs as a test of the cr
 
 ```toml
 [dependencies]
-oxirush-nas = "0.7"
+oxirush-nas = "0.8"
 hex = "0.4" # for the examples of this page
 # With NAS security and JSON:
-# oxirush-nas = { version = "0.7", features = ["security", "tree"] }
+# oxirush-nas = { version = "0.8", features = ["security", "tree"] }
 # The keys of the registration below:
 # oxirush-security = "0.4"
 ```

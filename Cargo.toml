@@ -1,6 +1,6 @@
 [package]
 name = "oxirush-nas"
-version = "0.7.1"
+version = "0.8.0"
 edition = "2024"
 description = "5G (5GS) and 4G LTE (EPS) NAS messages in Rust (3GPP TS 24.501 and TS 24.301, Release 19): decode, build, validate and encode every message, edit it as JSON, and protect it with NAS security. no_std."
 license = "Apache-2.0"
@@ -36,11 +36,11 @@ tree = ["std", "oxirush-utils/tree"]
 [dependencies]
 pastey = "0.2"
 # The identities of the OxiRush crates: PLMN, digits, GUTI, TAI, SUPI, SUCI
-oxirush-utils = { version = "0.2.2", default-features = false, features = ["alloc", "fields"] }
+oxirush-utils = { version = "0.3.0", default-features = false, features = ["alloc", "fields"] }
 
 # Optional: NAS security envelope (integrity + ciphering). `alloc` for
 # `build_s`, which returns a `Vec`.
-oxirush-security = { version = "0.4.0", default-features = false, features = ["alloc"], optional = true }
+oxirush-security = { version = "0.5.0", default-features = false, features = ["alloc"], optional = true }
 
 [dev-dependencies]
 serde_json = "1.0.154"
@@ -80,4 +80,5 @@ rustdoc-args = ["--cfg", "docsrs"]
 # crate without copying them, are not released yet: every crate of the build takes
 # oxirush-utils from this revision until its next release.
 [patch.crates-io]
-oxirush-utils = { git = "https://github.com/linouxis9/oxirush-utils", rev = "b8417d0a3608e8baacc2cb6be796d7cf6080c55e" }
+oxirush-security = { git = "https://github.com/linouxis9/oxirush-security", rev = "9075a99fcff187acc1eef5485d40702782737638" }
+oxirush-utils = { git = "https://github.com/linouxis9/oxirush-utils", rev = "824b57fa9540277e821b107f480718eebda04f1c" }

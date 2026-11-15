@@ -45,4 +45,5 @@ debug = true
 # crate without copying them, are not released yet: every crate of the build takes
 # oxirush-utils from this revision until its next release.
 [patch.crates-io]
-oxirush-utils = { git = "https://github.com/linouxis9/oxirush-utils", rev = "b8417d0a3608e8baacc2cb6be796d7cf6080c55e" }
+oxirush-security = { git = "https://github.com/linouxis9/oxirush-security", rev = "9075a99fcff187acc1eef5485d40702782737638" }
+oxirush-utils = { git = "https://github.com/linouxis9/oxirush-utils", rev = "824b57fa9540277e821b107f480718eebda04f1c" }

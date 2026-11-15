@@ -23,7 +23,7 @@
 //!
 //! Requires the `security` feature flag:
 //! ```toml
-//! oxirush-nas = { version = "0.5", features = ["security"] }
+//! oxirush-nas = { version = "0.8", features = ["security"] }
 //! ```
 //!
 //! A protected message is under a security header with a message
