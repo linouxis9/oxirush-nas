@@ -15,7 +15,11 @@ On core 2 of an Intel Xeon E5-2680 v4 (Broadwell, 2.4 GHz; a KVM guest bound
 to NUMA node 0; Linux 7.0, Rust 1.100.0), at 626037a on 2026-11-15, for a
 message of the 5GS fixtures (19 octets on average): the median of ten runs
 of `codec` (with the feature `security`), which were within 13 % of each
-other, and the allocations of `allocations`.
+other, and the allocations of `allocations`. These are criterion's times
+over every message of the 5GS fixtures; [the comparison](#against-other-implementations),
+whose figures the README shows, times the plain messages that each
+implementation reads or writes back, with a harness of its own, so its
+`decode` and `encode` differ from these.
 
 | Operation | Time | Allocations |
 |-----------|------|-------------|
