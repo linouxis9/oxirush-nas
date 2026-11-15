@@ -11,17 +11,23 @@
 # libraries, pip installs pycrate 0.8.1 in an environment of its own. They
 # are kept in target/compare beside this script, or under CARGO_TARGET_DIR.
 #
-# Each case runs on one core (3 by default) three times, and the table has
-# the lowest time. Cycles and instructions per message are those of perf
-# stat, between a run of N passes over the messages and one of 2N, which
-# leaves out the start of each program: PERF="sudo -n perf" where the kernel
-# keeps perf from users (kernel.perf_event_paranoid above 2). Needs cargo,
+# Each implementation of a case runs once a round, in turns, ROUNDS rounds
+# (10 by default), on one core (3 by default), so that a busy moment of the
+# machine falls on all of them. The table has the median time of the rounds
+# and their spread, the lowest and the highest; the time against oxirush-nas
+# is the ratio of the medians, given only where the two spreads do not
+# overlap. Cycles and instructions per message are the median of those of
+# perf stat, between a run of N passes over the messages and one of 2N in
+# each round, which leaves out the start of each program: PERF="sudo -n
+# perf" where the kernel keeps perf from users (kernel.perf_event_paranoid
+# above 2). Needs cargo,
 # go, git, meson, ninja, a C compiler and the libraries that the meson setup
 # of Open5GS asks for, and python3 with venv.
 set -eu
 here=$(cd "$(dirname "$0")" && pwd)
 fixtures=$here/../../tests/fixtures
 core=${1:-3}
+rounds=${ROUNDS:-10}
 perf=${PERF:-perf}
 target=${CARGO_TARGET_DIR:-$here/target}
 out=$target/compare
@@ -97,45 +103,76 @@ for system in 5gs eps; do
 		}' out="$out" "$@" "$fixtures/nas-$system.tsv"
 done
 
-# The lowest of three runs: ns, allocations, octets allocated, peak KiB.
-measure() { # command passes
-	for _ in 1 2 3; do taskset -c "$core" $1 "$2" 2> /dev/null; done | sort -n | head -1
-}
-
-# Cycles and instructions per message: the least of three runs of N passes
-# and of three of 2N, since a busy neighbour of the core adds cycles.
+# Cycles and instructions per message, between a run of N passes and one
+# of 2N.
 counted() { # command passes messages
 	for passes in "$2" $(($2 * 2)); do
-		for _ in 1 2 3; do
-			$perf stat -x, -e cycles:u,instructions:u -o "$out/perf" taskset -c "$core" $1 "$passes" > /dev/null 2>&1
-			awk -F, '$3 ~ /^(cycles|instructions)/ { printf "%s ", $1 }' "$out/perf"
-			echo
-		done | sort -n | head -1
+		$perf stat -x, -e cycles:u,instructions:u -o "$out/perf" taskset -c "$core" $1 "$passes" > /dev/null 2>&1
+		awk -F, '$3 ~ /^(cycles|instructions)/ { printf "%s ", $1 }' "$out/perf"
+		echo
 	done | awk -v n=$(($2 * $3)) 'NR == 1 { c = $1; i = $2 } NR == 2 { printf "%.0f %.0f", ($1 - c) / n, ($2 - i) / n }'
 }
 
-echo "$(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2 | sed 's/^ //'), core $core; load before: $(cut -d' ' -f1-3 /proc/loadavg)"
+rows=$out/rows
+: > "$rows"
+echo "$(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2 | sed 's/^ //'), core $core, $rounds rounds; load before: $(cut -d' ' -f1-3 /proc/loadavg)"
+round=0
+while [ "$round" -lt "$rounds" ]; do
+	for operation in decode encode; do
+		for system in 5gs eps; do
+			messages=$out/$operation-$system.tsv
+			count=$(wc -l < "$messages")
+			for implementation in $(implementations $system); do
+				[ $operation = encode ] && [ $implementation = packet-dissector ] && continue
+				passes=20000
+				[ $implementation = pycrate ] && passes=100
+				command="$(program $implementation $system) run $operation $system $messages"
+				# ns, allocations, octets allocated, peak KiB, cycles, instructions
+				set -- $(taskset -c "$core" $command $passes 2> /dev/null) $(counted "$command" $passes $count 2> /dev/null || echo - -)
+				echo "$operation|$system|$implementation|$1|$2|$3|$4|$5|$6" >> "$rows"
+			done
+		done
+	done
+	round=$((round + 1))
+done
+
 echo
-echo "| Operation | | ns | Cycles | Instructions | Allocations | Octets allocated | Peak memory | Time against oxirush-nas |"
-echo "|---|---|---|---|---|---|---|---|---|"
+echo "| Operation | | ns | Lowest and highest | Cycles | Instructions | Allocations | Octets allocated | Peak memory | Time against oxirush-nas |"
+echo "|---|---|---|---|---|---|---|---|---|---|"
 for operation in decode encode; do
 	for system in 5gs eps; do
-		messages=$out/$operation-$system.tsv
-		count=$(wc -l < "$messages")
-		mine=""
+		count=$(wc -l < "$out/$operation-$system.tsv")
 		for implementation in $(implementations $system); do
 			[ $operation = encode ] && [ $implementation = packet-dissector ] && continue
-			passes=20000
-			[ $implementation = pycrate ] && passes=100
-			command="$(program $implementation $system) run $operation $system $messages"
-			set -- $(measure "$command" $passes) $(counted "$command" $passes $count 2> /dev/null || echo - -)
-			[ -z "$mine" ] && mine=$1
-			ratio=$(awk -v a="$1" -v b="$mine" 'BEGIN { printf "%.2f", a / b }')
-			memory=$(awk -v k="$4" 'BEGIN { printf "%.1f MiB", k / 1024 }')
-			row="$operation, $(echo $system | sed 's/5gs/5GS/; s/eps/EPS/'), $count messages"
-			[ $implementation != oxirush-nas ] && row=""
-			[ $implementation = oxirush-nas ] && ratio=""
-			echo "| $row | $(name $implementation) | $1 | $5 | $6 | $2 | $3 | $memory | $ratio |"
+			row=""
+			[ $implementation = oxirush-nas ] && row="$operation, $(echo $system | sed 's/5gs/5GS/; s/eps/EPS/'), $count messages"
+			awk -F'|' -v operation="$operation" -v wanted_system="$system" -v implementation="$implementation" -v row="$row" -v name="$(name $implementation)" '
+				function median(list, count,    sorted, i, j, t) {
+					for (i = 1; i <= count; i++) sorted[i] = list[i]
+					for (i = 2; i <= count; i++)
+						for (j = i; j > 1 && sorted[j - 1] + 0 > sorted[j] + 0; j--) {
+							t = sorted[j]; sorted[j] = sorted[j - 1]; sorted[j - 1] = t
+						}
+					return count % 2 ? sorted[(count + 1) / 2] : (sorted[count / 2] + sorted[count / 2 + 1]) / 2
+				}
+				$1 != operation || $2 != wanted_system { next }
+				$3 == "oxirush-nas" { ours[++o] = $4; if (o == 1 || $4 < ourlow) ourlow = $4; if (o == 1 || $4 > ourhigh) ourhigh = $4 }
+				$3 == implementation {
+					n++; ns[n] = $4; allocations[n] = $5; octets[n] = $6; peak[n] = $7; cycles[n] = $8; instructions[n] = $9
+					if (n == 1 || $4 < low) low = $4
+					if (n == 1 || $4 > high) high = $4
+				}
+				END {
+					m = median(ns, n)
+					ratio = ""
+					if (implementation != "oxirush-nas")
+						ratio = (low > ourhigh || high < ourlow) ? sprintf("%.2f", m / median(ours, o)) : "spreads overlap"
+					format = m < 1000 ? "%.1f" : "%.0f"
+					printf "| %s | %s | " format " | " format " to " format " | %s | %s | %s | %s | %.1f MiB | %s |\n", row, name, m, low, high,
+						cycles[1] == "-" ? "-" : sprintf("%.0f", median(cycles, n)),
+						instructions[1] == "-" ? "-" : sprintf("%.0f", median(instructions, n)),
+						allocations[1] == "-" ? "" : median(allocations, n), octets[1] == "-" ? "" : median(octets, n), median(peak, n) / 1024, ratio
+				}' "$rows"
 		done
 	done
 done
