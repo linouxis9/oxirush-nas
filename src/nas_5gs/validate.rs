@@ -143,7 +143,7 @@ crate::common::ie_rules! {
     ReAttemptIndicator: lengths(1, 1), sender;
     ReceivedMbsContainer: lengths(6, 65535), sender, receiver, display;
     RegistrationResult: lengths(1, 1), sender;
-    RegistrationType;
+    RegistrationType: sender_table;
     RejectedNssai: lengths(2, 40), sender, receiver, display;
     RelayKeyRequestParameters: lengths(20, 65535);
     RelayKeyResponseParameters: lengths(49, 65535), display;

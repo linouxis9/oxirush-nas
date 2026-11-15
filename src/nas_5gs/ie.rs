@@ -33,6 +33,7 @@
 use crate::prelude::*;
 
 pub(crate) use crate::common::Plmn;
+use crate::common::field_table::field_row;
 use crate::common::{counted, sized, within};
 use crate::nas_5gs::*;
 
@@ -478,32 +479,17 @@ impl RegistrationType {
     pub fn from_registration_type(reg_type: RegistrationTypeValue) -> Self {
         Self::new(reg_type.value() & 0x07)
     }
+}
 
-    /// Registration type (lower nibble bits 1-3, mask 0x07), as it is
-    /// written: `effective()` is the value as a network reads it.
-    pub fn registration_type(&self) -> RegistrationTypeValue {
-        RegistrationTypeValue::from_value(self.value & 0x07)
-    }
-
-    /// Mutating setter for the registration type.
-    pub fn set_registration_type(&mut self, reg_type: RegistrationTypeValue) {
-        self.value = (self.value & 0xF8) | (reg_type.value() & 0x07);
-    }
-
-    /// Follow-on request indicator (lower nibble bit 4, mask 0x08).
-    pub fn follow_on_request(&self) -> bool {
-        (self.value >> 3) & 1 != 0
-    }
-
-    /// Mutating setter for the follow-on request bit.
-    pub fn set_follow_on_request(&mut self, for_flag: bool) {
-        if for_flag {
-            self.value |= 0x08;
-        } else {
-            self.value &= !0x08;
-        }
+// The value is the half octet of a type 1 IE: octet 1, bits 4 to 1.
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl RegistrationType (value) "9.11.3.7" octets 1 {
+        registration_type "5GS registration type value": 0 1 3 as RegistrationTypeValue,
+        follow_on_request "FOR": 0 4 1,
     }
 }
+crate::common::field_table::table_ie!(RegistrationType, octet, 1..=1, receives 1);
 
 // ---------------------------------------------------------------------------
 // NAS Key Set Identifier (§9.11.3.32)

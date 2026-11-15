@@ -21,6 +21,9 @@ mod codec;
 mod direction;
 pub(crate) mod display;
 pub(crate) mod enums;
+pub(crate) mod field_table;
+#[cfg(all(test, feature = "tree"))]
+mod field_table_tests;
 #[cfg(feature = "tree")]
 pub(crate) mod forms;
 pub(crate) mod gsm7;

@@ -1232,22 +1232,6 @@ named_ie!(
 );
 
 // The fields of an octet.
-fields_ie!(RegistrationType {
-"registration-type":
-    |ie| Code::of(
-        Some(RegistrationTypeValue::from_value(ie.value & 0x07)).filter(|value| value.name().is_some()),
-        ie.value & 0x07,
-    ),
-    |ie, code: Code<RegistrationTypeValue>| write_code(
-        ie,
-        code,
-        |ie, name| {
-            ie.set_registration_type(name);
-        },
-        |ie| ie.value & 0x07,
-    );
-"follow-on-request": |ie| ie.follow_on_request(), |ie, on: bool| ie.set_follow_on_request(on);
-});
 fields_ie!(DeRegistrationType {
 "switch-off": |ie| ie.switch_off(), |ie, on: bool| ie.set_switch_off(on);
 "re-registration-required":

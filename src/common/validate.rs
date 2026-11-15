@@ -201,7 +201,9 @@ pub(crate) trait IeRules {
 /// - `lengths(least, most)`: the octets of the value that its clause gives;
 /// - `sender`: what `is_well_formed()` checks, which `SENDER_RULE` says;
 ///   `sender(pattern)`: the values that a sender sets; `sender_own`: the
-///   type's own `sender_check()` and `sender_rule()`;
+///   type's own `sender_check()` and `sender_rule()`; `sender_table`: the
+///   spare bits of the type's table of fields are zero, and its value has a
+///   length of the table;
 /// - `receiver`: the grammar of its [`ReceiverSyntaxCheck`];
 /// - `display`: its own `Display`, which the `Display` of a message shows; a
 ///   type without one is shown by its tree. An IE that holds a key has one,
@@ -268,6 +270,17 @@ macro_rules! ie_rules {
         fn sender_fault(&self) -> Option<&'static str> {
             let rule = concat!("a value that a sender sets: ", stringify!($values));
             (!matches!(self.value, $values)).then_some(rule)
+        }
+    };
+    (@sender_table) => {
+        #[cfg(feature = "tree")]
+        fn sender_ok(&self) -> bool {
+            Self::TABLE.spare_bits_are_zero(self.table_octets())
+        }
+
+        fn sender_fault(&self) -> Option<&'static str> {
+            (!Self::TABLE.spare_bits_are_zero(self.table_octets()))
+                .then_some("spare bits of zero, and a length of its table")
         }
     };
     (@sender_own) => {

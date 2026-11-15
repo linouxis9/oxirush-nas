@@ -37,6 +37,13 @@ All notable changes to `oxirush-nas` are recorded here.
 
 - The tree of a message holds the names of its members and of the variants
   of its values without copying them, with oxirush-utils at 8f0b227.
+- The accessors of the 5GS registration type (§9.11.3.7) come from the table
+  of its figure, and so does its tree: `set_registration_type()` and
+  `set_follow_on_request()` return `&mut Self`; `registration_type_raw()`,
+  `set_registration_type_raw()` and `spare_bits_are_zero()` are new;
+  `validate()` reports spare bits that are set; its tree takes a number up to
+  7. The tree is decided from the masks of the fields, without writing the IE
+  back.
 - `RegistrationTypeValue` is a table of `named_values!` of oxirush-utils:
   it has `Other(u8)` for a value that the table does not name, `from_value()`,
   `value()`, `name()` (the words of the table), `tree_name()` and
