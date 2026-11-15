@@ -375,4 +375,7 @@ fn each_value_that_a_table_shows_writes_its_ie_back() {
     writes_back(crate::nas_eps::NetworkPolicy::new);
     writes_back(crate::nas_eps::MsNetworkFeatureSupport::new);
     writes_back(crate::nas_eps::AdditionalInformationRequested::new);
+    writes_back(|octet| nas_5gs::GsmCapability::new(two(octet)));
+    writes_back(|octet| crate::nas_eps::EpsNetworkFeatureSupport::new(two(octet)));
+    writes_back(|octet| crate::nas_eps::N1UeNetworkCapability::new(octets(octet)));
 }

@@ -1577,30 +1577,6 @@ decoded_ie!(
 );
 
 // Capabilities: every flag by its name, and the algorithms by number.
-fields_ie!(N1UeNetworkCapability {
-    "pnb-ciot":
-        |ie| Code::of(ie.pnb_ciot(), ie.pnb_ciot_raw()),
-        |ie, code: Code<PreferredCiotBehavior>| write_code(
-            ie,
-            code,
-            |ie, name| {
-                ie.set_pnb_ciot(name);
-            },
-            |ie| ie.pnb_ciot_raw(),
-        );
-} flags);
-fields_ie!(EpsNetworkFeatureSupport {
-    "cs-lcs":
-        |ie| Code::of(ie.cs_lcs(), ie.cs_lcs_raw()),
-        |ie, code: Code<CsLcsSupport>| write_code(
-            ie,
-            code,
-            |ie, name| {
-                ie.set_cs_lcs(name);
-            },
-            |ie| ie.cs_lcs_raw(),
-        );
-} flags);
 
 // The parts of an IE that its constructor takes.
 built_ie!(

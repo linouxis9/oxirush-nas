@@ -1278,7 +1278,7 @@ fn the_cs_lcs_field_is_bits_5_and_4_of_octet_3() {
     let mut support = EpsNetworkFeatureSupport::new(vec![0x11]);
     support.set_cs_lcs(CsLcsSupport::Supported);
     assert_eq!(support.value.as_slice(), [0x09]);
-    assert_eq!(support.cs_lcs(), Some(CsLcsSupport::Supported));
+    assert_eq!(support.cs_lcs(), CsLcsSupport::Supported);
 }
 
 #[test]

@@ -37,6 +37,12 @@ All notable changes to `oxirush-nas` are recorded here.
 
 - The tree of a message holds the names of its members and of the variants
   of its values without copying them, with oxirush-utils at 8f0b227.
+- The 5GSM capability, the EPS network feature support and the N1 UE network
+  capability come from the tables of their figures. `GsmCapability::atsss_st()`
+  and `atsss_ll()` return the typed values (the bits are `atsss_st_raw()` and
+  `atsss_ll_raw()`; the `_value` accessors go); `cs_lcs()` and `pnb_ciot()`
+  return the value, not an `Option`; setters return `&mut Self` and keep the
+  bits that they do not write.
 - Thirteen IE types of flags alone (5GMM capability, UE status, the
   re-attempt indicators, non-3GPP NW provided policies, mobile station
   classmark 2, access technology utilization control, MS network capability,

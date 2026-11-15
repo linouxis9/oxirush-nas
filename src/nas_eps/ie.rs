@@ -390,19 +390,18 @@ impl VoiceDomainPreferenceAndUeUsageSetting {
     }
 }
 
-crate::common::nas_ie_flags!(N1UeNetworkCapability {
-    /// Control plane CIoT 5GS optimization (octet 3, bit 1).
-    cp_ciot: 0, 1;
-    /// N3 data bit as sent (octet 3, bit 2): `true` means N3 data transfer
-    /// is not supported.
-    n3_data_not_supported: 0, 2;
-    /// IP header compression for control plane CIoT 5GS optimization (octet 3, bit 3).
-    hc_cp_ciot: 0, 3;
-    /// User plane CIoT 5GS optimization (octet 3, bit 4).
-    up_ciot: 0, 4;
-    /// Ethernet header compression for control plane CIoT 5GS optimization (octet 3, bit 7).
-    ehc_cp_ciot: 0, 7;
-});
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl N1UeNetworkCapability (value) "9.9.3.57" octets 1 {
+        pnb_ciot "5GS-PNB-CIoT": 0 5 2 as PreferredCiotBehavior,
+        cp_ciot "5G-CP CIoT": 0 1 1,
+        n3_data_not_supported "N3 data": 0 2 1,
+        hc_cp_ciot "5G-HC-CP CIoT": 0 3 1,
+        up_ciot "5G-UP CIoT": 0 4 1,
+        ehc_cp_ciot "5G-EHC-CP CIoT": 0 7 1,
+    }
+}
+crate::common::field_table::table_ie!(N1UeNetworkCapability, octets, 1..=1, receives 0, trailing);
 
 impl Default for N1UeNetworkCapability {
     /// One octet with no capability indicated.
@@ -415,25 +414,6 @@ impl N1UeNetworkCapability {
     /// Whether N3 data transfer is supported (N3 data bit clear).
     pub fn n3_data_transfer_supported(&self) -> bool {
         !self.value.is_empty() && !self.n3_data_not_supported()
-    }
-
-    /// Preferred 5GS CIoT network behaviour (octet 3, bits 6-5); reserved is `None`.
-    pub fn pnb_ciot(&self) -> Option<PreferredCiotBehavior> {
-        PreferredCiotBehavior::named(self.pnb_ciot_raw() & 0x03)
-    }
-
-    /// Raw 5GS-PNB-CIoT field.
-    pub fn pnb_ciot_raw(&self) -> u8 {
-        self.value.first().map_or(0, |octet| (octet >> 4) & 0x03)
-    }
-
-    /// Set the preferred 5GS CIoT network behaviour.
-    pub fn set_pnb_ciot(&mut self, value: PreferredCiotBehavior) -> &mut Self {
-        if self.value.is_empty() {
-            self.value.push(0);
-        }
-        self.value[0] = (self.value[0] & !0x30) | ((u8::from(value)) << 4);
-        self
     }
 
     /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
@@ -4332,52 +4312,34 @@ oxirush_utils::named_values! {
 }
 crate::common::enums::values_readable!(CsLcsSupport);
 
-crate::common::nas_ie_flags!(EpsNetworkFeatureSupport {
-    /// IMS voice over PS session in S1 mode (octet 3, bit 1).
-    ims_vops: 0, 1;
-    /// Emergency bearer services in S1 mode (octet 3, bit 2).
-    emc_bs: 0, 2;
-    /// Location services via EPC (octet 3, bit 3).
-    epc_lcs: 0, 3;
-    /// Extended service request for packet services (octet 3, bit 6).
-    esr_ps: 0, 6;
-    /// EMM-REGISTERED without PDN connection (octet 3, bit 7).
-    erw_opdn: 0, 7;
-    /// Control plane CIoT EPS optimization (octet 3, bit 8).
-    cp_ciot: 0, 8;
-    /// User plane CIoT EPS optimization (octet 4, bit 1).
-    up_ciot: 1, 1;
-    /// S1-U data transfer bit as sent (octet 4, bit 2); see
-    /// [`Self::s1u_data_supported`] for the receiver interpretation.
-    s1u_data: 1, 2;
-    /// Header compression for control plane CIoT EPS optimization (octet 4, bit 3).
-    hc_cp_ciot: 1, 3;
-    /// Extended protocol configuration options (octet 4, bit 4).
-    epco: 1, 4;
-    /// Restriction on enhanced coverage (octet 4, bit 5).
-    restrict_ec: 1, 5;
-    /// Restriction on the use of dual connectivity with NR (octet 4, bit 6).
-    restrict_dcnr: 1, 6;
-    /// Interworking without N26 (octet 4, bit 7).
-    iwk_n26: 1, 7;
-    /// Signalling for a maximum of 15 EPS bearer contexts (octet 4, bit 8).
-    fifteen_bearers: 1, 8;
-    /// NAS signalling connection release (octet 5, bit 1).
-    ncr: 2, 1;
-    /// Paging indication for voice services (octet 5, bit 2).
-    piv: 2, 2;
-    /// Reject paging request (octet 5, bit 3).
-    rpr: 2, 3;
-    /// Paging restriction (octet 5, bit 4).
-    pr: 2, 4;
-    /// Paging timing collision control (octet 5, bit 5).
-    ptcc: 2, 5;
-    /// Enhanced discontinuous coverage (octet 5, bit 6).
-    edc: 2, 6;
-    /// Overhead reduction bit as sent (octet 5, bit 7); see
-    /// [`Self::ohr_cp_ciot_supported`] for the receiver interpretation.
-    ohr_cp_ciot: 2, 7;
-});
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl EpsNetworkFeatureSupport (value) "9.9.3.12A" octets 3 {
+        cs_lcs "CS-LCS": 0 4 2 as CsLcsSupport,
+        ims_vops "IMS VoPS": 0 1 1,
+        emc_bs "EMC BS": 0 2 1,
+        epc_lcs "EPC-LCS": 0 3 1,
+        esr_ps "ESR PS": 0 6 1,
+        erw_opdn "ERw/oPDN": 0 7 1,
+        cp_ciot "CP CIoT": 0 8 1,
+        up_ciot "UP CIoT": 1 1 1,
+        s1u_data "S1-U data": 1 2 1,
+        hc_cp_ciot "HC-CP CIoT": 1 3 1,
+        epco "ePCO": 1 4 1,
+        restrict_ec "RestrictEC": 1 5 1,
+        restrict_dcnr "RestrictDCNR": 1 6 1,
+        iwk_n26 "IWKN26": 1 7 1,
+        fifteen_bearers "15 bearers": 1 8 1,
+        ncr "NCR": 2 1 1,
+        piv "PIV": 2 2 1,
+        rpr "RPR": 2 3 1,
+        pr "PR": 2 4 1,
+        ptcc "PTCC": 2 5 1,
+        edc "EDC": 2 6 1,
+        ohr_cp_ciot "OHR-CP CIoT": 2 7 1,
+    }
+}
+crate::common::field_table::table_ie!(EpsNetworkFeatureSupport, octets, 1..=3, receives 0, trailing);
 
 impl Default for EpsNetworkFeatureSupport {
     /// One octet with no feature indicated.
@@ -4387,24 +4349,6 @@ impl Default for EpsNetworkFeatureSupport {
 }
 
 impl EpsNetworkFeatureSupport {
-    /// Location services via CS domain (octet 3, bits 5-4); reserved is `None`.
-    pub fn cs_lcs(&self) -> Option<CsLcsSupport> {
-        CsLcsSupport::named(self.cs_lcs_raw() & 0x03)
-    }
-
-    /// Raw CS-LCS field.
-    pub fn cs_lcs_raw(&self) -> u8 {
-        self.value.first().map_or(0, |octet| (octet >> 3) & 0x03)
-    }
-
-    /// Set the CS-LCS field.
-    pub fn set_cs_lcs(&mut self, value: CsLcsSupport) {
-        if self.value.is_empty() {
-            self.value.push(0);
-        }
-        self.value[0] = (self.value[0] & !0x18) | ((u8::from(value)) << 3);
-    }
-
     /// S1-U data transfer as interpreted by the UE: supported when control
     /// plane CIoT EPS optimization is not indicated.
     pub fn s1u_data_supported(&self) -> bool {
@@ -4417,17 +4361,14 @@ impl EpsNetworkFeatureSupport {
         self.cp_ciot() && self.ohr_cp_ciot()
     }
 
-    /// Whether octet 5 bit 8 is clear.
-    pub fn spare_bits_are_zero(&self) -> bool {
-        self.value.get(2).is_none_or(|octet| octet & 0x80 == 0)
-    }
-
     /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
     pub(crate) const SENDER_RULE: &'static str =
         "1 to 3 octets, no reserved CS-LCS value, spare bit clear";
     /// Sender check: 1 to 3 octets, no reserved CS-LCS value, spare bit clear.
     pub fn is_well_formed(&self) -> bool {
-        (1..=3).contains(&self.value.len()) && self.cs_lcs().is_some() && self.spare_bits_are_zero()
+        (1..=3).contains(&self.value.len())
+            && self.cs_lcs().name().is_some()
+            && self.spare_bits_are_zero()
     }
 }
 
@@ -6870,7 +6811,7 @@ mod tests {
         n1.set_pnb_ciot(PreferredCiotBehavior::UserPlane);
         assert_eq!(n1.value, [0x21]);
         assert!(n1.n3_data_transfer_supported());
-        assert_eq!(n1.pnb_ciot(), Some(PreferredCiotBehavior::UserPlane));
+        assert_eq!(n1.pnb_ciot(), PreferredCiotBehavior::UserPlane);
         // Longer TLV 3-15 values are valid; only octet 3 is defined.
         assert!(N1UeNetworkCapability::new(vec![0x7f, 0x00]).is_well_formed());
         assert!(!N1UeNetworkCapability::new(vec![0x80]).is_well_formed());
@@ -7112,11 +7053,11 @@ mod tests {
         assert!(!EpsNetworkFeatureSupport::new(vec![0]).epco());
         // CS-LCS, S1-U data and OHR-CP CIoT receiver rules (Table 9.9.3.12A.1).
         let lcs = EpsNetworkFeatureSupport::new(vec![0x10, 0x00, 0x40]);
-        assert_eq!(lcs.cs_lcs(), Some(CsLcsSupport::NotSupported));
+        assert_eq!(lcs.cs_lcs(), CsLcsSupport::NotSupported);
         assert!(lcs.s1u_data_supported() && !lcs.ohr_cp_ciot_supported());
         assert!(lcs.is_well_formed());
         let reserved = EpsNetworkFeatureSupport::new(vec![0x18, 0x00, 0x80]);
-        assert_eq!((reserved.cs_lcs(), reserved.cs_lcs_raw()), (None, 3));
+        assert_eq!((reserved.cs_lcs().name(), reserved.cs_lcs_raw()), (None, 3));
         assert!(!reserved.is_well_formed());
         let mut built = EpsNetworkFeatureSupport::default();
         built.set_cs_lcs(CsLcsSupport::Supported);

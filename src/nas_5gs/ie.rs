@@ -3815,170 +3815,29 @@ impl Default for UpdateType {
     }
 }
 
+// The 5GSM capability (TS 24.501 §9.11.4.1): its fields, then its flags.
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl GsmCapability (value) "9.11.4.1" octets 13 {
+        atsss_st "ATSSS-ST": 0 4 4 as AtsssSteeringFunctionality,
+        atsss_ll "ATSSS-LL": 1 4 2 as AtsssLowLayerFunctionality,
+        tpmic "TPMIC": 0 8 1,
+        ept_s1 "EPT-S1": 0 3 1,
+        mh6_pdu "MH6-PDU": 0 2 1,
+        rqos "RQoS": 0 1 1,
+        mpquic_ip "MPQUIC-IP": 1 8 1,
+        mpquic_udp "MPQUIC-UDP": 1 7 1,
+        mptcp "MPTCP": 1 6 1,
+        rtpmmii "RTPMMII": 1 3 1,
+        sdnaepc "SDNAEPC": 1 2 1,
+        apmqf "APMQF": 1 1 1,
+        e8pcpdei "E8PCPDEI": 2 2 1,
+        mpquic_e "MPQUIC-E": 2 1 1,
+    }
+}
+crate::common::field_table::table_ie!(GsmCapability, octets, 1..=13, receives 0, trailing);
+
 impl GsmCapability {
-    fn clear_spare_bits(&mut self) {
-        if self.value.len() >= 3 {
-            self.value[2] &= 0x03;
-        }
-        for byte in self.value.iter_mut().skip(3) {
-            *byte = 0;
-        }
-    }
-
-    /// TPMIC (octet 3 bit 8 = mask 0x80): Transfer of port management information containers.
-    /// TS 24.501 §9.11.4.1 Table 9.11.4.1.1 octet 3.
-    pub fn tpmic(&self) -> bool {
-        self.value
-            .first()
-            .map(|b| (b >> 7) & 0x01 != 0)
-            .unwrap_or(false)
-    }
-
-    /// Set what [`Self::tpmic`] reads.
-    pub fn set_tpmic(&mut self, value: bool) {
-        set_bit(&mut self.value, 0, 7, value);
-    }
-
-    /// ATSSS-ST (octet 3 bits 4-7 = mask 0x78): selected steering functionality patterns.
-    pub fn atsss_st(&self) -> u8 {
-        self.value.first().map(|b| (b >> 3) & 0x0F).unwrap_or(0)
-    }
-
-    /// Return atsss st value.
-    pub fn atsss_st_value(&self) -> Option<AtsssSteeringFunctionality> {
-        AtsssSteeringFunctionality::named(self.atsss_st())
-    }
-
-    /// Set the ATSSS-ST.
-    pub fn set_atsss_st_value(&mut self, value: AtsssSteeringFunctionality) {
-        if self.value.is_empty() {
-            self.value.resize(1, 0);
-        }
-        self.value[0] = (self.value[0] & !0x78) | ((u8::from(value)) << 3);
-    }
-
-    /// EPT-S1 (octet 3 bit 3 = mask 0x04): Ethernet PDU type over S1 mode.
-    pub fn ept_s1(&self) -> bool {
-        self.value
-            .first()
-            .map(|b| (b >> 2) & 0x01 != 0)
-            .unwrap_or(false)
-    }
-
-    /// Set what [`Self::ept_s1`] reads.
-    pub fn set_ept_s1(&mut self, value: bool) {
-        set_bit(&mut self.value, 0, 2, value);
-    }
-
-    /// MH6-PDU (octet 3 bit 2 = mask 0x02): Multi-homed IPv6 PDU session.
-    pub fn mh6_pdu(&self) -> bool {
-        self.value
-            .first()
-            .map(|b| (b >> 1) & 0x01 != 0)
-            .unwrap_or(false)
-    }
-
-    /// Set what [`Self::mh6_pdu`] reads.
-    pub fn set_mh6_pdu(&mut self, value: bool) {
-        set_bit(&mut self.value, 0, 1, value);
-    }
-
-    /// RqoS (octet 3 bit 1 = mask 0x01): Reflective QoS.
-    pub fn rqos(&self) -> bool {
-        self.value.first().map(|b| b & 0x01 != 0).unwrap_or(false)
-    }
-
-    /// Set what [`Self::rqos`] reads.
-    pub fn set_rqos(&mut self, value: bool) {
-        set_bit(&mut self.value, 0, 0, value);
-    }
-
-    // ── Octet 4 (Rust value[1]) — Rel-17 ────────────────────────────────
-
-    /// MPQUIC-IP — MPQUIC over IP (octet 4 bit 8, mask 0x80).
-    pub fn mpquic_ip(&self) -> bool {
-        bit_at(&self.value, 1, 7)
-    }
-    /// Set what [`Self::mpquic_ip`] reads.
-    pub fn set_mpquic_ip(&mut self, v: bool) {
-        set_bit(&mut self.value, 1, 7, v);
-    }
-    /// MPQUIC-UDP — MPQUIC over UDP (octet 4 bit 7, mask 0x40).
-    pub fn mpquic_udp(&self) -> bool {
-        bit_at(&self.value, 1, 6)
-    }
-    /// Set what [`Self::mpquic_udp`] reads.
-    pub fn set_mpquic_udp(&mut self, v: bool) {
-        set_bit(&mut self.value, 1, 6, v);
-    }
-    /// MPTCP — Multipath TCP support (octet 4 bit 6, mask 0x20).
-    pub fn mptcp(&self) -> bool {
-        bit_at(&self.value, 1, 5)
-    }
-    /// Set what [`Self::mptcp`] reads.
-    pub fn set_mptcp(&mut self, v: bool) {
-        set_bit(&mut self.value, 1, 5, v);
-    }
-    /// ATSSS-LL — ATSSS Low-Layer (octet 4 bits 4-5, mask 0x18). 2-bit value.
-    pub fn atsss_ll(&self) -> u8 {
-        self.value.get(1).map(|b| (b >> 3) & 0x03).unwrap_or(0)
-    }
-    /// Return atsss ll value.
-    pub fn atsss_ll_value(&self) -> Option<AtsssLowLayerFunctionality> {
-        AtsssLowLayerFunctionality::named(self.atsss_ll())
-    }
-    /// Set the ATSSS-LL.
-    pub fn set_atsss_ll_value(&mut self, v: AtsssLowLayerFunctionality) {
-        if self.value.len() < 2 {
-            self.value.resize(2, 0);
-        }
-        self.value[1] = (self.value[1] & !0x18) | ((u8::from(v)) << 3);
-    }
-    /// RTPMMII — Reflective QoS over multiple media identification information
-    /// (octet 4 bit 3, mask 0x04).
-    pub fn rtpmmii(&self) -> bool {
-        bit_at(&self.value, 1, 2)
-    }
-    /// Set what [`Self::rtpmmii`] reads.
-    pub fn set_rtpmmii(&mut self, v: bool) {
-        set_bit(&mut self.value, 1, 2, v);
-    }
-    /// SDNAEPC — Satellite NAS support over EPC (octet 4 bit 2, mask 0x02).
-    pub fn sdnaepc(&self) -> bool {
-        bit_at(&self.value, 1, 1)
-    }
-    /// Set what [`Self::sdnaepc`] reads.
-    pub fn set_sdnaepc(&mut self, v: bool) {
-        set_bit(&mut self.value, 1, 1, v);
-    }
-    /// APMQF — Access Path Management QoS Flow (octet 4 bit 1, mask 0x01).
-    pub fn apmqf(&self) -> bool {
-        bit_at(&self.value, 1, 0)
-    }
-    /// Set what [`Self::apmqf`] reads.
-    pub fn set_apmqf(&mut self, v: bool) {
-        set_bit(&mut self.value, 1, 0, v);
-    }
-    // ── Octet 5 (Rust value[2]) — Rel-18 ────────────────────────────────
-
-    /// E8PCPDEI — Ethernet over 8PCPDE indication (octet 5 bit 2, mask 0x02).
-    pub fn e8pcpdei(&self) -> bool {
-        bit_at(&self.value, 2, 1)
-    }
-    /// Set what [`Self::e8pcpdei`] reads.
-    pub fn set_e8pcpdei(&mut self, v: bool) {
-        set_bit(&mut self.value, 2, 1, v);
-        self.clear_spare_bits();
-    }
-    /// MPQUIC-E — MPQUIC enhanced (octet 5 bit 1, mask 0x01).
-    pub fn mpquic_e(&self) -> bool {
-        bit_at(&self.value, 2, 0)
-    }
-    /// Set what [`Self::mpquic_e`] reads.
-    pub fn set_mpquic_e(&mut self, v: bool) {
-        set_bit(&mut self.value, 2, 0, v);
-        self.clear_spare_bits();
-    }
     /// Build a single-octet 5GSM capability with the most common Rel-15 flags.
     pub fn from_flags(
         tpmic: bool,
@@ -4024,12 +3883,6 @@ impl GsmCapability {
             return Err(ValueError::combination("5gsm-capability", rule));
         }
         Ok(Self::new(octets))
-    }
-
-    /// Whether spare bits and spare octets are zero as required by TS 24.501 §9.11.4.1.
-    pub fn spare_bits_are_zero(&self) -> bool {
-        self.value.get(2).copied().unwrap_or(0) & !0x03 == 0
-            && self.value.iter().skip(3).all(|octet| *octet == 0)
     }
 
     /// Raw capability octet at 1-based wire index. `octet(1)` returns octet 3 on
@@ -16788,10 +16641,10 @@ mod tests {
         ambr.set_uplink(6, 100);
         encodes(&ambr);
         let mut capability = GsmCapability::new(vec![]);
-        capability.set_atsss_st_value(AtsssSteeringFunctionality::named(0x3).unwrap());
+        capability.set_atsss_st(AtsssSteeringFunctionality::named(0x3).unwrap());
         encodes(&capability);
         let mut capability = GsmCapability::new(vec![0]);
-        capability.set_atsss_ll_value(AtsssLowLayerFunctionality::named(0x1).unwrap());
+        capability.set_atsss_ll(AtsssLowLayerFunctionality::named(0x1).unwrap());
         encodes(&capability);
         encodes(&AtsssContainer::new(vec![1, 2, 3]));
         encodes(&PortManagementInformationContainer::new(vec![1, 2, 3]));
@@ -20373,17 +20226,14 @@ mod tests {
     fn test_fgsm_capability_typed_atsss_values() {
         let mut cap = GsmCapability::default();
         cap.set_tpmic(true);
-        cap.set_atsss_st_value(AtsssSteeringFunctionality::MptcpAnyAndLowLayerAny);
-        cap.set_atsss_ll_value(AtsssLowLayerFunctionality::AnySteering);
+        cap.set_atsss_st(AtsssSteeringFunctionality::MptcpAnyAndLowLayerAny);
+        cap.set_atsss_ll(AtsssLowLayerFunctionality::AnySteering);
         assert!(cap.tpmic());
         assert_eq!(
-            cap.atsss_st_value(),
-            Some(AtsssSteeringFunctionality::MptcpAnyAndLowLayerAny)
+            cap.atsss_st(),
+            AtsssSteeringFunctionality::MptcpAnyAndLowLayerAny
         );
-        assert_eq!(
-            cap.atsss_ll_value(),
-            Some(AtsssLowLayerFunctionality::AnySteering)
-        );
+        assert_eq!(cap.atsss_ll(), AtsssLowLayerFunctionality::AnySteering);
     }
 
     #[test]
@@ -20407,13 +20257,13 @@ mod tests {
             (0x78, None),
         ] {
             assert_eq!(
-                GsmCapability::new(vec![octet]).atsss_st_value(),
+                AtsssSteeringFunctionality::named(GsmCapability::new(vec![octet]).atsss_st_raw()),
                 value,
                 "{octet:#04x}"
             );
             if let Some(value) = value {
                 let mut capability = GsmCapability::new(vec![0]);
-                capability.set_atsss_st_value(value);
+                capability.set_atsss_st(value);
                 assert_eq!(capability.value, [octet]);
                 assert_eq!(
                     GsmCapability::from_flags(false, value, false, false, false).value,
@@ -20429,10 +20279,10 @@ mod tests {
         let mut cap = GsmCapability::new(vec![0, 0]);
         cap.set_mpquic_ip(true);
         cap.set_mptcp(true);
-        cap.set_atsss_ll_value(AtsssLowLayerFunctionality::named(2).unwrap());
+        cap.set_atsss_ll(AtsssLowLayerFunctionality::named(2).unwrap());
         assert!(cap.mpquic_ip());
         assert!(cap.mptcp());
-        assert_eq!(cap.atsss_ll(), 2);
+        assert_eq!(cap.atsss_ll_raw(), 2);
     }
 
     // ────────────────────────────────────────────────────────────────────────

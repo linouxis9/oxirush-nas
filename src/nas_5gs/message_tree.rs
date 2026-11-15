@@ -2150,31 +2150,6 @@ fields_ie!(NetworkFeatureSupport {
             |ie| ie.restrict_ec(),
         );
 } flags);
-crate::common::nas_ie_flags!(@named GsmCapability {
-    tpmic ept_s1 mh6_pdu rqos mpquic_ip mpquic_udp mptcp rtpmmii sdnaepc apmqf e8pcpdei mpquic_e
-});
-fields_ie!(GsmCapability {
-    "atsss-st":
-        |ie| Code::of(ie.atsss_st_value(), ie.atsss_st()),
-        |ie, code: Code<AtsssSteeringFunctionality>| write_code(
-            ie,
-            code,
-            |ie, name| {
-                ie.set_atsss_st_value(name);
-            },
-            |ie| ie.atsss_st(),
-        );
-    "atsss-ll":
-        |ie| Code::of(ie.atsss_ll_value(), ie.atsss_ll()),
-        |ie, code: Code<AtsssLowLayerFunctionality>| write_code(
-            ie,
-            code,
-            |ie, name| {
-                ie.set_atsss_ll_value(name);
-            },
-            |ie| ie.atsss_ll(),
-        );
-} flags);
 fields_ie!(S1UeNetworkCapability {
     "eea": |ie| supported(ie, Self::supports_eea), |ie, algorithms: Vec<u16>| {
         (0..8).try_for_each(|algorithm| {

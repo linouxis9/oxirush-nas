@@ -196,7 +196,7 @@ fn from_features_writes_octet_3_and_octet_4_when_it_has_an_indication() {
     assert!(both.access_identity_2_valid());
 }
 
-type SetCapability = fn(&mut Capability, bool);
+type SetCapability = fn(&mut Capability, bool) -> &mut Capability;
 type ReadCapability = fn(&Capability) -> bool;
 
 /// Each indication of the 5GSM capability of one bit, with the octet of the
@@ -282,12 +282,14 @@ fn each_indication_of_the_5gsm_capability_is_its_own_bit() {
         assert!(!read(&Capability::new(others.to_vec())), "{name}");
         assert!(!read(&Capability::new(vec![0xff; octet])), "{name}");
     }
-    // The spare bits of octet 5, and the octets 6 to 15, are cleared by a
-    // setter of octet 5 and are zero in a capability that is well formed
+    // A setter writes its bit and keeps the others, spare ones too; the spare
+    // bits of octet 5, and the octets 6 to 15, are zero in a capability that is
+    // well formed
     let mut spare = Capability::new(vec![0, 0, 0xfc, 1]);
     spare.set_mpquic_e(true);
-    assert_eq!(spare.value, [0, 0, 0x01, 0]);
-    assert!(spare.spare_bits_are_zero());
+    assert_eq!(spare.value, [0, 0, 0xfd, 1]);
+    assert!(!spare.spare_bits_are_zero());
+    assert!(Capability::new(vec![0, 0, 0x01]).spare_bits_are_zero());
     assert!(!Capability::new(vec![0, 0, 0x04]).spare_bits_are_zero());
     assert!(!Capability::new(vec![0, 0, 0, 1]).spare_bits_are_zero());
     assert!(Capability::new(vec![0xff, 0xff, 0x03]).spare_bits_are_zero());
@@ -300,11 +302,11 @@ fn the_steering_functionalities_of_the_5gsm_capability_are_in_their_bits() {
     // ATSSS-ST in the bits 7 to 4 of octet 3, ATSSS-LL in the bits 5 and 4
     // of octet 4
     let mut capability = Capability::new(vec![0xff, 0xff]);
-    capability.set_atsss_st_value(AtsssSteeringFunctionality::MptcpAnyAndLowLayerActiveStandby);
-    capability.set_atsss_ll_value(AtsssLowLayerFunctionality::AnySteering);
+    capability.set_atsss_st(AtsssSteeringFunctionality::MptcpAnyAndLowLayerActiveStandby);
+    capability.set_atsss_ll(AtsssLowLayerFunctionality::AnySteering);
     assert_eq!(capability.value, [0x87 | 0x02 << 3, 0xe7 | 0x02 << 3]);
-    assert_eq!(capability.atsss_st(), 2);
-    assert_eq!(capability.atsss_ll(), 2);
+    assert_eq!(capability.atsss_st_raw(), 2);
+    assert_eq!(capability.atsss_ll_raw(), 2);
     let flags = Capability::from_flags(
         true,
         AtsssSteeringFunctionality::LowLayerAnySteering,
