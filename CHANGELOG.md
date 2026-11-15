@@ -2,7 +2,7 @@
 
 All notable changes to `oxirush-nas` are recorded here.
 
-## 0.8.0 - unreleased
+## 0.8.0 - 2026-11-16
 
 The fields of most IEs come from the tables of their figures, with the macros of
 oxirush-utils 0.3: a value that the table does not name is kept as `Other`, a setter of
