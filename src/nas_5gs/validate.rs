@@ -1702,7 +1702,11 @@ impl Validate for DeregistrationRequestUeOriginating {
     fn validate(&self) -> Vec<ValidationError> {
         let mut errs = self.sender_check_findings();
 
-        if self.de_registration_type.access_type().is_none() {
+        if self
+            .de_registration_type
+            .deregistration_access_type()
+            .is_none()
+        {
             errs.push(ValidationError {
                 severity: Severity::Error,
                 field: "de_registration_type",
@@ -1729,7 +1733,11 @@ impl Validate for DeregistrationRequestUeTerminated {
     fn validate(&self) -> Vec<ValidationError> {
         let mut errs = self.sender_check_findings();
 
-        if self.de_registration_type.access_type().is_none() {
+        if self
+            .de_registration_type
+            .deregistration_access_type()
+            .is_none()
+        {
             errs.push(ValidationError {
                 severity: Severity::Error,
                 field: "de_registration_type",

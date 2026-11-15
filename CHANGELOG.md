@@ -87,6 +87,9 @@ All notable changes to `oxirush-nas` are recorded here.
 
 ### Fixed
 
+- `validate()` of a DEREGISTRATION REQUEST no longer reports the access type
+  11 of its de-registration type (§9.11.3.20), 3GPP access and non-3GPP
+  access, as invalid.
 - `validate()` of a 5GS message says once each of the lengths of the ABBA,
   RAND, AUTN, AUTS, the UE security capability, the replayed one and the
   session AMBR, which the message structs said a second time in words of

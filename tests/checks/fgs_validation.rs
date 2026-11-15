@@ -350,10 +350,13 @@ fn a_deregistration_request_has_an_access_type() {
         .validate()
     };
     assert!(originating(0x01).is_empty(), "{:?}", originating(0x01));
+    // 11 is 3GPP access and non-3GPP access, which is no fault
+    assert!(originating(0x03).is_empty(), "{:?}", originating(0x03));
     assert!(names(&originating(0x00), "de_registration_type"));
     let terminated =
         |value| DeregistrationRequestUeTerminated::new(DeRegistrationType::new(value)).validate();
     assert!(terminated(0x01).is_empty());
+    assert!(terminated(0x03).is_empty(), "{:?}", terminated(0x03));
     assert!(names(&terminated(0x00), "de_registration_type"));
 }
 
