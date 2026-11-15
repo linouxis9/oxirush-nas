@@ -708,7 +708,7 @@ fn a_control_plane_service_type_has_its_type_and_the_active_flag() {
     // Table 9.9.3.47.1: the type in bits 3 to 1, "active" in bit 4
     let active = ControlPlaneServiceType::new(0x09);
     assert_eq!(active.service_type_raw(), 1);
-    assert!(active.is_active());
+    assert!(active.active());
     let mut ie = ControlPlaneServiceType::new(0x08);
     ie.set_service_type(ControlPlaneServiceTypeValue::MobileTerminatingRequest);
     assert_eq!(ie.value, 0x09);
@@ -771,10 +771,7 @@ fn an_eps_update_type_has_its_type_and_the_active_flag() {
             UpdateType::from_value(value & 0x07).effective(),
             update_type
         );
-        assert_eq!(
-            EpsUpdateType::new(0x08 | value).update_type_strict(),
-            Some(update_type)
-        );
+        assert_eq!(EpsUpdateType::new(0x08 | value).update_type(), update_type);
     }
     // 4 and 5 are read as TA updating by the network, 7 is reserved
     assert_eq!(UpdateType::named(5), None);
@@ -785,7 +782,7 @@ fn an_eps_update_type_has_its_type_and_the_active_flag() {
     assert_eq!(UpdateType::from_value(7).effective().name(), None);
     let ie = EpsUpdateType::new(0x09);
     assert_eq!(ie.update_type_raw(), 1);
-    assert!(ie.is_active());
+    assert!(ie.active());
 }
 
 #[test]
@@ -890,7 +887,7 @@ fn a_detach_type_is_one_of_table_9_9_3_7_1_in_each_direction() {
     );
     let switch_off = DetachType::from_ue_detach_kind(UeDetachKind::ImsiDetach, true);
     assert_eq!(switch_off.value, 0x0a);
-    assert!(switch_off.is_switch_off());
+    assert!(switch_off.switch_off());
 }
 
 #[test]

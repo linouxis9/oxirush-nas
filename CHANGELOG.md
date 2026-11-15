@@ -37,6 +37,15 @@ All notable changes to `oxirush-nas` are recorded here.
 
 - The tree of a message holds the names of its members and of the variants
   of its values without copying them, with oxirush-utils at 8f0b227.
+- The 5GS de-registration type, registration result, update type and control
+  plane service type, and the EPS update type, control plane service type and
+  detach type come from the tables of their figures. `result()`,
+  `result_raw()` and `set_result()` replace the `result_value` accessors;
+  `DeRegistrationType::access_type()` is the `DeregistrationAccessType`
+  (`deregistration_access_type()` goes); `active()` and `switch_off()` replace
+  `is_active()` and `is_switch_off()`; the `_strict` getters go; getters of
+  coded fields return the value as the IE has it. A tree that writes a number
+  too wide for its field is refused with the width of the field.
 - The 5GSM capability, the EPS network feature support and the N1 UE network
   capability come from the tables of their figures. `GsmCapability::atsss_st()`
   and `atsss_ll()` return the typed values (the bits are `atsss_st_raw()` and

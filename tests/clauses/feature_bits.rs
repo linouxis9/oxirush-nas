@@ -4,7 +4,7 @@
 //! de-registration type (§9.11.3.20) and the 5GS update type (§9.11.3.9A).
 
 use oxirush_nas::nas_5gs::{
-    AccessTypeValue, AtsssLowLayerFunctionality, AtsssSteeringFunctionality, DeRegistrationType,
+    AtsssLowLayerFunctionality, AtsssSteeringFunctionality, DeRegistrationType,
     DeregistrationAccessType, EmergencyFallbackSupport, EmergencyServiceSupport,
     GsmCapability as Capability, NetworkFeatureSupport as Support, PreferredCiotBehavior,
     RegistrationResult, RegistrationResultValue, RestrictionOnEnhancedCoverage, UpdateType,
@@ -356,7 +356,7 @@ fn the_registration_result_has_its_value_and_four_indications() {
     assert_eq!(all.value, [0x7a]);
     assert!(all.sms_allowed() && all.nssaa_performed());
     assert!(all.emergency_registered() && all.disaster_roaming());
-    let with = |set: fn(&mut RegistrationResult, bool)| {
+    let with = |set: fn(&mut RegistrationResult, bool) -> &mut RegistrationResult| {
         let (mut on, mut off) = (result.clone(), all.clone());
         set(&mut on, true);
         set(&mut off, false);
@@ -374,16 +374,13 @@ fn the_registration_result_has_its_value_and_four_indications() {
     changed.set_nssaa_performed(false);
     changed.set_emergency_registered(false);
     changed.set_disaster_roaming(false);
-    changed.set_result_value(RegistrationResultValue::ThreeGppAccessAndNon3GppAccess);
+    changed.set_result(RegistrationResultValue::ThreeGppAccessAndNon3GppAccess);
     assert_eq!(changed.value, [0x03]);
     let mut changed = all;
-    changed.set_result_value(RegistrationResultValue::ThreeGppAccess);
+    changed.set_result(RegistrationResultValue::ThreeGppAccess);
     assert_eq!(changed.value, [0x79]);
-    assert_eq!(
-        changed.result_value(),
-        RegistrationResultValue::ThreeGppAccess
-    );
-    assert_eq!(changed.result_value_raw(), 1);
+    assert_eq!(changed.result(), RegistrationResultValue::ThreeGppAccess);
+    assert_eq!(changed.result_raw(), 1);
     // A sender writes one octet, with the bit 8 spare and a result that is not
     // reserved (111)
     assert!(RegistrationResult::new(vec![0x7b]).is_well_formed());
@@ -399,33 +396,32 @@ fn the_deregistration_type_has_switch_off_re_registration_and_the_access_type() 
     // access type in the bits 2 and 1
     let mut deregistration = DeRegistrationType::new(0);
     deregistration.set_switch_off(true);
-    deregistration.set_access_type(AccessTypeValue::Non3GppAccess);
+    deregistration.set_access_type(DeregistrationAccessType::Non3GppAccess);
     assert_eq!(deregistration.value, 0x0a);
     assert!(deregistration.switch_off());
     assert!(!deregistration.re_registration_required());
     assert_eq!(
         deregistration.access_type(),
-        Some(AccessTypeValue::Non3GppAccess)
+        DeregistrationAccessType::Non3GppAccess
     );
     let mut required = DeRegistrationType::new(0x0f);
     required.set_switch_off(false);
     required.set_re_registration_required(true);
-    required.set_deregistration_access_type(DeregistrationAccessType::ThreeGppAccess);
+    required.set_access_type(DeregistrationAccessType::ThreeGppAccess);
     assert_eq!(required.value, 0x05);
     assert!(required.re_registration_required());
     assert_eq!(required.access_type_raw(), 1);
     let mut changed = required;
     changed.set_re_registration_required(false);
     changed.set_switch_off(true);
-    changed.set_access_type(AccessTypeValue::Non3GppAccess);
+    changed.set_access_type(DeregistrationAccessType::Non3GppAccess);
     assert_eq!(changed.value, 0x0a);
     changed.set_switch_off(false);
-    changed
-        .set_deregistration_access_type(DeregistrationAccessType::ThreeGppAccessAndNon3GppAccess);
+    changed.set_access_type(DeregistrationAccessType::ThreeGppAccessAndNon3GppAccess);
     assert_eq!(changed.value, 0x03);
     assert_eq!(
-        changed.deregistration_access_type(),
-        Some(DeregistrationAccessType::ThreeGppAccessAndNon3GppAccess)
+        changed.access_type(),
+        DeregistrationAccessType::ThreeGppAccessAndNon3GppAccess
     );
     let mut not_required = DeRegistrationType::new(0x07);
     not_required.set_re_registration_required(false);
@@ -445,11 +441,8 @@ fn the_update_type_has_its_requests_and_the_preferred_behaviours() {
     let eps = u8::from(PreferredCiotBehavior::ControlPlane);
     assert_eq!(update.value, [0x03 | pnb << 2 | eps << 4]);
     assert!(update.sms_requested() && update.ng_ran_rcu());
-    assert_eq!(update.pnb_ciot(), Some(PreferredCiotBehavior::UserPlane));
-    assert_eq!(
-        update.eps_pnb_ciot(),
-        Some(PreferredCiotBehavior::ControlPlane)
-    );
+    assert_eq!(update.pnb_ciot(), PreferredCiotBehavior::UserPlane);
+    assert_eq!(update.eps_pnb_ciot(), PreferredCiotBehavior::ControlPlane);
     assert_eq!(update.pnb_ciot_raw(), pnb);
     assert_eq!(update.eps_pnb_ciot_raw(), eps);
     let mut cleared = update;

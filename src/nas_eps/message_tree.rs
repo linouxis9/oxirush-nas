@@ -1124,62 +1124,6 @@ named_ie!(
 );
 
 // The fields of an octet.
-fields_ie!(EpsUpdateType {
-    "update-type":
-        |ie| Code::of(ie.update_type_strict(), ie.update_type_raw()),
-        |ie, code: Code<UpdateType>| write_code(
-            ie,
-            code,
-            |ie, name| {
-                ie.set_update_type(name);
-            },
-            |ie| ie.update_type_raw(),
-        );
-    "active": |ie| ie.is_active(), |ie, active: bool| {
-        ie.set_active(active);
-    };
-});
-fields_ie!(ControlPlaneServiceType {
-    "service-type":
-        |ie| Code::of(ie.service_type_strict(), ie.service_type_raw()),
-        |ie, code: Code<ControlPlaneServiceTypeValue>| write_code(
-            ie,
-            code,
-            |ie, name| {
-                ie.set_service_type(name);
-            },
-            |ie| ie.service_type_raw(),
-        );
-    "active": |ie| ie.is_active(), |ie, active: bool| {
-        ie.set_active(active);
-    };
-});
-// The same code names a type of detach in each direction, so both read.
-fields_ie!(DetachType {
-    "ue-detach-kind":
-        |ie| Code::of(UeDetachKind::named(ie.value & 0x07), ie.detach_type_raw()),
-        |ie, code: Code<UeDetachKind>| write_code(
-            ie,
-            code,
-            |ie, name| {
-                ie.value = DetachType::from_ue_detach_kind(name, ie.is_switch_off()).value;
-            },
-            |ie| ie.detach_type_raw(),
-        );
-    "network-detach-kind":
-        |ie| Code::of(NetworkDetachKind::named(ie.value & 0x07), ie.detach_type_raw()),
-        |ie, code: Code<NetworkDetachKind>| write_code(
-            ie,
-            code,
-            |ie, name| {
-                ie.value = DetachType::from_network_detach_kind(name).value | (ie.value & 0x08);
-            },
-            |ie| ie.detach_type_raw(),
-        );
-    "switch-off": |ie| ie.is_switch_off(), |ie, on: bool| {
-        ie.value = (ie.value & !0x08) | (u8::from(on) << 3);
-    };
-});
 fields_ie!(SecurityAlgorithms {
     "ciphering":
         |ie| Code::of(CipheringAlgorithm::named(ie.ciphering_raw()), ie.ciphering_raw()),

@@ -190,89 +190,6 @@ fn one_octet() -> Vec<Vec<u8>> {
     (0..=255).map(|octet| vec![octet]).collect()
 }
 
-fn up_to_two_octets() -> Vec<Vec<u8>> {
-    let mut values = vec![vec![]];
-    values.extend(one_octet());
-    values.extend(
-        (0..=255)
-            .step_by(5)
-            .flat_map(|first| [vec![first, 0], vec![first, 0x81]]),
-    );
-    values
-}
-
-#[test]
-fn a_table_writes_the_tree_of_the_fields_of_de_registration_type() {
-    const TABLE: Table = Table {
-        rows: &[
-            row!(switch_off, 0, 4, 1),
-            row!(re_registration_required, 0, 3, 1),
-            row!(access_type, 0, 1, 2, nas_5gs::DeregistrationAccessType),
-        ],
-        least: 1,
-        most: 1,
-        receives: 1,
-        trailing: false,
-    };
-    let differences = compare(
-        &TABLE,
-        &one_octet(),
-        |ie: &nas_5gs::DeRegistrationType| &ie.value,
-        nas_5gs::DeRegistrationType::new,
-        false,
-    );
-    assert!(differences.is_empty(), "{}", differences.join("\n"));
-}
-
-#[test]
-fn a_table_writes_the_tree_of_the_fields_of_registration_result() {
-    const TABLE: Table = Table {
-        rows: &[
-            row!(result, 0, 1, 3, nas_5gs::RegistrationResultValue),
-            row!(sms_allowed, 0, 4, 1),
-            row!(nssaa_performed, 0, 5, 1),
-            row!(emergency_registered, 0, 6, 1),
-            row!(disaster_roaming, 0, 7, 1),
-        ],
-        least: 1,
-        most: 1,
-        receives: 1,
-        trailing: false,
-    };
-    let differences = compare(
-        &TABLE,
-        &up_to_two_octets(),
-        |ie: &nas_5gs::RegistrationResult| &ie.value,
-        nas_5gs::RegistrationResult::new,
-        false,
-    );
-    assert!(differences.is_empty(), "{}", differences.join("\n"));
-}
-
-#[test]
-fn a_table_writes_the_tree_of_the_fields_of_update_type() {
-    const TABLE: Table = Table {
-        rows: &[
-            row!(sms_requested, 0, 1, 1),
-            row!(ng_ran_rcu, 0, 2, 1),
-            row!(pnb_ciot, 0, 3, 2, nas_5gs::PreferredCiotBehavior),
-            row!(eps_pnb_ciot, 0, 5, 2, nas_5gs::PreferredCiotBehavior),
-        ],
-        least: 1,
-        most: 1,
-        receives: 1,
-        trailing: false,
-    };
-    let differences = compare(
-        &TABLE,
-        &up_to_two_octets(),
-        |ie: &nas_5gs::UpdateType| &ie.value,
-        nas_5gs::UpdateType::new,
-        false,
-    );
-    assert!(differences.is_empty(), "{}", differences.join("\n"));
-}
-
 #[test]
 fn a_table_writes_the_tree_of_the_fields_of_security_algorithms() {
     const TABLE: Table = Table {
@@ -378,4 +295,11 @@ fn each_value_that_a_table_shows_writes_its_ie_back() {
     writes_back(|octet| nas_5gs::GsmCapability::new(two(octet)));
     writes_back(|octet| crate::nas_eps::EpsNetworkFeatureSupport::new(two(octet)));
     writes_back(|octet| crate::nas_eps::N1UeNetworkCapability::new(octets(octet)));
+    writes_back(nas_5gs::DeRegistrationType::new);
+    writes_back(|octet| nas_5gs::RegistrationResult::new(octets(octet)));
+    writes_back(|octet| nas_5gs::UpdateType::new(octets(octet)));
+    writes_back(nas_5gs::ControlPlaneServiceType::new);
+    writes_back(crate::nas_eps::EpsUpdateType::new);
+    writes_back(crate::nas_eps::ControlPlaneServiceType::new);
+    writes_back(crate::nas_eps::DetachType::new);
 }

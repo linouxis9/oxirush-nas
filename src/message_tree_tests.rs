@@ -697,7 +697,7 @@ fn an_ie_that_a_tree_writes_has_the_octets_of_what_is_written() {
         "7e00420101"
     );
     let error = accept(tree!({"result": 8})).unwrap_err().to_string();
-    assert!(error.contains("result cannot be 8"), "{error}");
+    assert!(error.contains("result: 8 is more than 7"), "{error}");
     let request = |name: &str, value: Value| {
         let mut tree = tree!({
             "message-type": "registration-request",

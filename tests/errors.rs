@@ -702,7 +702,7 @@ fn a_registration_result_is_built_from_its_value() {
     let result = f::RegistrationResult::from_result(f::RegistrationResultValue::Non3GppAccess);
     assert_eq!(result.value, [0x02]);
     assert_eq!(
-        result.result_value().effective(),
+        result.result().effective(),
         f::RegistrationResultValue::Non3GppAccess
     );
     assert!(result.is_well_formed());

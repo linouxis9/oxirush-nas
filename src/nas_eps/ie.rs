@@ -1520,42 +1520,19 @@ oxirush_utils::named_values! {
 }
 crate::common::enums::values_readable!(ControlPlaneServiceTypeValue);
 
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl ControlPlaneServiceType (value) "9.9.3.47" octets 1 {
+        service_type "Control plane service type value": 0 1 3 as ControlPlaneServiceTypeValue,
+        active "Active flag": 0 4 1,
+    }
+}
+crate::common::field_table::table_ie!(ControlPlaneServiceType, octet, 1..=1, receives 1);
+
 impl ControlPlaneServiceType {
     /// Build from a service type and the "active" flag.
     pub fn from_service_type(value: ControlPlaneServiceTypeValue, active: bool) -> Self {
         Self::new(u8::from(value) | ((active as u8) << 3))
-    }
-
-    /// Service type with the mobile-originating receive fallback.
-    pub fn service_type(&self) -> ControlPlaneServiceTypeValue {
-        ControlPlaneServiceTypeValue::from_value(self.value & 0x07).effective()
-    }
-
-    /// Service type, only for a defined value.
-    pub fn service_type_strict(&self) -> Option<ControlPlaneServiceTypeValue> {
-        ControlPlaneServiceTypeValue::named(self.value & 0x07)
-    }
-
-    /// Raw service type (bits 3-1).
-    pub fn service_type_raw(&self) -> u8 {
-        self.value & 0x07
-    }
-
-    /// "Active" flag (bit 4): radio bearer establishment requested.
-    pub fn is_active(&self) -> bool {
-        self.value & 0x08 != 0
-    }
-
-    /// Set the service type, keeping the "active" flag.
-    pub fn set_service_type(&mut self, value: ControlPlaneServiceTypeValue) -> &mut Self {
-        self.value = (self.value & 0x08) | u8::from(value);
-        self
-    }
-
-    /// Set the "active" flag.
-    pub fn set_active(&mut self, active: bool) -> &mut Self {
-        self.value = (self.value & 0x07) | ((active as u8) << 3);
-        self
     }
 }
 
@@ -1648,45 +1625,19 @@ oxirush_utils::named_values! {
 }
 crate::common::enums::values_readable!(UpdateType);
 
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl EpsUpdateType (value) "9.9.3.14" octets 1 {
+        update_type "EPS update type value": 0 1 3 as UpdateType,
+        active "Active flag": 0 4 1,
+    }
+}
+crate::common::field_table::table_ie!(EpsUpdateType, octet, 1..=1, receives 1);
+
 impl EpsUpdateType {
     /// Build from a typed update type with the "active" flag clear.
     pub fn from_update_type(value: UpdateType) -> Self {
         Self::new(u8::from(value))
-    }
-
-    /// Update type with the network receive fallback.
-    ///
-    /// The value as the IE has it: `effective()` is the value as a receiver
-    /// reads it.
-    pub fn update_type(&self) -> UpdateType {
-        UpdateType::from_value(self.value & 0x07)
-    }
-
-    /// Update type, only for a defined value.
-    pub fn update_type_strict(&self) -> Option<UpdateType> {
-        UpdateType::named(self.value & 0x07)
-    }
-
-    /// Raw update type (bits 3-1).
-    pub fn update_type_raw(&self) -> u8 {
-        self.value & 0x07
-    }
-
-    /// Set the update type, keeping the "active" flag.
-    pub fn set_update_type(&mut self, value: UpdateType) -> &mut Self {
-        self.value = (self.value & 0x08) | u8::from(value);
-        self
-    }
-
-    /// "Active" flag (bit 4): bearer establishment requested.
-    pub fn is_active(&self) -> bool {
-        self.value & 0x08 != 0
-    }
-
-    /// Set the "active" flag.
-    pub fn set_active(&mut self, active: bool) -> &mut Self {
-        self.value = (self.value & 0x07) | ((active as u8) << 3);
-        self
     }
 }
 
@@ -1984,6 +1935,16 @@ oxirush_utils::named_values! {
 }
 crate::common::enums::values_readable!(NetworkDetachKind);
 
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl DetachType (value) "9.9.3.7" octets 1 {
+        ue_detach_kind "Type of detach": 0 1 3 as UeDetachKind,
+        network_detach_kind "Type of detach": 0 1 3 as NetworkDetachKind,
+        switch_off "Switch off": 0 4 1,
+    }
+}
+crate::common::field_table::table_ie!(DetachType, octet, 1..=1, receives 1);
+
 impl DetachType {
     /// Build a UE-originating detach type.
     pub fn from_ue_detach_kind(value: UeDetachKind, switch_off: bool) -> Self {
@@ -1993,27 +1954,6 @@ impl DetachType {
     /// Build a network-originating detach type; bit 4 is spare.
     pub fn from_network_detach_kind(value: NetworkDetachKind) -> Self {
         Self::new(u8::from(value))
-    }
-
-    /// Type of detach sent by the UE, with the network receive fallback.
-    pub fn ue_detach_kind(&self) -> UeDetachKind {
-        UeDetachKind::from_value(self.value & 0x07).effective()
-    }
-
-    /// Type of detach sent by the network, with the UE receive fallback.
-    pub fn network_detach_kind(&self) -> NetworkDetachKind {
-        NetworkDetachKind::from_value(self.value & 0x07).effective()
-    }
-
-    /// Raw type of detach (bits 3-1).
-    pub fn detach_type_raw(&self) -> u8 {
-        self.value & 0x07
-    }
-
-    /// Switch off (bit 4); meaningful only from the UE, since the bit is
-    /// spare from the network.
-    pub fn is_switch_off(&self) -> bool {
-        self.value & 0x08 != 0
     }
 }
 
@@ -6457,7 +6397,7 @@ mod tests {
 
         let mut update = EpsUpdateType::new(0x0c);
         assert_eq!(update.update_type().effective(), UpdateType::TaUpdating);
-        assert_eq!(update.update_type_strict(), None);
+        assert_eq!(update.update_type().name(), None);
         update
             .set_update_type(UpdateType::PeriodicUpdating)
             .set_active(false);
@@ -6487,15 +6427,18 @@ mod tests {
         // Table 9.9.3.7.1: fallbacks differ by direction, and bit 4 is
         // spare from the network.
         let detach = DetachType::new(0x0d);
-        assert_eq!(detach.ue_detach_kind(), UeDetachKind::CombinedEpsImsiDetach);
         assert_eq!(
-            detach.network_detach_kind(),
+            detach.ue_detach_kind().effective(),
+            UeDetachKind::CombinedEpsImsiDetach
+        );
+        assert_eq!(
+            detach.network_detach_kind().effective(),
             NetworkDetachKind::ReattachNotRequired
         );
         assert_eq!(UeDetachKind::named(detach.value & 0x07), None);
-        assert!(detach.is_switch_off());
+        assert!(detach.switch_off());
         let network = DetachType::from_network_detach_kind(NetworkDetachKind::ImsiDetach);
-        assert_eq!((network.value, network.detach_type_raw()), (3, 3));
+        assert_eq!((network.value, network.ue_detach_kind_raw()), (3, 3));
     }
 
     #[test]
@@ -7188,14 +7131,14 @@ mod tests {
             cp.service_type(),
             ControlPlaneServiceTypeValue::MobileTerminatingRequest
         );
-        assert!(cp.is_active());
+        assert!(cp.active());
         assert_eq!(
             ControlPlaneServiceTypeValue::from_value(7).effective(),
             ControlPlaneServiceTypeValue::MobileOriginatingRequest
         );
         assert_eq!(ControlPlaneServiceTypeValue::named(7), None);
         assert_eq!(
-            ControlPlaneServiceType::new(0x0f).service_type_strict(),
+            ControlPlaneServiceType::new(0x0f).service_type().name(),
             None
         );
     }
@@ -7553,7 +7496,7 @@ mod tests {
         );
         let mut update = EpsUpdateType::new(0);
         update.set_active(true);
-        assert!(update.is_active());
+        assert!(update.active());
         assert_eq!(
             EpsUpdateResult::new(5).update_result(),
             Some(UpdateResult::CombinedTaLaUpdatedAndIsrActivated)
@@ -7569,7 +7512,7 @@ mod tests {
         assert!(
             KeySetIdentifier::from_key_set_identifier(KeySetIdentifierValue::Native(7)).is_err()
         );
-        assert!(DetachType::from_ue_detach_kind(UeDetachKind::EpsDetach, true).is_switch_off());
+        assert!(DetachType::from_ue_detach_kind(UeDetachKind::EpsDetach, true).switch_off());
     }
 
     #[test]

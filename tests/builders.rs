@@ -257,7 +257,10 @@ fn nothing_keeps_the_low_bits_of_what_it_is_given() {
     // The preferred CIoT behaviours are values of their own, reserved one
     // aside
     let mut update = UpdateType::new(vec![0x3c]);
-    assert_eq!((update.pnb_ciot(), update.eps_pnb_ciot()), (None, None));
+    assert_eq!(
+        (update.pnb_ciot().name(), update.eps_pnb_ciot().name()),
+        (None, None)
+    );
     update.set_pnb_ciot(PreferredCiotBehavior::UserPlane);
     update.set_eps_pnb_ciot(PreferredCiotBehavior::ControlPlane);
     assert_eq!(update.value, [0x18]);

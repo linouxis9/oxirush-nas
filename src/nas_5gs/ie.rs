@@ -1392,67 +1392,17 @@ impl SNssai {
 // De-registration Type (§9.11.3.20)
 // ---------------------------------------------------------------------------
 
-impl DeRegistrationType {
-    /// Switch off flag (bit 4) — only meaningful for **UE-originated** deregistration
-    /// (DeregistrationRequestUeOriginating, TS 24.501 §9.11.3.20 Table 9.11.3.20.1).
-    ///
-    /// When set, the UE is powering off and does not expect a DeregistrationAccept.
-    pub fn switch_off(&self) -> bool {
-        (self.value >> 3) & 1 != 0
-    }
-
-    /// Re-registration required flag (bit 3) — only meaningful for **network-originated**
-    /// deregistration (DeregistrationRequestUeTerminated, TS 24.501 §9.11.3.20 Table 9.11.3.20.2).
-    pub fn re_registration_required(&self) -> bool {
-        (self.value >> 2) & 1 != 0
-    }
-
-    /// Typed access type (bits 1-2) using the common two-value access type.
-    ///
-    /// For this IE, value `0b11` means both 3GPP and non-3GPP access; use
-    /// [`Self::deregistration_access_type`] when that value must be represented.
-    pub fn access_type(&self) -> Option<AccessTypeValue> {
-        AccessTypeValue::named(self.value & 0x03)
-    }
-
-    /// De-registration-specific access type (bits 1-2).
-    pub fn deregistration_access_type(&self) -> Option<DeregistrationAccessType> {
-        DeregistrationAccessType::named(self.value & 0x03)
-    }
-
-    /// Raw access type (bits 1-2).
-    pub fn access_type_raw(&self) -> u8 {
-        self.value & 0x03
-    }
-
-    /// Mutating setter for the access type.
-    pub fn set_access_type(&mut self, t: AccessTypeValue) {
-        self.value = (self.value & 0xFC) | (u8::from(t) & 0x03);
-    }
-
-    /// Mutating setter for the de-registration-specific access type.
-    pub fn set_deregistration_access_type(&mut self, t: DeregistrationAccessType) {
-        self.value = (self.value & 0xFC) | (u8::from(t) & 0x03);
-    }
-
-    /// Mutating setter for the switch-off bit.
-    pub fn set_switch_off(&mut self, on: bool) {
-        if on {
-            self.value |= 0x08;
-        } else {
-            self.value &= !0x08;
-        }
-    }
-
-    /// Mutating setter for the re-registration-required bit.
-    pub fn set_re_registration_required(&mut self, on: bool) {
-        if on {
-            self.value |= 0x04;
-        } else {
-            self.value &= !0x04;
-        }
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl DeRegistrationType (value) "9.11.3.20" octets 1 {
+        switch_off "Switch off": 0 4 1,
+        re_registration_required "Re-registration required": 0 3 1,
+        access_type "Access type": 0 1 2 as DeregistrationAccessType,
     }
 }
+crate::common::field_table::table_ie!(DeRegistrationType, octet, 1..=1, receives 1);
+
+impl DeRegistrationType {}
 
 impl Default for DeRegistrationType {
     /// 3GPP access, without switch-off or re-registration.
@@ -1475,118 +1425,23 @@ crate::common::enums::values_readable!(DeregistrationAccessType);
 // 5GS Registration Result (§9.11.3.6)
 // ---------------------------------------------------------------------------
 
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl RegistrationResult (value) "9.11.3.6" octets 1 {
+        result "5GS registration result value": 0 1 3 as RegistrationResultValue,
+        sms_allowed "SMS allowed": 0 4 1,
+        nssaa_performed "NSSAA Performed": 0 5 1,
+        emergency_registered "Emergency registered": 0 6 1,
+        disaster_roaming "Disaster roaming registration result value": 0 7 1,
+    }
+}
+crate::common::field_table::table_ie!(RegistrationResult, octets, 1..=1, receives 1);
+
 impl RegistrationResult {
     /// The IE of a registration result, with none of its flags set:
     /// `from_result(RegistrationResultValue::ThreeGppAccess)`.
     pub fn from_result(result: RegistrationResultValue) -> Self {
         Self::new(vec![u8::from(result)])
-    }
-
-    /// Registration result value (bits 1-3 of first byte).
-    ///
-    /// The value as the IE has it: `effective()` is the value as a receiver
-    /// reads it.
-    pub fn result_value(&self) -> RegistrationResultValue {
-        RegistrationResultValue::from_value(self.value.first().copied().unwrap_or(0) & 0x07)
-    }
-
-    /// Raw registration result value (bits 1-3 of first byte).
-    pub fn result_value_raw(&self) -> u8 {
-        self.value.first().map(|b| b & 0x07).unwrap_or(0)
-    }
-
-    /// SMS over NAS allowed (bit 4).
-    pub fn sms_allowed(&self) -> bool {
-        self.value
-            .first()
-            .map(|b| (b >> 3) & 1 != 0)
-            .unwrap_or(false)
-    }
-
-    /// NSSAA to be performed (bit 5).
-    pub fn nssaa_performed(&self) -> bool {
-        self.value
-            .first()
-            .map(|b| (b >> 4) & 1 != 0)
-            .unwrap_or(false)
-    }
-
-    /// Emergency registered (bit 6) per TS 24.501 §9.11.3.6.
-    pub fn emergency_registered(&self) -> bool {
-        self.value
-            .first()
-            .map(|b| (b >> 5) & 1 != 0)
-            .unwrap_or(false)
-    }
-
-    /// Disaster roaming registration result (bit 7) per TS 24.501 §9.11.3.6.
-    pub fn disaster_roaming(&self) -> bool {
-        self.value
-            .first()
-            .map(|b| (b >> 6) & 1 != 0)
-            .unwrap_or(false)
-    }
-
-    fn first_byte(&self) -> u8 {
-        self.value.first().copied().unwrap_or(0)
-    }
-    fn set_first_byte(&mut self, b: u8) {
-        let b = b & 0x7F;
-        if self.value.is_empty() {
-            self.value.push(b);
-        } else {
-            self.value[0] = b;
-        }
-    }
-
-    /// Set what [`Self::result_value`] reads.
-    pub fn set_result_value(&mut self, r: RegistrationResultValue) {
-        let b = (self.first_byte() & 0xF8) | (u8::from(r) & 0x07);
-        self.set_first_byte(b);
-    }
-
-    /// Set what [`Self::sms_allowed`] reads.
-    pub fn set_sms_allowed(&mut self, on: bool) {
-        let mut b = self.first_byte();
-        if on {
-            b |= 0x08;
-        } else {
-            b &= !0x08;
-        }
-        self.set_first_byte(b);
-    }
-
-    /// Set what [`Self::nssaa_performed`] reads.
-    pub fn set_nssaa_performed(&mut self, on: bool) {
-        let mut b = self.first_byte();
-        if on {
-            b |= 0x10;
-        } else {
-            b &= !0x10;
-        }
-        self.set_first_byte(b);
-    }
-
-    /// Set what [`Self::emergency_registered`] reads.
-    pub fn set_emergency_registered(&mut self, on: bool) {
-        let mut b = self.first_byte();
-        if on {
-            b |= 0x20;
-        } else {
-            b &= !0x20;
-        }
-        self.set_first_byte(b);
-    }
-
-    /// Set what [`Self::disaster_roaming`] reads.
-    pub fn set_disaster_roaming(&mut self, on: bool) {
-        let mut b = self.first_byte();
-        if on {
-            b |= 0x40;
-        } else {
-            b &= !0x40;
-        }
-        self.set_first_byte(b);
     }
 }
 
@@ -1595,7 +1450,7 @@ impl RegistrationResult {
     pub(crate) const SENDER_RULE: &'static str = "one octet with bit 8 clear and a defined result";
     /// Whether this mandatory LV has its exact sender length and defined value.
     pub fn is_well_formed(&self) -> bool {
-        self.value.len() == 1 && self.value[0] & 0x80 == 0 && self.result_value().name().is_some()
+        self.value.len() == 1 && self.value[0] & 0x80 == 0 && self.result().name().is_some()
     }
 }
 
@@ -2853,31 +2708,18 @@ impl Default for ControlPlaneServiceType {
     }
 }
 
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl ControlPlaneServiceType (value) "9.11.3.18D" octets 1 {
+        service_type "Control plane service type value": 0 1 3 as ControlPlaneServiceTypeValue,
+    }
+}
+crate::common::field_table::table_ie!(ControlPlaneServiceType, octet, 1..=1, receives 1);
+
 impl ControlPlaneServiceType {
     /// Build from a control plane service type.
     pub fn from_service_type(service_type: ControlPlaneServiceTypeValue) -> Self {
         Self::new(u8::from(service_type) & 0x07)
-    }
-
-    /// Service type with the mobile-originating receive fallback.
-    pub fn service_type(&self) -> ControlPlaneServiceTypeValue {
-        ControlPlaneServiceTypeValue::from_value(self.value & 0x07).effective()
-    }
-
-    /// Service type, only for a defined value.
-    pub fn service_type_strict(&self) -> Option<ControlPlaneServiceTypeValue> {
-        ControlPlaneServiceTypeValue::named(self.value & 0x07)
-    }
-
-    /// Raw control plane service type value (lower nibble bits 1-3).
-    pub fn service_type_raw(&self) -> u8 {
-        self.value & 0x07
-    }
-
-    /// Mutating setter for the control plane service type.
-    pub fn set_service_type(&mut self, service_type: ControlPlaneServiceTypeValue) -> &mut Self {
-        self.value = (self.value & 0xF8) | (u8::from(service_type) & 0x07);
-        self
     }
 }
 
@@ -3740,74 +3582,16 @@ impl DrxParameters {
     }
 }
 
-impl UpdateType {
-    fn fb(&self) -> u8 {
-        self.value.first().copied().unwrap_or(0)
-    }
-    fn write_first(&mut self, b: u8) {
-        if self.value.is_empty() {
-            self.value.push(b);
-        } else {
-            self.value[0] = b;
-        }
-    }
-
-    /// SMS requested (bit 1, mask 0x01). TS 24.501 §9.11.3.9A.
-    pub fn sms_requested(&self) -> bool {
-        self.fb() & 0x01 != 0
-    }
-    /// Set what [`Self::sms_requested`] reads.
-    pub fn set_sms_requested(&mut self, on: bool) {
-        let b = (self.fb() & !0x01) | if on { 0x01 } else { 0 };
-        self.write_first(b);
-    }
-
-    /// NG-RAN Radio Capability Update (bit 2, mask 0x02).
-    pub fn ng_ran_rcu(&self) -> bool {
-        (self.fb() >> 1) & 0x01 != 0
-    }
-    /// Set what [`Self::ng_ran_rcu`] reads.
-    pub fn set_ng_ran_rcu(&mut self, on: bool) {
-        let b = (self.fb() & !0x02) | if on { 0x02 } else { 0 };
-        self.write_first(b);
-    }
-
-    /// 5GS-PNB-CIoT, the preferred CIoT network behaviour for 5GS (bits
-    /// 4-3); reserved is `None`.
-    pub fn pnb_ciot(&self) -> Option<PreferredCiotBehavior> {
-        PreferredCiotBehavior::named(self.pnb_ciot_raw() & 0x03)
-    }
-
-    /// Raw 5GS-PNB-CIoT field.
-    pub fn pnb_ciot_raw(&self) -> u8 {
-        (self.fb() >> 2) & 0x03
-    }
-
-    /// Set the preferred CIoT network behaviour for 5GS.
-    pub fn set_pnb_ciot(&mut self, value: PreferredCiotBehavior) -> &mut Self {
-        let b = (self.fb() & !0x0C) | ((u8::from(value)) << 2);
-        self.write_first(b);
-        self
-    }
-
-    /// EPS-PNB-CIoT, the preferred CIoT network behaviour for EPS (bits
-    /// 6-5); reserved is `None`.
-    pub fn eps_pnb_ciot(&self) -> Option<PreferredCiotBehavior> {
-        PreferredCiotBehavior::named(self.eps_pnb_ciot_raw() & 0x03)
-    }
-
-    /// Raw EPS-PNB-CIoT field.
-    pub fn eps_pnb_ciot_raw(&self) -> u8 {
-        (self.fb() >> 4) & 0x03
-    }
-
-    /// Set the preferred CIoT network behaviour for EPS.
-    pub fn set_eps_pnb_ciot(&mut self, value: PreferredCiotBehavior) -> &mut Self {
-        let b = (self.fb() & !0x30) | ((u8::from(value)) << 4);
-        self.write_first(b);
-        self
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl UpdateType (value) "9.11.3.9A" octets 1 {
+        sms_requested "SMS requested": 0 1 1,
+        ng_ran_rcu "NG-RAN-RCU": 0 2 1,
+        pnb_ciot "5GS PNB-CIoT": 0 3 2 as PreferredCiotBehavior,
+        eps_pnb_ciot "EPS-PNB-CIoT": 0 5 2 as PreferredCiotBehavior,
     }
 }
+crate::common::field_table::table_ie!(UpdateType, octets, 1..=1, receives 1);
 
 impl Default for UpdateType {
     fn default() -> Self {
@@ -16676,7 +16460,7 @@ mod tests {
         tnan.set_ssid(Some(b"ssid")).unwrap();
         encodes(&tnan);
         let mut result = RegistrationResult::new(vec![]);
-        result.set_result_value(RegistrationResultValue::ThreeGppAccess);
+        result.set_result(RegistrationResultValue::ThreeGppAccess);
         encodes(&result);
         let mut update = UpdateType::new(vec![]);
         update.set_sms_requested(true);
@@ -17058,23 +16842,18 @@ mod tests {
         let dt = DeRegistrationType::new(0x09);
         assert!(dt.switch_off());
         assert!(!dt.re_registration_required());
-        assert_eq!(dt.access_type(), Some(AccessTypeValue::ThreeGppAccess));
-        assert_eq!(
-            dt.deregistration_access_type(),
-            Some(DeregistrationAccessType::ThreeGppAccess)
-        );
+        assert_eq!(dt.access_type(), DeregistrationAccessType::ThreeGppAccess);
 
         // access_type=1, no switch-off = 0b0001
         let dt2 = DeRegistrationType::new(0x01);
         assert!(!dt2.switch_off());
         assert!(!dt2.re_registration_required());
-        assert_eq!(dt2.access_type(), Some(AccessTypeValue::ThreeGppAccess));
+        assert_eq!(dt2.access_type(), DeregistrationAccessType::ThreeGppAccess);
 
         let mut dt3 = DeRegistrationType::default();
         dt3.set_switch_off(true);
-        dt3.set_access_type(AccessTypeValue::ThreeGppAccess);
+        dt3.set_access_type(DeregistrationAccessType::ThreeGppAccess);
         assert!(dt3.switch_off());
-        assert_eq!(dt3.access_type(), Some(AccessTypeValue::ThreeGppAccess));
         assert_eq!(dt3.value, 0x09);
 
         let mut dt4 = DeRegistrationType::new(0x01);
@@ -17083,21 +16862,19 @@ mod tests {
         assert_eq!(dt4.value, 0x05);
 
         let mut dt5 = DeRegistrationType::default();
-        dt5.set_deregistration_access_type(
-            DeregistrationAccessType::ThreeGppAccessAndNon3GppAccess,
-        );
+        dt5.set_access_type(DeregistrationAccessType::ThreeGppAccessAndNon3GppAccess);
         assert_eq!(
-            dt5.deregistration_access_type(),
-            Some(DeregistrationAccessType::ThreeGppAccessAndNon3GppAccess)
+            dt5.access_type(),
+            DeregistrationAccessType::ThreeGppAccessAndNon3GppAccess
         );
-        assert_eq!(dt5.access_type(), None);
+        assert_eq!(dt5.access_type_raw(), 3);
     }
 
     #[test]
     fn test_registration_result() {
         let result = RegistrationResult::new(vec![0x09]); // 3GPP access + SMS allowed
         assert_eq!(
-            result.result_value().effective(),
+            result.result().effective(),
             RegistrationResultValue::ThreeGppAccess
         );
         assert!(result.sms_allowed());
