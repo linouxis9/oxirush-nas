@@ -83,10 +83,10 @@ impl Row {
         if octet == self.octet {
             mask |= ones(self.low, self.width);
         }
-        if let Some((next, low, width)) = self.next {
-            if octet == next {
-                mask |= ones(low, width);
-            }
+        if let Some((next, low, width)) = self.next
+            && octet == next
+        {
+            mask |= ones(low, width);
         }
         mask
     }
