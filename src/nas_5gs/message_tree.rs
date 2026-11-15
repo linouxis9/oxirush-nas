@@ -685,6 +685,45 @@ impl GmmMessageType {
         message_tree::ies(&[&format!("{self:?}")], GmmMessage::ies_named)
     }
 
+    /// The cleartext IEs of an initial NAS message of this type, by the
+    /// names of its tree: those that a UE with a security context sends
+    /// outside the NAS message container, after the header (TS 24.501
+    /// §4.4.6). Every other IE goes in the container, ciphered. `None` for a
+    /// type that is no initial NAS message.
+    ///
+    /// ```
+    /// use oxirush_nas::nas_5gs::GmmMessageType;
+    ///
+    /// let cleartext = GmmMessageType::ServiceRequest.cleartext_ies().unwrap();
+    /// assert_eq!(cleartext, ["ngksi", "service-type", "5g-s-tmsi"]);
+    /// assert_eq!(GmmMessageType::RegistrationComplete.cleartext_ies(), None);
+    /// ```
+    pub fn cleartext_ies(self) -> Option<&'static [&'static str]> {
+        Some(match self {
+            Self::RegistrationRequest => &[
+                "5gs-registration-type",
+                "ngksi",
+                "5gs-mobile-identity",
+                "ue-security-capability",
+                "additional-guti",
+                "ue-status",
+                "eps-nas-message-container",
+                "nid",
+                "ue-determined-plmn-with-disaster-condition",
+            ],
+            Self::DeregistrationRequestUeOriginating => {
+                &["de-registration-type", "ngksi", "5gs-mobile-identity"]
+            }
+            Self::ServiceRequest => &["ngksi", "service-type", "5g-s-tmsi"],
+            Self::ControlPlaneServiceRequest => &[
+                "control-plane-service-type",
+                "ngksi",
+                "ciot-small-data-container",
+            ],
+            _ => return None,
+        })
+    }
+
     /// The names of the members that the tree of a message of this type can
     /// have: the fields of its header, then its IEs in the order of the
     /// message, with those that are optional. A type that the crate has no
@@ -2112,6 +2151,36 @@ listed_ie!(CipheringKeyData: CipheringDataSet, data_sets, Self::from_data_sets);
 mod tests {
     use super::*;
     use crate::common::message_tree::tests::{exercise, replace_parts, sweep};
+
+    /// The cleartext IEs of the four initial NAS messages are members of
+    /// their messages, and no other type has any (TS 24.501 §4.4.6).
+    #[test]
+    fn the_cleartext_ies_are_members_of_their_initial_messages() {
+        use GmmMessageType as K;
+        let initial = [
+            K::RegistrationRequest,
+            K::DeregistrationRequestUeOriginating,
+            K::ServiceRequest,
+            K::ControlPlaneServiceRequest,
+        ];
+        for value in 0..=u8::MAX {
+            let kind = K::from(value);
+            let Some(cleartext) = kind.cleartext_ies() else {
+                assert!(!initial.contains(&kind), "{kind:?}");
+                continue;
+            };
+            assert!(initial.contains(&kind), "{kind:?}");
+            let names = kind.names();
+            for name in cleartext {
+                assert!(names.iter().any(|member| member == name), "{kind:?} {name}");
+            }
+            assert!(!cleartext.contains(&"nas-message-container"), "{kind:?}");
+        }
+        assert_eq!(
+            K::ServiceRequest.cleartext_ies(),
+            Some(&["ngksi", "service-type", "5g-s-tmsi"][..])
+        );
+    }
 
     #[test]
     fn values_encode_back_and_take_nothing_unchecked() {

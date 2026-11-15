@@ -6,6 +6,8 @@ All notable changes to `oxirush-nas` are recorded here.
 
 ### Added
 
+- `cleartext_ies()` of `GmmMessageType`: the cleartext IEs of an initial NAS
+  message of the type, by the names of its tree (TS 24.501 §4.4.6).
 - `replayed_count()`: the NAS COUNT that a received message of a sequence
   number replays, the highest of the 256 below the receiver's next one that
   ends with it (TS 24.501 and TS 24.301 §4.4.3.2).
