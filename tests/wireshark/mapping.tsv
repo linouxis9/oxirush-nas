@@ -5,7 +5,7 @@
 #   ie       an IE's label, and the crate's name of the IE
 #   bare     a field that Wireshark shows for a whole IE, and the crate's IE
 #   field    in an IE of a type, a field, and the path of the crate's value with a comparison:
-#            int, bool, notbool, str, hex, name (a coded value by name, by number where the crate has no
+#            int, bool, str, hex, name (a coded value by name, by number where the crate has no
 #            name), code (a name ending with its number), bit (a flag, and the number it adds to a list),
 #            plmn (MCC and MNC), duration (seconds), kbps, ambr, ksi, key (the form of a value), count,
 #            octet (a coded octet that the crate keeps in a string of octets), tz (quarters of an hour),
@@ -253,7 +253,7 @@ field	5gs	5GMM capability	mcsiu	bool:nas-5gs.mm.mcsiu_b0
 field	5gs	5GMM capability	mint	bool:nas-5gs.mm.mint_b1	
 field	5gs	5GMM capability	mpsiu	bool:nas-5gs.mm.mpsiu_b7	
 field	5gs	5GMM capability	multiple-up	bool:nas-5gs.mm.multiple_up_b2	
-field	5gs	5GMM capability	n3-data-not-supported	bool:nas-5gs.mm.n3_data_b5	
+field	5gs	5GMM capability	n3-data	bool:nas-5gs.mm.n3_data_b5	
 field	5gs	5GMM capability	ncr	bool:nas-5gs.mm.ncr_b4	
 field	5gs	5GMM capability	nr-pssi	bool:nas-5gs.mm.nr_pssi_b3	
 field	5gs	5GMM capability	nsag	bool:nas-5gs.mm.nsag_b5	
@@ -336,7 +336,7 @@ field	5gs	5GS network feature support	iwk-n26	bool:nas-5gs.nw_feat_sup.iwk_n26
 field	5gs	5GS network feature support	lcs-upp	bool:nas-5gs.nw_feat_sup.lcs_upp	
 field	5gs	5GS network feature support	mcsi	bool:nas-5gs.nw_feat_sup.mcsi	
 field	5gs	5GS network feature support	mpsi	bool:nas-5gs.nw_feat_sup.mpsi	
-field	5gs	5GS network feature support	n3-data	notbool:nas-5gs.nw_feat_sup.n3_data	the crate has the capability, whose bit is 0 when it is supported
+field	5gs	5GS network feature support	n3-data	bool:nas-5gs.nw_feat_sup.n3_data	
 field	5gs	5GS network feature support	naps	bool:nas-5gs.nw_feat_sup.naps	
 field	5gs	5GS network feature support	ncr	bool:nas-5gs.nw_feat_sup.ncr	
 field	5gs	5GS network feature support	piv	bool:nas-5gs.nw_feat_sup.piv	

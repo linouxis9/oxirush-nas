@@ -10,7 +10,7 @@ use oxirush_nas::nas_5gs::{
     RegistrationResult, RegistrationResultValue, RestrictionOnEnhancedCoverage, UpdateType,
 };
 
-type Set = fn(&mut Support, bool);
+type Set = fn(&mut Support, bool) -> &mut Support;
 type Read = fn(&Support) -> bool;
 
 /// Each indication of one bit, with the octet of the value and the bit that
@@ -41,13 +41,7 @@ const INDICATIONS: [(&str, Set, Read, usize, u8); 24] = [
         1,
         0x10,
     ),
-    (
-        "N3 data",
-        Support::set_n3_data_not_supported,
-        Support::n3_data_not_supported,
-        1,
-        0x20,
-    ),
+    ("N3 data", Support::set_n3_data, Support::n3_data, 1, 0x20),
     (
         "5G-IPHC-CP CIoT",
         Support::set_iphc_cp_ciot,
@@ -122,15 +116,14 @@ fn each_indication_of_the_5gs_network_feature_support_is_its_own_bit() {
 }
 
 #[test]
-fn n3_data_transfer_is_supported_when_its_bit_is_0() {
-    let mut supported = Support::new(vec![0; 2]);
-    supported.set_n3_data(true);
-    assert_eq!(supported.value, [0, 0]);
-    assert!(supported.n3_data());
+fn the_n3_data_bit_is_1_where_n3_data_transfer_is_not_supported() {
+    // The member is the bit as the figure has it: 0 "N3 data transfer
+    // supported", 1 "N3 data transfer not supported"
     let mut not_supported = Support::new(vec![0; 2]);
-    not_supported.set_n3_data(false);
+    not_supported.set_n3_data(true);
     assert_eq!(not_supported.value, [0, 0x20]);
-    assert!(!not_supported.n3_data());
+    assert!(not_supported.n3_data());
+    assert!(!Support::new(vec![0; 2]).n3_data());
 }
 
 #[test]
@@ -138,33 +131,30 @@ fn the_codes_of_two_bits_are_in_their_bits() {
     // EMC in the bits 4 and 3 of octet 3, EMF in the bits 6 and 5, and
     // RestrictEC in the bits 4 and 3 of octet 4
     let mut support = Support::new(vec![0xff, 0xff]);
-    support.set_emc_value(EmergencyServiceSupport::NrOnly);
-    support.set_emf_value(EmergencyFallbackSupport::EutraOnly);
-    support.set_restrict_ec_value(RestrictionOnEnhancedCoverage::CeModeBRestricted);
+    support.set_emc(EmergencyServiceSupport::NrOnly).unwrap();
+    support
+        .set_emf(EmergencyFallbackSupport::EutraOnly)
+        .unwrap();
+    (support.set_restrict_ec(RestrictionOnEnhancedCoverage::CeModeBRestricted)).unwrap();
     assert_eq!(
         support.value,
         [0xc3 | 0x01 << 2 | 0x02 << 4, 0xf3 | 0x02 << 2]
     );
-    assert_eq!(support.emc(), 1);
-    assert_eq!(support.emc_value(), Some(EmergencyServiceSupport::NrOnly));
-    assert_eq!(support.emf(), 2);
+    assert_eq!(support.emc_raw(), 1);
+    assert_eq!(support.emc(), EmergencyServiceSupport::NrOnly);
+    assert_eq!(support.emf_raw(), 2);
+    assert_eq!(support.emf(), EmergencyFallbackSupport::EutraOnly);
+    assert_eq!(support.restrict_ec_raw(), 2);
     assert_eq!(
-        support.emf_value(),
-        Some(EmergencyFallbackSupport::EutraOnly)
-    );
-    assert_eq!(support.restrict_ec(), 2);
-    assert_eq!(
-        support.restrict_ec_value(),
-        Some(RestrictionOnEnhancedCoverage::CeModeBRestricted)
+        support.restrict_ec(),
+        RestrictionOnEnhancedCoverage::CeModeBRestricted
     );
     let mut codes = Support::new(vec![]);
-    codes.set_emc(3).unwrap();
-    codes.set_emf(1).unwrap();
-    codes.set_restrict_ec(3).unwrap();
+    codes.set_emc_raw(3).set_emf_raw(1).set_restrict_ec_raw(3);
     assert_eq!(codes.value, [0x1c, 0x0c]);
-    assert!(codes.set_emc(4).is_err());
-    assert!(codes.set_emf(4).is_err());
-    assert!(codes.set_restrict_ec(4).is_err());
+    assert!(codes.set_emc(EmergencyServiceSupport::Other(4)).is_err());
+    assert!(codes.set_emf(EmergencyFallbackSupport::Other(4)).is_err());
+    assert!((codes.set_restrict_ec(RestrictionOnEnhancedCoverage::Other(4))).is_err());
 }
 
 #[test]

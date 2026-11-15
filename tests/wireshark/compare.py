@@ -683,9 +683,6 @@ def run_compare(comparison, where, path, compare, node_fields, value):
 
     if kind == "int":
         equal_lists([as_number(f.show) for f in ws], [as_number(v) if not isinstance(v, bool) else int(v) for v in crate], f"{fields[0]} as a number")
-    elif kind == "notbool":
-        # a flag of the crate that is set when the bit that Wireshark shows is 0
-        equal_lists([f.show in ("True", "1") for f in ws], [not v for v in crate], f"{fields[0]} as the negation of a flag")
     elif kind == "bool":
         equal_lists([f.show in ("True", "1") for f in ws], [bool(v) for v in crate], f"{fields[0]} as a flag")
     elif kind == "text":

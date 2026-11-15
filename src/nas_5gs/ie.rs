@@ -2137,114 +2137,41 @@ oxirush_utils::named_values! {
 }
 crate::common::enums::values_readable!(RestrictionOnEnhancedCoverage);
 
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl NetworkFeatureSupport (value) "9.11.3.5" octets 4 {
+        emc "EMC": 0 3 2 as EmergencyServiceSupport,
+        emf "EMF": 0 5 2 as EmergencyFallbackSupport,
+        restrict_ec "RestrictEC": 1 3 2 as RestrictionOnEnhancedCoverage,
+        ims_vops_3gpp "IMS-VoPS-3GPP": 0 1 1,
+        ims_vops_n3gpp "IMS-VoPS-N3GPP": 0 2 1,
+        iwk_n26 "IWK N26": 0 7 1,
+        mpsi "MPSI": 0 8 1,
+        emcn3 "EMCN3": 1 1 1,
+        mcsi "MCSI": 1 2 1,
+        cp_ciot "5G-CP CIoT": 1 5 1,
+        n3_data "N3 data": 1 6 1,
+        iphc_cp_ciot "5G-IPHC-CP CIoT": 1 7 1,
+        up_ciot "5G-UP CIoT": 1 8 1,
+        lcs_5g "5G-LCS": 2 1 1,
+        ats_ind "ATS-IND": 2 2 1,
+        ehc_cp_ciot "5G-EHC-CP CIoT": 2 3 1,
+        ncr "NCR": 2 4 1,
+        piv "PIV": 2 5 1,
+        rpr "RPR": 2 6 1,
+        pr "PR": 2 7 1,
+        un_per "UN-PER": 2 8 1,
+        naps "NAPS": 3 1 1,
+        lcs_upp "LCS-UPP": 3 2 1,
+        supl "SUPL": 3 3 1,
+        rslp "RSLP": 3 4 1,
+        mlcsup "MLCSUP": 3 5 1,
+        ef5l "EF5L": 3 6 1,
+    }
+}
+crate::common::field_table::table_ie!(NetworkFeatureSupport, octets, 1..=4, receives 0, trailing);
+
 impl NetworkFeatureSupport {
-    /// IMS VoPS support (bit 1 of octet 1).
-    pub fn ims_vops_3gpp(&self) -> bool {
-        self.value.first().map(|b| b & 0x01 != 0).unwrap_or(false)
-    }
-
-    /// IMS VoPS support over non-3GPP (bit 2 of octet 1).
-    pub fn ims_vops_n3gpp(&self) -> bool {
-        self.value
-            .first()
-            .map(|b| (b >> 1) & 0x01 != 0)
-            .unwrap_or(false)
-    }
-
-    /// Set what [`Self::ims_vops_3gpp`] reads.
-    pub fn set_ims_vops_3gpp(&mut self, value: bool) {
-        set_bit(&mut self.value, 0, 0, value);
-    }
-
-    /// Set what [`Self::ims_vops_n3gpp`] reads.
-    pub fn set_ims_vops_n3gpp(&mut self, value: bool) {
-        set_bit(&mut self.value, 0, 1, value);
-    }
-
-    /// Emergency services support (bits 3-4 of octet 1).
-    pub fn emc(&self) -> u8 {
-        self.value.first().map(|b| (b >> 2) & 0x03).unwrap_or(0)
-    }
-
-    /// Emergency services support as a typed value.
-    pub fn emc_value(&self) -> Option<EmergencyServiceSupport> {
-        EmergencyServiceSupport::named(self.emc() & 0x03)
-    }
-
-    /// Write the two bits `code` at bit `shift` of the octet `index`.
-    fn write_two_bits(&mut self, index: usize, shift: u8, code: u8) {
-        if self.value.len() <= index {
-            self.value.resize(index + 1, 0);
-        }
-        self.value[index] = (self.value[index] & !(0x03 << shift)) | (code << shift);
-    }
-
-    /// Set the code of the emergency services support, 0 to 3.
-    pub fn set_emc(&mut self, value: u8) -> core::result::Result<&mut Self, ValueError> {
-        self.write_two_bits(0, 2, within("emc", value, 0, 3)?);
-        Ok(self)
-    }
-
-    /// Set what [`Self::emc_value`] reads.
-    pub fn set_emc_value(&mut self, value: EmergencyServiceSupport) {
-        self.write_two_bits(0, 2, u8::from(value));
-    }
-
-    /// Emergency services fallback (bits 5-6 of octet 1).
-    pub fn emf(&self) -> u8 {
-        self.value.first().map(|b| (b >> 4) & 0x03).unwrap_or(0)
-    }
-
-    /// Emergency services fallback support as a typed value.
-    pub fn emf_value(&self) -> Option<EmergencyFallbackSupport> {
-        EmergencyFallbackSupport::named(self.emf() & 0x03)
-    }
-
-    /// Set the code of the emergency services fallback, 0 to 3.
-    pub fn set_emf(&mut self, value: u8) -> core::result::Result<&mut Self, ValueError> {
-        self.write_two_bits(0, 4, within("emf", value, 0, 3)?);
-        Ok(self)
-    }
-
-    /// Set what [`Self::emf_value`] reads.
-    pub fn set_emf_value(&mut self, value: EmergencyFallbackSupport) {
-        self.write_two_bits(0, 4, u8::from(value));
-    }
-
-    /// Interworking without N26 (bit 7 of octet 1).
-    pub fn iwk_n26(&self) -> bool {
-        self.value
-            .first()
-            .map(|b| (b >> 6) & 0x01 != 0)
-            .unwrap_or(false)
-    }
-
-    /// Set what [`Self::iwk_n26`] reads.
-    pub fn set_iwk_n26(&mut self, value: bool) {
-        set_bit(&mut self.value, 0, 6, value);
-    }
-
-    /// Access identity 1 valid in the RPLMN or an equivalent PLMN (bit 8 of octet 1).
-    pub fn mpsi(&self) -> bool {
-        self.value
-            .first()
-            .map(|b| (b >> 7) & 0x01 != 0)
-            .unwrap_or(false)
-    }
-
-    /// Set what [`Self::mpsi`] reads.
-    pub fn set_mpsi(&mut self, value: bool) {
-        set_bit(&mut self.value, 0, 7, value);
-    }
-
-    /// MCS indicator (octet 4 bit 2 on wire; bit 2 of contents octet 2).
-    pub fn mcsi(&self) -> bool {
-        self.value
-            .get(1)
-            .map(|b| (b >> 1) & 0x01 != 0)
-            .unwrap_or(false)
-    }
-
     /// Return access identity 1 valid.
     pub fn access_identity_1_valid(&self) -> bool {
         self.mpsi()
@@ -2253,234 +2180,6 @@ impl NetworkFeatureSupport {
     /// Return access identity 2 valid.
     pub fn access_identity_2_valid(&self) -> bool {
         self.mcsi()
-    }
-
-    /// Emergency service support for non-3GPP access (octet 4 bit 1 on wire).
-    pub fn emcn3(&self) -> bool {
-        self.value.get(1).map(|b| b & 0x01 != 0).unwrap_or(false)
-    }
-
-    /// Set what [`Self::emcn3`] reads.
-    pub fn set_emcn3(&mut self, value: bool) {
-        set_bit(&mut self.value, 1, 0, value);
-    }
-
-    /// Set what [`Self::mcsi`] reads.
-    pub fn set_mcsi(&mut self, value: bool) {
-        set_bit(&mut self.value, 1, 1, value);
-    }
-
-    /// Restriction on enhanced coverage support (bits 3-4 of octet 2).
-    pub fn restrict_ec(&self) -> u8 {
-        self.value.get(1).map(|b| (b >> 2) & 0x03).unwrap_or(0)
-    }
-
-    /// Return restrict ec value.
-    pub fn restrict_ec_value(&self) -> Option<RestrictionOnEnhancedCoverage> {
-        RestrictionOnEnhancedCoverage::named(self.restrict_ec() & 0x03)
-    }
-
-    /// Set the code of the restriction on enhanced coverage, 0 to 3.
-    pub fn set_restrict_ec(&mut self, value: u8) -> core::result::Result<&mut Self, ValueError> {
-        self.write_two_bits(1, 2, within("restrict-ec", value, 0, 3)?);
-        Ok(self)
-    }
-
-    /// Set what [`Self::restrict_ec_value`] reads.
-    pub fn set_restrict_ec_value(&mut self, value: RestrictionOnEnhancedCoverage) {
-        self.write_two_bits(1, 2, u8::from(value));
-    }
-
-    /// 5G CP CIoT support (bit 5 of octet 2).
-    pub fn cp_ciot(&self) -> bool {
-        bit_at(&self.value, 1, 4)
-    }
-
-    /// Set what [`Self::cp_ciot`] reads.
-    pub fn set_cp_ciot(&mut self, value: bool) {
-        set_bit(&mut self.value, 1, 4, value);
-    }
-
-    /// N3 data transfer support (octet 4 bit 6 on wire).
-    ///
-    /// The encoded bit is inverted by the spec: 0 means supported, 1 means not supported.
-    pub fn n3_data(&self) -> bool {
-        !self.n3_data_not_supported()
-    }
-
-    /// Raw N3-data encoded state: true means N3 data transfer is not supported.
-    pub fn n3_data_not_supported(&self) -> bool {
-        bit_at(&self.value, 1, 5)
-    }
-
-    /// Set what [`Self::n3_data`] reads.
-    pub fn set_n3_data(&mut self, supported: bool) {
-        set_bit(&mut self.value, 1, 5, !supported);
-    }
-
-    /// Set what [`Self::n3_data_not_supported`] reads.
-    pub fn set_n3_data_not_supported(&mut self, value: bool) {
-        set_bit(&mut self.value, 1, 5, value);
-    }
-
-    /// 5G IPHC CP CIoT support (bit 7 of octet 2).
-    pub fn iphc_cp_ciot(&self) -> bool {
-        bit_at(&self.value, 1, 6)
-    }
-
-    /// Set what [`Self::iphc_cp_ciot`] reads.
-    pub fn set_iphc_cp_ciot(&mut self, value: bool) {
-        set_bit(&mut self.value, 1, 6, value);
-    }
-
-    /// 5G UP CIoT support (bit 8 of octet 2).
-    pub fn up_ciot(&self) -> bool {
-        bit_at(&self.value, 1, 7)
-    }
-
-    /// Set what [`Self::up_ciot`] reads.
-    pub fn set_up_ciot(&mut self, value: bool) {
-        set_bit(&mut self.value, 1, 7, value);
-    }
-
-    /// 5G LCS support (bit 1 of octet 3).
-    pub fn lcs_5g(&self) -> bool {
-        bit_at(&self.value, 2, 0)
-    }
-
-    /// Set what [`Self::lcs_5g`] reads.
-    pub fn set_lcs_5g(&mut self, value: bool) {
-        set_bit(&mut self.value, 2, 0, value);
-    }
-
-    /// ATS indication (bit 2 of octet 3).
-    pub fn ats_ind(&self) -> bool {
-        bit_at(&self.value, 2, 1)
-    }
-
-    /// Set what [`Self::ats_ind`] reads.
-    pub fn set_ats_ind(&mut self, value: bool) {
-        set_bit(&mut self.value, 2, 1, value);
-    }
-
-    /// 5G EHC CP CIoT support (bit 3 of octet 3).
-    pub fn ehc_cp_ciot(&self) -> bool {
-        bit_at(&self.value, 2, 2)
-    }
-
-    /// Set what [`Self::ehc_cp_ciot`] reads.
-    pub fn set_ehc_cp_ciot(&mut self, value: bool) {
-        set_bit(&mut self.value, 2, 2, value);
-    }
-
-    /// NCR support (bit 4 of octet 3).
-    pub fn ncr(&self) -> bool {
-        bit_at(&self.value, 2, 3)
-    }
-
-    /// Set what [`Self::ncr`] reads.
-    pub fn set_ncr(&mut self, value: bool) {
-        set_bit(&mut self.value, 2, 3, value);
-    }
-
-    /// PIV support (bit 5 of octet 3).
-    pub fn piv(&self) -> bool {
-        bit_at(&self.value, 2, 4)
-    }
-
-    /// Set what [`Self::piv`] reads.
-    pub fn set_piv(&mut self, value: bool) {
-        set_bit(&mut self.value, 2, 4, value);
-    }
-
-    /// RPR support (bit 6 of octet 3).
-    pub fn rpr(&self) -> bool {
-        bit_at(&self.value, 2, 5)
-    }
-
-    /// Set what [`Self::rpr`] reads.
-    pub fn set_rpr(&mut self, value: bool) {
-        set_bit(&mut self.value, 2, 5, value);
-    }
-
-    /// PR support (bit 7 of octet 3).
-    pub fn pr(&self) -> bool {
-        bit_at(&self.value, 2, 6)
-    }
-
-    /// Set what [`Self::pr`] reads.
-    pub fn set_pr(&mut self, value: bool) {
-        set_bit(&mut self.value, 2, 6, value);
-    }
-
-    /// UN-PER support (bit 8 of octet 3).
-    pub fn un_per(&self) -> bool {
-        bit_at(&self.value, 2, 7)
-    }
-
-    /// Set what [`Self::un_per`] reads.
-    pub fn set_un_per(&mut self, value: bool) {
-        set_bit(&mut self.value, 2, 7, value);
-    }
-
-    /// NAPS support (bit 1 of octet 4).
-    pub fn naps(&self) -> bool {
-        bit_at(&self.value, 3, 0)
-    }
-
-    /// Set what [`Self::naps`] reads.
-    pub fn set_naps(&mut self, value: bool) {
-        set_bit(&mut self.value, 3, 0, value);
-    }
-
-    /// LCS UPP support (bit 2 of octet 4).
-    pub fn lcs_upp(&self) -> bool {
-        bit_at(&self.value, 3, 1)
-    }
-
-    /// Set what [`Self::lcs_upp`] reads.
-    pub fn set_lcs_upp(&mut self, value: bool) {
-        set_bit(&mut self.value, 3, 1, value);
-    }
-
-    /// SUPL support (bit 3 of octet 4).
-    pub fn supl(&self) -> bool {
-        bit_at(&self.value, 3, 2)
-    }
-
-    /// Set what [`Self::supl`] reads.
-    pub fn set_supl(&mut self, value: bool) {
-        set_bit(&mut self.value, 3, 2, value);
-    }
-
-    /// RSLP support (bit 4 of octet 4).
-    pub fn rslp(&self) -> bool {
-        bit_at(&self.value, 3, 3)
-    }
-
-    /// Set what [`Self::rslp`] reads.
-    pub fn set_rslp(&mut self, value: bool) {
-        set_bit(&mut self.value, 3, 3, value);
-    }
-
-    /// MLCSUP support (bit 5 of octet 4).
-    pub fn mlcsup(&self) -> bool {
-        bit_at(&self.value, 3, 4)
-    }
-
-    /// Set what [`Self::mlcsup`] reads.
-    pub fn set_mlcsup(&mut self, value: bool) {
-        set_bit(&mut self.value, 3, 4, value);
-    }
-
-    /// EF5L support (bit 6 of octet 4).
-    pub fn ef5l(&self) -> bool {
-        bit_at(&self.value, 3, 5)
-    }
-
-    /// Set what [`Self::ef5l`] reads.
-    pub fn set_ef5l(&mut self, value: bool) {
-        set_bit(&mut self.value, 3, 5, value);
     }
 
     /// Raw octet at the given 1-based index (per spec numbering: `octet(1)` is octet 3 on wire).
@@ -3242,28 +2941,6 @@ impl TimeDuration {
     }
 }
 
-/// Helper: read bit `bit` (0..=7, 0=LSB/mask 0x01) from byte at index `idx` of `bytes`.
-#[inline]
-fn bit_at(bytes: &[u8], idx: usize, bit: u8) -> bool {
-    bytes
-        .get(idx)
-        .map(|b| (b >> bit) & 0x01 != 0)
-        .unwrap_or(false)
-}
-
-/// Helper: ensure `bytes` is at least `len + 1` bytes (pads with zeros), then set bit.
-#[inline]
-fn set_bit(bytes: &mut Octets, idx: usize, bit: u8, value: bool) {
-    if bytes.len() <= idx {
-        bytes.resize(idx + 1, 0);
-    }
-    if value {
-        bytes[idx] |= 1 << bit;
-    } else {
-        bytes[idx] &= !(1 << bit);
-    }
-}
-
 const FGMM_CAPABILITY_MAX_CONTENT_OCTETS: usize = 13;
 const FGMM_CAPABILITY_SPARE_ONLY_START_INDEX: usize = 11;
 
@@ -3274,7 +2951,7 @@ oxirush_utils::bits! {
     impl GmmCapability (value) "9.11.3.1" octets 13 {
         sgc "SGC": 0 8 1,
         iphc_cp_ciot "5G-IPHC-CP CIoT": 0 7 1,
-        n3_data_not_supported "N3 data": 0 6 1,
+        n3_data "N3 data": 0 6 1,
         cp_ciot "5G-CP CIoT": 0 5 1,
         restrict_ec "RestrictEC": 0 4 1,
         lpp "LPP": 0 3 1,
@@ -3366,13 +3043,13 @@ impl GmmCapability {
     // ──────────────────────────────────────────────────────────────────
 
     /// Build a single-octet 5GMM capability with the most common Rel-15 flags,
-    /// each the bit as sent: `n3_data_not_supported` is the N3 data bit.
+    /// each the bit as sent.
     /// For Rel-16+ bits use the per-bit `set_*()` setters or [`Self::from_octets`].
     #[allow(clippy::too_many_arguments)]
     pub fn from_flags(
         sgc: bool,
         iphc_cp_ciot: bool,
-        n3_data_not_supported: bool,
+        n3_data: bool,
         cp_ciot: bool,
         restrict_ec: bool,
         lpp: bool,
@@ -3386,7 +3063,7 @@ impl GmmCapability {
         if iphc_cp_ciot {
             b |= 0x40;
         }
-        if n3_data_not_supported {
+        if n3_data {
             b |= 0x20;
         }
         if cp_ciot {
@@ -3405,18 +3082,6 @@ impl GmmCapability {
             b |= 0x01;
         }
         Self::new(vec![b])
-    }
-
-    /// N3 data transfer support (octet 3 bit 6). The bit is inverted by the
-    /// specification: 0 means supported, 1 means not supported, which
-    /// [`Self::n3_data_not_supported`] reads.
-    pub fn n3_data(&self) -> bool {
-        !self.n3_data_not_supported()
-    }
-
-    /// Set what [`Self::n3_data`] reads.
-    pub fn set_n3_data(&mut self, supported: bool) {
-        self.set_n3_data_not_supported(!supported);
     }
 
     /// Build from checked capability contents. Octet 1 (= wire octet 3) is the
@@ -15193,51 +14858,22 @@ oxirush_utils::named_values! {
 }
 crate::common::enums::values_readable!(FeatureAuthMbsraiValue);
 
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl FeatureAuthorizationIndication (value) "9.11.3.105" octets 1 {
+        hpase "HPASE": 0 3 1,
+        mbsrai "MBSRAI": 0 1 2 as FeatureAuthMbsraiValue,
+    }
+}
+crate::common::field_table::table_ie!(FeatureAuthorizationIndication, octets, 1..=1, receives 1);
+
 impl FeatureAuthorizationIndication {
-    fn first(&self) -> u8 {
-        self.value.first().copied().unwrap_or(0)
-    }
-
-    /// HPASE semantic value: true means high-priority access UEs are exempt from restrictions
-    /// or the network does not support the operator policy.
-    pub fn hpase(&self) -> bool {
-        !self.high_priority_access_not_exempt()
-    }
-
-    /// Raw HPASE bit: true means high-priority access UEs are not exempt.
-    pub fn high_priority_access_not_exempt(&self) -> bool {
-        (self.first() >> 2) & 0x01 != 0
-    }
-
-    /// MBSRAI — MBS receiver authorization indicator (bits 1-2, mask 0x03).
-    pub fn mbsrai(&self) -> Option<FeatureAuthMbsraiValue> {
-        FeatureAuthMbsraiValue::named(self.first() & 0x03)
-    }
-
-    /// Raw MBSRAI value.
-    pub fn mbsrai_raw(&self) -> u8 {
-        self.first() & 0x03
-    }
-
-    /// Construct a value from flags.
+    /// Construct a value from its HPASE bit (1: high priority access UEs are not
+    /// exempt from service area restrictions) and its MBSRAI.
     pub fn from_flags(hpase: bool, mbsrai: FeatureAuthMbsraiValue) -> Self {
-        let mut b = u8::from(mbsrai) & 0x03;
-        if !hpase {
-            b |= 0x04;
-        }
-        Self::new(vec![b])
-    }
-
-    /// Construct a value from high priority access not exempt.
-    pub fn from_high_priority_access_not_exempt(
-        not_exempt: bool,
-        mbsrai: FeatureAuthMbsraiValue,
-    ) -> Self {
-        let mut b = u8::from(mbsrai) & 0x03;
-        if not_exempt {
-            b |= 0x04;
-        }
-        Self::new(vec![b])
+        let mut ie = Self::new(vec![0]);
+        ie.set_hpase(hpase).set_mbsrai_raw(u8::from(mbsrai));
+        ie
     }
 }
 
@@ -16325,13 +15961,15 @@ mod tests {
             ie.encode().unwrap();
         }
         let mut support = NetworkFeatureSupport::new(vec![]);
-        support.set_emc(1).unwrap();
+        support.set_emc(EmergencyServiceSupport::NrOnly).unwrap();
         encodes(&support);
         let mut support = NetworkFeatureSupport::new(vec![]);
-        support.set_emf(1).unwrap();
+        support.set_emf(EmergencyFallbackSupport::NrOnly).unwrap();
         encodes(&support);
         let mut support = NetworkFeatureSupport::new(vec![0]);
-        support.set_restrict_ec(1).unwrap();
+        support
+            .set_restrict_ec(RestrictionOnEnhancedCoverage::Restricted)
+            .unwrap();
         encodes(&support);
         let mut ambr = SessionAmbr::new(vec![]);
         ambr.set_downlink(6, 100);
@@ -17010,8 +16648,8 @@ mod tests {
         let nfs = NetworkFeatureSupport::new(vec![0x05]);
         assert!(nfs.ims_vops_3gpp());
         assert!(!nfs.ims_vops_n3gpp());
-        assert_eq!(nfs.emc(), 0x01);
-        assert_eq!(nfs.emf(), 0x00);
+        assert_eq!(nfs.emc(), EmergencyServiceSupport::NrOnly);
+        assert_eq!(nfs.emf(), EmergencyFallbackSupport::NotSupported);
         assert!(!nfs.iwk_n26());
         assert!(!nfs.mpsi());
     }
@@ -17022,12 +16660,12 @@ mod tests {
         assert!(nfs.emcn3());
         assert!(nfs.mcsi());
         assert_eq!(
-            nfs.restrict_ec_value(),
-            Some(RestrictionOnEnhancedCoverage::NotRestricted)
+            nfs.restrict_ec(),
+            RestrictionOnEnhancedCoverage::NotRestricted
         );
         assert!(!nfs.cp_ciot());
-        assert!(nfs.n3_data());
-        assert!(!nfs.n3_data_not_supported());
+        // The N3 data bit is 0: N3 data transfer supported
+        assert!(!nfs.n3_data());
         assert!(!nfs.iphc_cp_ciot());
         assert!(!nfs.up_ciot());
         assert!(nfs.lcs_5g());
@@ -18722,7 +18360,8 @@ mod tests {
             FeatureAuthMbsraiValue::AuthorizedAsMbsr,
         );
         assert!(ie.hpase());
-        assert_eq!(ie.mbsrai(), Some(FeatureAuthMbsraiValue::AuthorizedAsMbsr));
+        assert_eq!(ie.value, [0x06], "the HPASE bit is the bit 3");
+        assert_eq!(ie.mbsrai(), FeatureAuthMbsraiValue::AuthorizedAsMbsr);
         assert_eq!(ie.mbsrai_raw(), 2);
     }
 

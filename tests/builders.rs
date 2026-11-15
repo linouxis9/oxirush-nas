@@ -240,20 +240,26 @@ fn nothing_keeps_the_low_bits_of_what_it_is_given() {
         refused
     );
 
-    // The fields of two bits and of four
+    // The fields of two bits: a value of their table that the bits do not hold is
+    // refused, and nothing is written
     let mut support = NetworkFeatureSupport::new(vec![0, 0]);
+    use oxirush_nas::nas_5gs::{
+        EmergencyFallbackSupport, EmergencyServiceSupport, RestrictionOnEnhancedCoverage,
+    };
     assert_eq!(
-        text(support.set_emc(7).map(|_| ())),
-        "`emc` is 7, and must be 0 to 3"
+        (support.set_emc(EmergencyServiceSupport::Other(7)))
+            .map(|_| ())
+            .unwrap_err()
+            .to_string(),
+        "EMC: 7 is more than 3, the most that its bits hold"
     );
-    assert_eq!(
-        text(support.set_emf(4).map(|_| ())),
-        "`emf` is 4, and must be 0 to 3"
-    );
-    let refused = "`restrict-ec` is 5, and must be 0 to 3";
-    assert_eq!(text(support.set_restrict_ec(5).map(|_| ())), refused);
+    assert!(support.set_emf(EmergencyFallbackSupport::Other(4)).is_err());
+    assert!((support.set_restrict_ec(RestrictionOnEnhancedCoverage::Other(5))).is_err());
     assert_eq!(support.value, [0, 0]);
-    assert_eq!(support.set_emc(3).unwrap().value, [0x0c, 0]);
+    let written = support
+        .set_emc(EmergencyServiceSupport::NrAndEutra)
+        .unwrap();
+    assert_eq!(written.value, [0x0c, 0]);
     // The preferred CIoT behaviours are values of their own, reserved one
     // aside
     let mut update = UpdateType::new(vec![0x3c]);

@@ -175,15 +175,12 @@ fn a_flag_or_a_short_field_of_a_later_ie_is_its_bits() {
 
 #[test]
 fn the_feature_authorization_indication_has_hpase_in_bit_3() {
-    // HPASE in bit 3, 1 when high priority access is not exempted, and MBSRAI in bits
-    // 2 and 1 (§9.11.3.105)
+    // HPASE in bit 3, 1 when high priority access UEs are not exempt from service area
+    // restrictions, and MBSRAI in bits 2 and 1 (§9.11.3.105): the member is the bit
     let not_exempt = FeatureAuthorization::new(vec![0x04]);
-    assert!(not_exempt.high_priority_access_not_exempt() && !not_exempt.hpase());
-    assert!(FeatureAuthorization::new(vec![0x03]).hpase());
-    let written = FeatureAuthorization::from_flags(false, Mbsrai::AuthorizedAsMbsr);
-    assert_eq!(written.value, [0x06]);
-    let written =
-        FeatureAuthorization::from_high_priority_access_not_exempt(true, Mbsrai::AuthorizedAsMbsr);
+    assert!(not_exempt.hpase());
+    assert!(!FeatureAuthorization::new(vec![0x03]).hpase());
+    let written = FeatureAuthorization::from_flags(true, Mbsrai::AuthorizedAsMbsr);
     assert_eq!(written.value, [0x06]);
 }
 

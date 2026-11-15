@@ -40,7 +40,7 @@
 // `Result` of the standard library with an alias that takes one type.
 use crate::common::Reader;
 pub(crate) use crate::common::Result;
-pub(crate) use crate::common::{Decode, Encode, Error, Octets, ValueError};
+pub(crate) use crate::common::{Decode, Encode, Error, ValueError};
 use crate::common::{nas_ie_lv, nas_ie_lve, nas_ie_v, nas_ie_v_fixed, nas_ie_v_u16};
 use crate::prelude::*;
 

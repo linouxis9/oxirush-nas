@@ -35,6 +35,18 @@ All notable changes to `oxirush-nas` are recorded here.
 
 ### Changed
 
+- The 5GS network feature support and the feature authorization indication
+  come from their tables. The member `n3-data` of the 5GS network feature
+  support and of the 5GMM capability, and `hpase` of the feature authorization
+  indication, are the bit as its figure has it: `n3_data()` is true where the
+  bit says "N3 data transfer not supported", and `hpase()` where it says "high
+  priority access UEs are not exempt". The 5GMM capability's member was
+  `n3-data-not-supported`; `n3_data_not_supported()`,
+  `high_priority_access_not_exempt()` and
+  `from_high_priority_access_not_exempt()` go, and `from_flags()` of both takes
+  the bit. The two-bit fields of the 5GS network feature support are typed:
+  `emc()`, `emf()` and `restrict_ec()` return their values, `_raw` their bits,
+  where `emc_value()` and the others go.
 - The setter of a field of more than one bit that a table writes refuses a
   value that the bits of the field do not hold, and writes nothing: it returns
   `Result<&mut Self, OutOfRange>` ("Paging Time Window: 20 is more than 15, the

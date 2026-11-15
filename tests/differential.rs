@@ -26,42 +26,37 @@ fn message_5gs(octets: &str) -> Message {
 }
 
 /// TS 24.501 §9.11.3.1: bit 6 of octet 3 of the 5GMM capability is "N3
-/// data", and 0 means "N3 data transfer supported". The flag as sent is
-/// named for what a 1 means, and `n3_data()` is the capability, as those of
-/// the 5GS network feature support (§9.11.3.5) are.
+/// data", 0 "N3 data transfer supported" and 1 "N3 data transfer not
+/// supported". `n3_data()` and the member `n3-data` are the bit as the figure
+/// has it, as those of the 5GS network feature support (§9.11.3.5) are.
 #[test]
-fn n3_data_of_a_5gmm_capability_is_supported_when_its_bit_is_0() {
+fn n3_data_of_a_5gmm_capability_is_the_bit_of_the_figure() {
     // REGISTRATION REQUEST with a 5GMM capability of S1 mode, HO attach and LPP
     let request = "7e004101000d0102f8390000000021436587f9100107";
     let Message::Gmm(_, GmmMessage::RegistrationRequest(request)) = message_5gs(request) else {
         panic!("a REGISTRATION REQUEST")
     };
     let capability = request.fgmm_capability.unwrap();
-    assert!(capability.n3_data());
-    assert!(!capability.n3_data_not_supported());
+    assert!(!capability.n3_data());
     let mut not_supported = capability.clone();
-    not_supported.set_n3_data(false);
-    assert_eq!(not_supported.value, [0x27]);
-    assert!(not_supported.n3_data_not_supported());
     not_supported.set_n3_data(true);
+    assert_eq!(not_supported.value, [0x27]);
+    assert!(not_supported.n3_data());
+    not_supported.set_n3_data(false);
     assert_eq!(not_supported.value, [0x07]);
 }
 
 #[cfg(feature = "tree")]
 #[test]
-fn a_tree_names_the_n3_data_bit_for_what_a_1_means() {
-    for (octets, not_supported) in [
+fn a_tree_names_the_n3_data_bit_as_the_figure_does() {
+    for (octets, bit) in [
         ("7e004101000d0102f8390000000021436587f9100107", false),
         ("7e004101000d0102f8390000000021436587f9100127", true),
     ] {
         let tree = message_5gs(octets).to_tree();
         let flags = &tree["5gmm-capability"];
-        assert_eq!(
-            flags["n3-data-not-supported"],
-            oxirush_nas::tree!(not_supported),
-            "{octets}"
-        );
-        assert!(flags.get("n3-data").is_none(), "{octets}");
+        assert_eq!(flags["n3-data"], oxirush_nas::tree!(bit), "{octets}");
+        assert!(flags.get("n3-data-not-supported").is_none(), "{octets}");
     }
     // The N1 UE network capability of EPS (TS 24.301 §9.9.3.57), bit 2
     use oxirush_nas::nas_eps::*;

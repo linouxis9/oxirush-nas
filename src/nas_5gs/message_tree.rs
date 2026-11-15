@@ -1213,11 +1213,6 @@ fields_ie!(EpsNasSecurityAlgorithms {
 // The flags of an indication, by the names of its accessors.
 built_ie!(ControlPlaneOnlyIndication, Self::from_cpoi, { cpoi: bool });
 built_ie!(
-    FeatureAuthorizationIndication,
-    |hpase, mbsrai| Ok(Self::from_flags(hpase, mbsrai)),
-    { hpase: bool, mbsrai: FeatureAuthMbsraiValue = |ie| ie.mbsrai() }
-);
-built_ie!(
     Aun3DeviceSecurityKey,
     |askt, key: Vec<u8>| Self::from_typed(askt, &key),
     {
@@ -1878,42 +1873,6 @@ decoded_ie!(
 );
 
 // Capabilities: every flag by its name, and the algorithms by number.
-crate::common::nas_ie_flags!(@named NetworkFeatureSupport {
-    ims_vops_3gpp ims_vops_n3gpp iwk_n26 mpsi emcn3 mcsi cp_ciot n3_data iphc_cp_ciot up_ciot
-    lcs_5g ats_ind ehc_cp_ciot ncr piv rpr pr un_per naps lcs_upp supl rslp mlcsup ef5l
-});
-fields_ie!(NetworkFeatureSupport {
-    "emc":
-        |ie| Code::of(ie.emc_value(), ie.emc()),
-        |ie, code: Code<EmergencyServiceSupport>| write_code(
-            ie,
-            code,
-            |ie, name| {
-                ie.set_emc_value(name);
-            },
-            |ie| ie.emc(),
-        );
-    "emf":
-        |ie| Code::of(ie.emf_value(), ie.emf()),
-        |ie, code: Code<EmergencyFallbackSupport>| write_code(
-            ie,
-            code,
-            |ie, name| {
-                ie.set_emf_value(name);
-            },
-            |ie| ie.emf(),
-        );
-    "restrict-ec":
-        |ie| Code::of(ie.restrict_ec_value(), ie.restrict_ec()),
-        |ie, code: Code<RestrictionOnEnhancedCoverage>| write_code(
-            ie,
-            code,
-            |ie, name| {
-                ie.set_restrict_ec_value(name);
-            },
-            |ie| ie.restrict_ec(),
-        );
-} flags);
 fields_ie!(S1UeNetworkCapability {
     "eea": |ie| supported(ie, Self::supports_eea), |ie, algorithms: Vec<u16>| {
         (0..8).try_for_each(|algorithm| {
