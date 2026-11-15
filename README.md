@@ -313,49 +313,9 @@ the COUNT that a replayed message was sent with.
 
 Between the RAN and the core, a NAS message is the NAS-PDU of an
 [NGAP](https://github.com/linouxis9/oxirush-ngap) or
-[S1AP](https://github.com/linouxis9/oxirush-s1ap) message: the octets of
-`encode()`, which `decode()` reads back. This block uses oxirush-ngap and
-oxirush-s1ap, which the crate does not depend on: its documentation tests do
-not run it.
-
-```rust,ignore
-use oxirush_nas::{nas_5gs, nas_eps};
-use oxirush_ngap::{build_ngap, extract_ngap_ies, ngap::NASPDU};
-use oxirush_s1ap::build_s1ap;
-
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // The AMF: a REGISTRATION REJECT, cause #22, in a DOWNLINK NAS TRANSPORT
-    let reject = nas_5gs::Message::decode(&hex::decode("7e0044165f012a")?)?;
-    let downlink = build_ngap!(InitiatingMessage, DownlinkNASTransport, DownlinkNASTransport,
-        AMF_UE_NGAP_ID(1u64),
-        RAN_UE_NGAP_ID(7u32),
-        NAS_PDU(reject.encode()?),
-    )?;
-    assert_eq!(
-        downlink.to_tree().to_string(),
-        r#"{"message":"DownlinkNASTransport","ies":[{"AMF-UE-NGAP-ID":1},{"RAN-UE-NGAP-ID":7},{"NAS-PDU":"7e0044165f012a"}]}"#
-    );
-
-    // The gNB gives the UE the NAS-PDU, which decodes as the message
-    extract_ngap_ies!(downlink, DownlinkNASTransport,
-        req nas: NASPDU = NAS_PDU(nas) => nas,
-    );
-    assert_eq!(nas_5gs::Message::decode(&nas.0)?, reject);
-
-    // The MME: an ATTACH REJECT, cause #3, in a DOWNLINK NAS TRANSPORT of S1AP
-    let reject = nas_eps::Message::decode(&[0x07, 0x44, 0x03])?;
-    let downlink = build_s1ap!(InitiatingMessage, downlinkNASTransport, DownlinkNASTransport,
-        MME_UE_S1AP_ID(1u32),
-        eNB_UE_S1AP_ID(7u32),
-        NAS_PDU(reject.encode()?),
-    )?;
-    assert_eq!(
-        downlink.to_tree().to_string(),
-        r#"{"message":"DownlinkNASTransport","ies":[{"MME-UE-S1AP-ID":1},{"eNB-UE-S1AP-ID":7},{"NAS-PDU":"074403"}]}"#
-    );
-    Ok(())
-}
-```
+[S1AP](https://github.com/linouxis9/oxirush-s1ap) message: the octets that
+`encode()` writes and `decode()` reads back. The READMEs of those two crates
+put a NAS-PDU in a DOWNLINK NAS TRANSPORT.
 
 ## Change a decoded message
 
@@ -663,45 +623,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ## Performance
 
-On core 2 of an Intel Xeon E5-2680 v4 (Broadwell, 2.4 GHz, a KVM guest, Linux
-7.0, Rust 1.100.0), at 626037a on 2026-11-15, for a message of the 5GS
-fixtures (19 octets on average): the median of ten runs, which were within
-13 % of each other.
+| Operation, on the messages of the fixtures | Time | Other implementations, time over this crate's |
+|---|---|---|
+| Decode a 5GS message | 224.6 ns | free5GC 3.9x, Open5GS 14x |
+| Encode a 5GS message | 75.5 ns | free5GC 4.5x, Open5GS 44x |
+| Decode an EPS message | 196.1 ns | Open5GS 10x |
+| `to_tree` of a 5GS message | 5.1 µs | |
+| `from_tree` of a 5GS message | 9.9 µs | |
+| `protect`, `unprotect` (128-NIA2, 128-NEA2) | 589 ns, 817 ns | |
 
-| Operation | Time | Allocations |
-|-----------|------|-------------|
-| `decode` | 235 ns | 1.2 |
-| `encode` | 97 ns | 1.0 |
-| `validate` | 616 ns | 3.2 |
-| `to_tree` | 5.1 µs | 28 |
-| `from_tree` | 9.9 µs | 31 |
-| `with_tree` | 7.3 µs | 29 |
-| `protect`, `unprotect` (128-NIA2, 128-NEA2) | 589 ns, 817 ns | 1.0, 2.3 |
-
-[`benches/`](benches/README.md) has how to run them and the profilers.
-
-### Against other implementations
-
-The plain messages of the fixtures, decoded and encoded by this crate and
-four other implementations, at 626037a on the same machine, ten rounds in
-turns. A ratio is the median time of the other implementation over this
-crate's, given where the ten times of the two do not overlap. free5GC's
-library has no EPS, and packet-dissector only decodes.
-
-| Operation | oxirush-nas | free5GC nas v1.2.3 | Open5GS v2.8.0 | packet-dissector 0.6.1 | pycrate 0.8.1 |
-|---|---|---|---|---|---|
-| Decode, 5GS, 87 messages | 224.6 ns | 3.9x | 14x | 1.1x | 2,600x |
-| Decode, EPS, 95 messages | 196.1 ns | | 10x | about the same | 2,000x |
-| Encode, 5GS, 72 messages | 75.5 ns | 4.5x | 44x | | 650x |
-| Encode, EPS, 82 messages | 74.5 ns | | 44x | | 600x |
-
-[`benches/`](benches/README.md#against-other-implementations) has every
-figure, with cycles, instructions, allocations and peak memory, and the
-method. `benches/compare/compare.sh 3` runs every row on core 3:
-
-```sh
-benches/compare/compare.sh 3
-```
+Medians of ten runs on one core of an Intel Xeon E5-2680 v4 (a KVM guest,
+Linux 7.0, Rust 1.100.0), at 626037a on 2026-11-15; a ratio is given only
+where the ten times of the two do not overlap.
+[`benches/README.md`](benches/README.md) has every figure, the allocations,
+packet-dissector and pycrate, the method and the commands.
 
 ## Tests and fuzzing
 
@@ -720,13 +655,9 @@ build. Twelve fuzz targets decode, edit and build messages, take any path
 of their trees and protect them, for a minute each at each commit, an hour
 each day but Sunday and four hours on Tuesday. `examples/` has six programs, each for 5GS and for EPS.
 
-Each Rust block of this page runs as a documentation test, which checks
-what it shows with `assert_eq!`, but for the block of NGAP and S1AP: the
-crate does not depend on those two.
 [The documentation](https://docs.rs/oxirush-nas) has what the crate covers,
 the rules of the receiver and the sender, the versions of the
-specifications, and the tests. In a clone,
-`cargo doc --all-features --open` builds it.
+specifications, and the tests.
 
 A pull request comes with a test for what it changes. Sign off your commits
 (`git commit -s`): by contributing you agree to the [Developer Certificate

@@ -3,21 +3,35 @@
 A package of its own, which the published crate does not have. It measures
 the codec, the JSON forms and NAS security on the messages of the fixtures,
 with criterion; [`src/lib.rs`](src/lib.rs) has the commands of the
-profilers. The [README](../README.md#performance) has the figures of the
-crate alone, taken on core 2 of an Intel Xeon E5-2680 v4 (Broadwell, 2.4 GHz;
-a KVM guest bound to NUMA node 0; Linux 7.0, Rust 1.100.0) at 626037a on
-2026-11-15, the median of ten runs of `codec` (with the feature `security`),
-and the allocations of `allocations`.
+profilers.
 
 ```sh
 cargo bench
 ```
 
+## The crate alone
+
+On core 2 of an Intel Xeon E5-2680 v4 (Broadwell, 2.4 GHz; a KVM guest bound
+to NUMA node 0; Linux 7.0, Rust 1.100.0), at 626037a on 2026-11-15, for a
+message of the 5GS fixtures (19 octets on average): the median of ten runs
+of `codec` (with the feature `security`), which were within 13 % of each
+other, and the allocations of `allocations`.
+
+| Operation | Time | Allocations |
+|-----------|------|-------------|
+| `decode` | 235 ns | 1.2 |
+| `encode` | 97 ns | 1.0 |
+| `validate` | 616 ns | 3.2 |
+| `to_tree` | 5.1 µs | 28 |
+| `from_tree` | 9.9 µs | 31 |
+| `with_tree` | 7.3 µs | 29 |
+| `protect`, `unprotect` (128-NIA2, 128-NEA2) | 589 ns, 817 ns | 1.0, 2.3 |
+
 ## Against other implementations
 
 The plain messages of the fixtures that each implementation decodes, and
 for encoding those that each writes back to the same octets, on core 3 of
-the machine of the README (Go 1.27.4, Python 3.14, GCC 15.2), at 626037a on
+the same machine (Go 1.27.4, Python 3.14, GCC 15.2), at 626037a on
 2026-11-15. Each implementation ran once a round, in turns, ten rounds: a
 time is the median of the ten, beside the lowest and the highest. Cycles
 and instructions are per message, the median of those of `perf stat` in
