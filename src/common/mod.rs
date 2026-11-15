@@ -56,6 +56,8 @@ pub(crate) use codec::{
 };
 pub use direction::Direction;
 pub(crate) use identity::{of_type, receiver_identity};
+#[cfg(all(test, feature = "tree"))]
+pub(crate) use ie_macros::IeFormat;
 #[allow(unused_imports)]
 pub(crate) use ie_macros::nas_ie_flags;
 pub(crate) use ie_macros::{

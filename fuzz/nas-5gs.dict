@@ -1,4 +1,4 @@
-# The message types and IEs of the tables of src/nas_5gs: written by fuzz/dict.sh.
+# The message types and IEs of the tables of src/nas_5gs: written by the test `dictionaries` of src/dictionary_tests.rs.
 RegistrationRequest="\x7e\x00\x41"
 RegistrationAccept="\x7e\x00\x42"
 RegistrationComplete="\x7e\x00\x43"

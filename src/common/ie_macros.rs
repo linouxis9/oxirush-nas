@@ -88,6 +88,10 @@ macro_rules! nas_ie_v {
             "Value octet, or the half octet of a type 1 IE in bits 4 to 1.",
             u8
         );
+        #[cfg(all(test, feature = "tree"))]
+        impl crate::common::IeFormat for $name {
+            const FORMAT: &'static str = "v";
+        }
         impl Encode for $name {
             fn encode_into(&self, buffer: &mut Vec<u8>) -> Result<()> {
                 buffer.push(self.value);
@@ -106,6 +110,10 @@ macro_rules! nas_ie_v {
 macro_rules! nas_ie_v_u16 {
     ($(#[$meta:meta])* $name:ident) => {
         crate::common::nas_ie_struct!($(#[$meta])* $name, "Value octets.", u16);
+        #[cfg(all(test, feature = "tree"))]
+        impl crate::common::IeFormat for $name {
+            const FORMAT: &'static str = "v_u16";
+        }
         impl Encode for $name {
             fn encode_into(&self, buffer: &mut Vec<u8>) -> Result<()> {
                 buffer.extend_from_slice(&self.value.to_be_bytes());
@@ -125,6 +133,10 @@ macro_rules! nas_ie_v_u16 {
 macro_rules! nas_ie_v_fixed {
     ($(#[$meta:meta])* $name:ident, $len:expr) => {
         crate::common::nas_ie_struct!($(#[$meta])* $name, "Value octets.", octets);
+        #[cfg(all(test, feature = "tree"))]
+        impl crate::common::IeFormat for $name {
+            const FORMAT: &'static str = "v_fixed";
+        }
         impl Encode for $name {
             fn encode_into(&self, buffer: &mut Vec<u8>) -> Result<()> {
                 if self.value.len() != $len {
@@ -173,6 +185,10 @@ macro_rules! nas_ie_lv {
     ($(#[$meta:meta])* $name:ident $(, $own_debug:ident)?) => {
         crate::common::nas_ie_struct!($(#[$meta])* $name, "Value octets.", octets $(, $own_debug)?);
         crate::common::nas_ie_lv!(@codec $name);
+        #[cfg(all(test, feature = "tree"))]
+        impl crate::common::IeFormat for $name {
+            const FORMAT: &'static str = "lv";
+        }
     };
 }
 
@@ -205,6 +221,10 @@ macro_rules! nas_ie_lve {
     ($(#[$meta:meta])* $name:ident $(, $own_debug:ident)?) => {
         crate::common::nas_ie_struct!($(#[$meta])* $name, "Value octets.", octets $(, $own_debug)?);
         crate::common::nas_ie_lve!(@codec $name);
+        #[cfg(all(test, feature = "tree"))]
+        impl crate::common::IeFormat for $name {
+            const FORMAT: &'static str = "lve";
+        }
     };
 }
 
@@ -290,6 +310,13 @@ macro_rules! nas_ie_flags {
             )* }
         }
     };
+}
+
+/// The format of an IE type, as the macro that writes it says it: what the
+/// fuzz dictionaries are written from.
+#[cfg(all(test, feature = "tree"))]
+pub(crate) trait IeFormat {
+    const FORMAT: &'static str;
 }
 
 pub(crate) use {

@@ -154,8 +154,8 @@ jobs:
         with:
           workspaces: fuzz
       - run: cargo install cargo-fuzz --locked
-      # The dictionaries are those that the tables of the crate give.
-      - run: ./fuzz/dict.sh && git diff --exit-code fuzz/nas-5gs.dict fuzz/nas-eps.dict
+      # The dictionaries are those that the tables of the crate write.
+      - run: cargo test --features tree --lib dictionaries
       # Each corpus of a target that reads octets starts from the messages of
       # tests/fixtures; the other targets start from the fixtures themselves.
       - run: ./fuzz/seed.sh

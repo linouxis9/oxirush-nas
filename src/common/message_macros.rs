@@ -628,6 +628,19 @@ macro_rules! nas_message {
                 $(crate::common::names::name!(stringify!($ofield)),)*
             ];
 
+            /// The optional IEs of the table, for the fuzz dictionaries: the
+            /// IEIs and the field as the table writes them, the format of
+            /// the type, and the least length in the message as written.
+            #[cfg(test)]
+            pub(crate) const DICTIONARY_IES: &[(&[&str], &str, &str, Option<&str>)] = &[
+                $((
+                    &[$(stringify!($iei)),+],
+                    stringify!($ofield),
+                    <$otype as crate::common::IeFormat>::FORMAT,
+                    nas_message!(@least $({wire_len $omin, $omax})?),
+                ),)*
+            ];
+
             /// The rows of the table of the message, in the order of
             /// [`PRINTED_FIELDS`](Self::PRINTED_FIELDS).
             pub(crate) const IES: &[crate::IeRow] = &[
@@ -893,6 +906,8 @@ macro_rules! nas_message {
 
     // The length of an IE in the message, its IEI included, where the table
     // of the message gives it.
+    (@least) => { None };
+    (@least {wire_len $min:expr, $max:expr}) => { Some(stringify!($min)) };
     (@length) => { None };
     (@length {wire_len $min:expr, $max:expr}) => { Some(($min, $max)) };
     (@sender_olength $findings:ident, $encoded:ident, $self:ident, $field:ident,
@@ -1133,6 +1148,15 @@ macro_rules! nas_messages {
                     $($(Self::$svariant(message) => &**message,)+)*
                 }
             }
+
+            /// The types of the table and of the messages that share one, with
+            /// their codes, and the optional IEs of each message: what the
+            /// fuzz dictionaries are written from.
+            #[cfg(all(test, feature = "tree"))]
+            pub(crate) const DICTIONARY: (&[(&str, u8)], &[&[(&[&str], &str, &str, Option<&str>)]]) = (
+                &[$((stringify!($variant), $code),)+ $((stringify!($shared), $scode),)*],
+                &[$(<$body>::DICTIONARY_IES,)+ $($(<$sbody>::DICTIONARY_IES,)+)*],
+            );
 
             /// The variants, as the code writes them.
             #[cfg(feature = "tree")]

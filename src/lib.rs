@@ -445,6 +445,8 @@ mod prelude {
 
 mod common;
 #[cfg(all(test, feature = "tree"))]
+mod dictionary_tests;
+#[cfg(all(test, feature = "tree"))]
 mod message_tree_tests;
 pub mod nas_5gs;
 pub mod nas_eps;

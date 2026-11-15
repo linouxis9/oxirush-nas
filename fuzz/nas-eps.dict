@@ -1,4 +1,4 @@
-# The message types and IEs of the tables of src/nas_eps: written by fuzz/dict.sh.
+# The message types and IEs of the tables of src/nas_eps: written by the test `dictionaries` of src/dictionary_tests.rs.
 AttachRequest="\x07\x41"
 AttachAccept="\x07\x42"
 AttachComplete="\x07\x43"
