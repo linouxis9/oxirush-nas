@@ -4,6 +4,12 @@ All notable changes to `oxirush-nas` are recorded here.
 
 ## 0.8.0 - unreleased
 
+The fields of most IEs come from the tables of their figures, with the macros of
+oxirush-utils 0.3: a value that the table does not name is kept as `Other`, a setter of
+a field of several bits refuses a value that its bits cannot hold, and the getters
+return what the IE has. The trees are five to fifteen times as fast. Many accessors are
+renamed or change their types: the table at the end of the section has the migration.
+
 ### Added
 
 - `cleartext_ies()` of `GmmMessageType`: the cleartext IEs of an initial NAS
@@ -40,11 +46,11 @@ All notable changes to `oxirush-nas` are recorded here.
 
 ### Changed
 
-- The member `n3-data` of the N1 UE network capability of EPS (TS 24.301
+- Breaking: The member `n3-data` of the N1 UE network capability of EPS (TS 24.301
   §9.9.3.57), which was `n3-data-not-supported`, is the "N3 data" bit as its
   figure has it: `n3_data()` and `set_n3_data()` read and write it, and
   `n3_data_transfer_supported()`, its negation, goes.
-- The 5GS network feature support and the feature authorization indication
+- Breaking: The 5GS network feature support and the feature authorization indication
   come from their tables. The member `n3-data` of the 5GS network feature
   support and of the 5GMM capability, and `hpase` of the feature authorization
   indication, are the bit as its figure has it: `n3_data()` is true where the
@@ -56,25 +62,25 @@ All notable changes to `oxirush-nas` are recorded here.
   the bit. The two-bit fields of the 5GS network feature support are typed:
   `emc()`, `emf()` and `restrict_ec()` return their values, `_raw` their bits,
   where `emc_value()` and the others go.
-- The setter of a field of more than one bit that a table writes refuses a
+- Breaking: The setter of a field of more than one bit that a table writes refuses a
   value that the bits of the field do not hold, and writes nothing: it returns
   `Result<&mut Self, OutOfRange>` ("Paging Time Window: 20 is more than 15, the
   most that its bits hold"). The setter of bits (`_raw`) writes those of the
   value that the field has, as before.
 - The tree of a message holds the names of its members and of the variants
-  of its values without copying them, with oxirush-utils at 8f0b227.
-- The EMM and ESM causes come from their tables: `cause()` returns the value
+  of its values without copying them, with oxirush-utils 0.3.
+- Breaking: The EMM and ESM causes come from their tables: `cause()` returns the value
   of the octet, not an `Option` (`name()` says whether the table names it).
-- The extended DRX parameters come from their table:
+- Breaking: The extended DRX parameters come from their table:
   `set_paging_time_window()` and `set_edrx_value()` return `&mut Self` and
   write the four bits of their value, where they refused a value over 15.
-- Thirty IEs of one coded value (the 5GMM and 5GSM causes, the service,
+- Breaking: Thirty IEs of one coded value (the 5GMM and 5GSM causes, the service,
   PDU session, SSC mode, access, payload container, request, attach, update
   and PDN types, the DRX values and the others) come from tables. Their getters
   return the value as the IE has it, not an `Option` (`name()` says whether the
   table names it, `effective()` reads it as a receiver does); the `_strict`
   getters go; setters keep the bits that they do not write.
-- The EPS additional update type, voice domain preference and UE's usage
+- Breaking: The EPS additional update type, voice domain preference and UE's usage
   setting, T3412 extended value, DRX parameter, UE radio capability ID request
   and the truncated 5G-S-TMSI configuration come from tables. Their getters
   return the field as the IE has it, not an `Option`, and a reserved value is
@@ -84,7 +90,7 @@ All notable changes to `oxirush-nas` are recorded here.
   EMM cause, and the others) come from tables: each flag has a setter that
   returns `&mut Self`, and each type `spare_bits_are_zero()`. A tree that edits
   one of them keeps the bits that it does not write.
-- The 5GS de-registration type, registration result, update type and control
+- Breaking: The 5GS de-registration type, registration result, update type and control
   plane service type, and the EPS update type, control plane service type and
   detach type come from the tables of their figures. `result()`,
   `result_raw()` and `set_result()` replace the `result_value` accessors;
@@ -93,7 +99,7 @@ All notable changes to `oxirush-nas` are recorded here.
   `is_active()` and `is_switch_off()`; the `_strict` getters go; getters of
   coded fields return the value as the IE has it. A tree that writes a number
   too wide for its field is refused with the width of the field.
-- The 5GSM capability, the EPS network feature support and the N1 UE network
+- Breaking: The 5GSM capability, the EPS network feature support and the N1 UE network
   capability come from the tables of their figures. `GsmCapability::atsss_st()`
   and `atsss_ll()` return the typed values (the bits are `atsss_st_raw()` and
   `atsss_ll_raw()`; the `_value` accessors go); `cs_lcs()` and `pnb_ciot()`
@@ -107,7 +113,7 @@ All notable changes to `oxirush-nas` are recorded here.
   tables of their figures: their setters return `&mut Self`, and each has
   `spare_bits_are_zero()`. `validate()` reports spare bits set in a 5GMM
   capability.
-- Every table of values (102, of TS 24.501, TS 24.301 and TS 24.008) is a
+- Breaking: Every table of values (102, of TS 24.501, TS 24.301 and TS 24.008) is a
   table of `named_values!` of oxirush-utils, as `RegistrationTypeValue` is:
   `Other(u8)`, `from_value()`, `named()`, `value()`, `name()`, `tree_name()`
   and `effective()`. `TryFrom<u8>` never fails (`named()` reads a code
@@ -120,14 +126,14 @@ All notable changes to `oxirush-nas` are recorded here.
   `PduSessionTypeValue::sbi_str()` returns an `Option`; an access type gives
   its `NasConnection` by `TryFrom`. `IpHdrCompAdditionalSetupType::Other` is
   `OtherProfile`. The trees do not change.
-- The accessors of the 5GS registration type (§9.11.3.7) come from the table
+- Breaking: The accessors of the 5GS registration type (§9.11.3.7) come from the table
   of its figure, and so does its tree: `set_registration_type()` and
   `set_follow_on_request()` return `&mut Self`; `registration_type_raw()`,
   `set_registration_type_raw()` and `spare_bits_are_zero()` are new;
   `validate()` reports spare bits that are set; its tree takes a number up to
   7. The tree is decided from the masks of the fields, without writing the IE
   back.
-- `RegistrationTypeValue` is a table of `named_values!` of oxirush-utils:
+- Breaking: `RegistrationTypeValue` is a table of `named_values!` of oxirush-utils:
   it has `Other(u8)` for a value that the table does not name, `from_value()`,
   `value()`, `name()` (the words of the table), `tree_name()` and
   `effective()`, the value as a network reads it. `received()` goes, and
@@ -161,7 +167,7 @@ All notable changes to `oxirush-nas` are recorded here.
 
 ### Removed
 
-- The UE policy delivery service of TS 24.501 Annex D: its six messages,
+- Breaking: the UE policy delivery service of TS 24.501 Annex D: its six messages,
   `UpdsEnvelope`, `UpdsMessage`, their IEs and their `validate()`, and
   `decode_as_ue_policy_message()` and `from_ue_policy_message()` of
   `PayloadContainer`. A payload container of the type "UE policy container"
@@ -170,13 +176,13 @@ All notable changes to `oxirush-nas` are recorded here.
   without `Upds`: `EventNotificationContainer`, `EventNotificationIndicator`,
   `EventNotificationIndicatorType`, `MultiplePayloadContainer` and
   `MultiplePayloadEntry`. The fuzz target `upds` goes with them.
-- The packets of the configuration protocols in the protocol configuration
-  options: a unit of LCP, PAP, CHAP or IPCP (C021H, C023H, C223H, 8021H) is
+- Breaking: the packets of the configuration protocols in the protocol
+  configuration options: a unit of LCP, PAP, CHAP or IPCP (C021H, C023H, C223H, 8021H) is
   a `container` of its identifier and its octets in a tree, as any unit
   without a name: `{"container": {"identifier": 49187, "contents": "0101"}}`
   where a tree had `{"pap": "0101"}`. A tree that names `lcp`, `pap`, `chap`
   or `ipcp` is refused.
-- The aliases of the 5GS IEs kept for callers of earlier versions:
+- Breaking: the aliases of the 5GS IEs kept for callers of earlier versions:
   `GsmCongestionReAttemptIndicator::from_abo(abo)`, which is
   `from_flags(abo, false)`; `GsmNetworkFeatureSupport::from_ept_s1(ept_s1)`,
   which is `from_flags(ept_s1, false)`; `QosFlowDescriptions::descriptions()`,
@@ -204,6 +210,33 @@ All notable changes to `oxirush-nas` are recorded here.
   value of at least 2 octets" and "message-table length is under 3", where
   the two read "2 to 18446744073709551615 octets" and
   "outside 3..=18446744073709551615".
+
+### Migration from 0.7
+
+| 0.7 | 0.8 |
+|-----|-----|
+| `ie.set_field(value)` of a field of several bits, `RegistrationType::set_registration_type(value)` | `ie.set_field(value)?`: it returns `Result<&mut Self, OutOfRange>` |
+| `set_paging_time_window(value)?`, `set_edrx_value(value)?` | `set_paging_time_window(value)`, `set_edrx_value(value)`: they write the four bits of the value |
+| `if let Some(value) = ie.field()` of a coded value, `field_strict()` | `ie.field()`, the value that the IE has; `.effective()` reads it as a receiver does, `.name()` says whether the table names it |
+| `EmmCause::cause()`, `EsmCause::cause()` giving an `Option` | `cause()`, the value of the octet |
+| `Value::try_from(code)?`, `Value::received(code)` | `Value::named(code)` reads a code strictly, `Value::from_value(code).effective()` as a receiver does |
+| `value.description()` | `value.name()` |
+| `RegistrationType::registration_type()` read as a network reads it | `registration_type().effective()` |
+| `result_value()`, `set_result_value()` | `result()`, `result_raw()`, `set_result()` |
+| `DeRegistrationType::deregistration_access_type()` | `access_type()` |
+| `is_active()`, `is_switch_off()` of a de-registration or detach type | `active()`, `switch_off()` |
+| `emc_value()`, `emf_value()`, `restrict_ec_value()` | `emc()`, `emf()`, `restrict_ec()`, and `_raw()` for the bits |
+| `atsss_st_value()`, `atsss_ll_value()` | `atsss_st()`, `atsss_ll()`, and `_raw()` for the bits |
+| `n3_data_transfer_supported()` of the EPS N1 UE network capability | `!n3_data()` |
+| `n3_data_not_supported()` of the 5GMM capability, `high_priority_access_not_exempt()` | `n3_data()`, `hpase()` |
+| `PduSessionTypeValue::sbi_str()` giving a `&str` | `sbi_str()`, an `Option<&str>` |
+| `IpHdrCompAdditionalSetupType::Other` | `IpHdrCompAdditionalSetupType::OtherProfile` |
+| `UpdsEnvelope`, `UpdsMessage`, `decode_as_ue_policy_message()` | the octets of the payload container |
+| `UpdsMultiplePayloadContainer`, `UpdsEventNotification*` | `MultiplePayloadContainer`, `MultiplePayloadEntry`, `EventNotification*` |
+| `{"pap": "0101"}` in the tree of the protocol configuration options | `{"container": {"identifier": 49187, "contents": "0101"}}` |
+| `GsmCongestionReAttemptIndicator::from_abo(abo)`, `GsmNetworkFeatureSupport::from_ept_s1(ept_s1)` | `from_flags(abo, false)`, `from_flags(ept_s1, false)` |
+| `QosFlowDescriptions::descriptions()` | `try_descriptions().unwrap_or_default()` |
+| `PduSessionReactivationResult::is_active`, `active_sessions`, `from_sessions` | `reactivation_failed`, `failed_sessions`, `from_failed_sessions` |
 
 ## 0.7.1 - 2026-11-09
 

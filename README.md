@@ -60,7 +60,7 @@ hex = "0.4" # for the examples of this page
 # With NAS security and JSON:
 # oxirush-nas = { version = "0.8", features = ["security", "tree"] }
 # The keys of the registration below:
-# oxirush-security = "0.4"
+# oxirush-security = "0.5"
 ```
 
 | Feature | Adds | Dependencies |
@@ -71,8 +71,9 @@ hex = "0.4" # for the examples of this page
 | `idna` | The NAI of a SUCI is checked as an internationalized name too | `idna`, `unicode-normalization` |
 
 Without its default features the crate is `no_std` and needs an allocator;
-`security` still works. With `tree`, oxirush-utils 0.2 and serde_json 1 are
-public dependencies: a tree is an
+`security` still works. Every build depends on oxirush-utils 0.3, whose
+identities and fields the IEs are written with. With `tree`, oxirush-utils
+and serde_json 1 are public dependencies: a tree is an
 `oxirush_utils::tree::Value`.
 
 The minimum supported Rust version is 1.88. Cargo's resolver 3, the
@@ -304,6 +305,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 has an example of each of the other tasks: restore a context after a
 restart, change its algorithms with `reselect_algorithms`, and protect an
 invalid payload for a negative test with `protect_opaque_payload`.
+`protect_into` appends a protected message to a buffer that is used again,
+`set_nas_count` moves the COUNT of a direction, and `replayed_count` gives
+the COUNT that a replayed message was sent with.
 
 ## Carry the messages in NGAP and S1AP
 
@@ -384,6 +388,44 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "5GMM RegistrationReject (5gmm-cause: #3 (Illegal UE), t3502-value: 12 min)"
     );
     assert_eq!(hex::encode(msg.encode()?), "7e00440316012c");
+    Ok(())
+}
+```
+
+## The table of a message, and the fields of an IE
+
+The IEs of each message come from its table, and the fields of an IE from
+the figure of its clause. A setter refuses a value that the bits of its
+field cannot hold, and writes nothing.
+
+```rust
+use oxirush_nas::nas_5gs::*;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // The IEs of a REGISTRATION REJECT: the mandatory one, then the optional
+    // ones with their IEIs
+    let rows: Vec<String> = (GmmMessageType::RegistrationReject.ies().iter())
+        .map(|row| format!("{} {:02x?} {}", row.name, row.iei, row.mandatory))
+        .collect();
+    assert_eq!(rows.len(), 16);
+    assert_eq!(rows[..3], ["5gmm-cause [] true", "t3346-value [5f] false", "t3502-value [16] false"]);
+
+    // The IEs that a SERVICE REQUEST sends in clear, outside its container
+    let cleartext = GmmMessageType::ServiceRequest.cleartext_ies();
+    assert_eq!(cleartext, Some(&["ngksi", "service-type", "5g-s-tmsi"][..]));
+
+    // A field as the IE has it, and as a network reads it
+    let mut kind = RegistrationType::default();
+    kind.set_registration_type(RegistrationTypeValue::Other(0))?;
+    assert_eq!(kind.registration_type().effective(), RegistrationTypeValue::InitialRegistration);
+
+    // 8 does not fit in the three bits of the field
+    let refused = kind.set_registration_type(RegistrationTypeValue::Other(8)).unwrap_err();
+    assert_eq!(
+        refused.to_string(),
+        "5GS registration type value: 8 is more than 7, the most that its bits hold"
+    );
+    assert_eq!(kind.value, 0x00);
     Ok(())
 }
 ```
@@ -698,7 +740,8 @@ says how to report a vulnerability.
 - [oxirush-security](https://github.com/linouxis9/oxirush-security): NAS security, AKA and the derivation of keys.
 - [oxirush-ngap](https://github.com/linouxis9/oxirush-ngap): NGAP, between a gNB and an AMF.
 - [oxirush-s1ap](https://github.com/linouxis9/oxirush-s1ap): S1AP, between an eNB and an MME.
-- [oxirush-gtp-u](https://github.com/linouxis9/oxirush-gtp-u): GTP-U tunnels, with a test UPF.
+- [oxirush-gtp-u](https://github.com/linouxis9/oxirush-gtp-u): GTP-U tunnels, with a user-plane test peer.
+- [oxirush-pfcp](https://github.com/linouxis9/oxirush-pfcp): PFCP, between the control plane and the user plane.
 - [oxirush-sctp](https://github.com/linouxis9/oxirush-sctp): SCTP sockets, which carry NGAP and S1AP.
 
 ## License

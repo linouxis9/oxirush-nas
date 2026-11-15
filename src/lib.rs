@@ -95,6 +95,7 @@
 //! | Register a UE, from its REGISTRATION REQUEST to the ACCEPT | [`nas_5gs::Message`], [`nas_5gs::AuthenticationRequest`], [`nas_5gs::SecurityModeCommand`], [`nas_5gs::SecurityContext`], [`nas_5gs::RegistrationAccept`] |
 //! | Attach a UE to EPS | [`nas_eps::Message`], [`nas_eps::AuthenticationRequest`], [`nas_eps::SecurityContext`] |
 //! | Change a decoded message | the `set_*`, `with_*` and `clear_*` of a message, as [`nas_5gs::RegistrationReject::with_t3346_value`] |
+//! | The table of a message, and the fields of an IE | [`nas_5gs::GmmMessageType::ies`], [`IeRow`], [`nas_5gs::GmmMessageType::cleartext_ies`], [`nas_5gs::RegistrationType::set_registration_type`] |
 //! | A 5GSM message in UL NAS TRANSPORT | [`nas_5gs::UlNasTransport`], [`nas_5gs::PayloadContainer`] |
 //! | Validate a message, and answer one that is faulty | [`Validate`], [`nas_5gs::Message::answer_to`], [`nas_5gs::Message::decode_lenient`] |
 //! | A message as JSON, by path, and with serde | [`paths`], [`Message::to_tree`], [`Message::with_tree`] |
@@ -411,7 +412,8 @@
 //! - [oxirush-security](https://docs.rs/oxirush-security): NAS security, AKA and the derivation of keys.
 //! - [oxirush-ngap](https://docs.rs/oxirush-ngap): NGAP, between a gNB and an AMF.
 //! - [oxirush-s1ap](https://docs.rs/oxirush-s1ap): S1AP, between an eNB and an MME.
-//! - [oxirush-gtp-u](https://docs.rs/oxirush-gtp-u): GTP-U tunnels, with a test UPF.
+//! - [oxirush-gtp-u](https://docs.rs/oxirush-gtp-u): GTP-U tunnels, with a user-plane test peer.
+//! - [oxirush-pfcp](https://docs.rs/oxirush-pfcp): PFCP, between the control plane and the user plane.
 //! - [oxirush-sctp](https://docs.rs/oxirush-sctp): SCTP sockets, which carry NGAP and S1AP.
 //!
 //! [`nas_5gs::SecurityContext`]: crate::nas_5gs::SecurityContext
