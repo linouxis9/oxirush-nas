@@ -17,3 +17,8 @@ hex = "0.4"
 
 # Not a member of a workspace that the crate may be in.
 [workspace]
+
+# oxirush-security 0.5.0 and oxirush-utils 0.3.0, until their releases.
+[patch.crates-io]
+oxirush-security = { git = "https://github.com/linouxis9/oxirush-security", rev = "c7b5888dfcbb101eb569031f401d9cc02696db3d" }
+oxirush-utils = { git = "https://github.com/linouxis9/oxirush-utils", rev = "5d22965aee97b66f962dcc72d7fbbd2d682c0a7f" }
