@@ -60,10 +60,12 @@ fn a_tree_names_the_n3_data_bit_as_the_figure_does() {
     }
     // The N1 UE network capability of EPS (TS 24.301 §9.9.3.57), bit 2
     use oxirush_nas::nas_eps::*;
-    for (value, not_supported) in [(0x00, false), (0x02, true)] {
+    for (value, bit) in [(0x00, false), (0x02, true)] {
         let capability = N1UeNetworkCapability::new(vec![value]);
-        assert_eq!(capability.n3_data_not_supported(), not_supported);
-        assert_eq!(capability.n3_data_transfer_supported(), !not_supported);
+        assert_eq!(capability.n3_data(), bit);
+        let tree = serde_json::to_value(&capability).unwrap();
+        assert_eq!(tree["n3-data"], serde_json::json!(bit), "{tree}");
+        assert!(tree.get("n3-data-not-supported").is_none(), "{tree}");
     }
 }
 

@@ -35,6 +35,10 @@ All notable changes to `oxirush-nas` are recorded here.
 
 ### Changed
 
+- The member `n3-data` of the N1 UE network capability of EPS (TS 24.301
+  §9.9.3.57), which was `n3-data-not-supported`, is the "N3 data" bit as its
+  figure has it: `n3_data()` and `set_n3_data()` read and write it, and
+  `n3_data_transfer_supported()`, its negation, goes.
 - The 5GS network feature support and the feature authorization indication
   come from their tables. The member `n3-data` of the 5GS network feature
   support and of the 5GMM capability, and `hpase` of the feature authorization

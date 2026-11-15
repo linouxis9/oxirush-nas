@@ -369,7 +369,7 @@ oxirush_utils::bits! {
     impl N1UeNetworkCapability (value) "9.9.3.57" octets 1 {
         pnb_ciot "5GS-PNB-CIoT": 0 5 2 as PreferredCiotBehavior,
         cp_ciot "5G-CP CIoT": 0 1 1,
-        n3_data_not_supported "N3 data": 0 2 1,
+        n3_data "N3 data": 0 2 1,
         hc_cp_ciot "5G-HC-CP CIoT": 0 3 1,
         up_ciot "5G-UP CIoT": 0 4 1,
         ehc_cp_ciot "5G-EHC-CP CIoT": 0 7 1,
@@ -385,11 +385,6 @@ impl Default for N1UeNetworkCapability {
 }
 
 impl N1UeNetworkCapability {
-    /// Whether N3 data transfer is supported (N3 data bit clear).
-    pub fn n3_data_transfer_supported(&self) -> bool {
-        !self.value.is_empty() && !self.n3_data_not_supported()
-    }
-
     /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
     pub(crate) const SENDER_RULE: &'static str =
         "1 to 13 octets with octet 3 bit 8 clear and later octets spare";
@@ -6648,12 +6643,12 @@ mod tests {
         n1.set_cp_ciot(true);
         n1.set_pnb_ciot(PreferredCiotBehavior::UserPlane).unwrap();
         assert_eq!(n1.value, [0x21]);
-        assert!(n1.n3_data_transfer_supported());
+        assert!(!n1.n3_data(), "N3 data transfer supported");
         assert_eq!(n1.pnb_ciot(), PreferredCiotBehavior::UserPlane);
         // Longer TLV 3-15 values are valid; only octet 3 is defined.
         assert!(N1UeNetworkCapability::new(vec![0x7f, 0x00]).is_well_formed());
         assert!(!N1UeNetworkCapability::new(vec![0x80]).is_well_formed());
-        assert!(!N1UeNetworkCapability::new(vec![0x02]).n3_data_transfer_supported());
+        assert!(N1UeNetworkCapability::new(vec![0x02]).n3_data());
 
         // UCS2, SS 01, R99 / GEA2-GEA3 / EMM combined, ISR, EPC.
         let ms = MsNetworkCapability::new(vec![0x15, 0x60, 0x34, 0x00]);
