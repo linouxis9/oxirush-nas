@@ -37,6 +37,8 @@ All notable changes to `oxirush-nas` are recorded here.
 
 - The tree of a message holds the names of its members and of the variants
   of its values without copying them, with oxirush-utils at 8f0b227.
+- The EMM and ESM causes come from their tables: `cause()` returns the value
+  of the octet, not an `Option` (`name()` says whether the table names it).
 - The extended DRX parameters come from their table:
   `set_paging_time_window()` and `set_edrx_value()` return `&mut Self` and
   write the four bits of their value, where they refused a value over 15.

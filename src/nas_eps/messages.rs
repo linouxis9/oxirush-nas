@@ -2304,7 +2304,7 @@ impl Decode for EmmTransport {
 /// let Message::Emm(_, EmmMessage::AttachReject(reject)) = &message else {
 ///     unreachable!()
 /// };
-/// assert_eq!(reject.emm_cause.cause(), Some(EmmCauseValue::IllegalUe));
+/// assert_eq!(reject.emm_cause.cause(), EmmCauseValue::IllegalUe);
 /// assert_eq!(message.encode().unwrap(), [0x07, 0x44, 0x03]);
 /// ```
 #[non_exhaustive]

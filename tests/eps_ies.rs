@@ -97,7 +97,7 @@ fn an_esm_cause_is_one_of_table_9_9_4_4_1() {
     for (value, cause) in causes {
         assert_eq!(EsmCauseValue::named(value), Some(cause), "{value:#04x}");
         assert_eq!(u8::from(cause), value);
-        assert_eq!(EsmCause::new(value).cause(), Some(cause));
+        assert_eq!(EsmCause::new(value).cause(), cause);
     }
     // #46 is unused (NOTE 2), and any other value is none of the table
     for value in (0..=255u8).filter(|value| causes.iter().all(|(listed, _)| listed != value)) {

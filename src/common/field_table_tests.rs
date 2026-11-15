@@ -311,6 +311,8 @@ fn each_value_that_a_table_shows_writes_its_ie_back() {
     writes_back(|octet| crate::nas_eps::UeRadioCapabilityIdRequest::new(octets(octet)));
     writes_back(nas_5gs::ServiceType::new);
     writes_back(nas_5gs::GmmCause::new);
+    writes_back(crate::nas_eps::EmmCause::new);
+    writes_back(crate::nas_eps::EsmCause::new);
     writes_back(|octet| crate::common::types::ExtendedDrxParameters::new(octets(octet)));
     writes_back(nas_5gs::GsmCause::new);
     writes_back(nas_5gs::PduSessionType::new);

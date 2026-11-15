@@ -1001,18 +1001,6 @@ container_ie!(
 );
 
 // One coded value.
-code_ie!(
-    EmmCause,
-    EmmCauseValue,
-    |ie| EmmCauseValue::named(ie.value),
-    EmmCause::from_cause
-);
-code_ie!(
-    EsmCause,
-    EsmCauseValue,
-    |ie| EsmCauseValue::named(ie.value),
-    EsmCause::from_cause
-);
 /// The identity that an IDENTITY REQUEST asks for (TS 24.008 Table
 /// 10.5.142), by its name.
 #[derive(Clone, Copy)]

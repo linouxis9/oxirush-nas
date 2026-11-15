@@ -87,28 +87,27 @@ oxirush_utils::named_values! {
 }
 crate::common::enums::values_readable!(EmmCauseValue);
 
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl EmmCause (value) "9.9.3.9" octets 1 {
+        cause "Cause value": 0 1 8 as EmmCauseValue,
+    }
+}
+crate::common::field_table::table_ie!(EmmCause, octet, 1..=1, receives 1, code);
+
 impl EmmCause {
     /// Build the raw IE from a typed cause.
     pub fn from_cause(cause: EmmCauseValue) -> Self {
         Self::new(u8::from(cause))
     }
-    /// The cause, if its value is one of the table.
-    pub fn cause(&self) -> Option<EmmCauseValue> {
-        EmmCauseValue::named(self.value)
-    }
     /// Decode the cause received by the UE or the network (the table's "interpreted as" rule, `EmmCauseValue::effective`).
     pub fn cause_received(&self) -> EmmCauseValue {
         EmmCauseValue::from_value(self.value).effective()
     }
-    /// Set the cause value.
-    pub fn set_cause(&mut self, cause: EmmCauseValue) -> &mut Self {
-        self.value = u8::from(cause);
-        self
-    }
     /// Cause text, with the hexadecimal value for unknown codes.
     pub fn description(&self) -> String {
-        match self.cause() {
-            Some(cause) => cause.name().unwrap_or_default().to_string(),
+        match self.cause().name() {
+            Some(name) => name.to_string(),
             None => format!("Unknown EMM cause 0x{:02x}", self.value),
         }
     }
@@ -181,14 +180,18 @@ impl EsmCauseValue {
     }
 }
 
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl EsmCause (value) "9.9.4.4" octets 1 {
+        cause "Cause value": 0 1 8 as EsmCauseValue,
+    }
+}
+crate::common::field_table::table_ie!(EsmCause, octet, 1..=1, receives 1, code);
+
 impl EsmCause {
     /// Build the raw IE from a typed cause.
     pub fn from_cause(cause: EsmCauseValue) -> Self {
         Self::new(u8::from(cause))
-    }
-    /// The cause, if its value is one of the table.
-    pub fn cause(&self) -> Option<EsmCauseValue> {
-        EsmCauseValue::named(self.value)
     }
     /// Decode the cause received by the UE (see [`EsmCauseValue::from_u8_for_ue`]).
     pub fn cause_for_ue(&self) -> EsmCauseValue {
@@ -198,15 +201,10 @@ impl EsmCause {
     pub fn cause_for_network(&self) -> EsmCauseValue {
         EsmCauseValue::from_u8_for_network(self.value)
     }
-    /// Set the cause value.
-    pub fn set_cause(&mut self, cause: EsmCauseValue) -> &mut Self {
-        self.value = u8::from(cause);
-        self
-    }
     /// Cause text, with the hexadecimal value for unknown codes.
     pub fn description(&self) -> String {
-        match self.cause() {
-            Some(cause) => cause.name().unwrap_or_default().to_string(),
+        match self.cause().name() {
+            Some(name) => name.to_string(),
             None => format!("Unknown ESM cause 0x{:02x}", self.value),
         }
     }
@@ -5576,14 +5574,14 @@ mod shown {
     /// An EMM cause by its number and its name: `#22 (Congestion)`.
     impl fmt::Display for EmmCause {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            display::cause(f, self.value, self.cause().and_then(EmmCauseValue::name))
+            display::cause(f, self.value, self.cause().name())
         }
     }
 
     /// An ESM cause by its number and its name: `#26 (Insufficient resources)`.
     impl fmt::Display for EsmCause {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            display::cause(f, self.value, self.cause().and_then(EsmCauseValue::name))
+            display::cause(f, self.value, self.cause().name())
         }
     }
 
@@ -6509,7 +6507,7 @@ mod tests {
     fn cause_values_apply_receive_rules() {
         // Table 9.9.3.9.1: unlisted EMM causes are treated as #111.
         let emm = EmmCause::new(0x04);
-        assert_eq!(emm.cause(), None);
+        assert_eq!(emm.cause().name(), None);
         assert_eq!(
             emm.cause_received(),
             EmmCauseValue::ProtocolErrorUnspecified
@@ -7398,14 +7396,14 @@ mod tests {
 
     #[test]
     fn eps_cause_tables_preserve_unknown_values() {
-        assert_eq!(EmmCause::new(3).cause(), Some(EmmCauseValue::IllegalUe));
+        assert_eq!(EmmCause::new(3).cause(), EmmCauseValue::IllegalUe);
         assert_eq!(
             EsmCause::new(0x1B).cause(),
-            Some(EsmCauseValue::MissingOrUnknownApn)
+            EsmCauseValue::MissingOrUnknownApn
         );
         // A value that the table does not list is kept by the IE.
         let unknown = EmmCause::new(0xFE);
-        assert_eq!((unknown.cause(), unknown.value), (None, 0xFE));
+        assert_eq!((unknown.cause().name(), unknown.value), (None, 0xFE));
         assert_eq!(unknown.encode().unwrap(), [0xFE]);
     }
 
