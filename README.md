@@ -663,36 +663,37 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ## Performance
 
-On one core of an AMD Ryzen 7 5700G (Linux 7.0, Rust 1.98.1), for 0.6.0 on
-2026-11-08, for a message of the 5GS fixtures (19 octets on average): the
-lowest of three runs, on a machine that other work shared, so that the
-times are high rather than low.
+On core 2 of an Intel Xeon E5-2680 v4 (Broadwell, 2.4 GHz, a KVM guest, Linux
+7.0, Rust 1.100.0), at 626037a on 2026-11-15, for a message of the 5GS
+fixtures (19 octets on average): the median of ten runs, which were within
+13 % of each other.
 
 | Operation | Time | Allocations |
 |-----------|------|-------------|
-| `decode` | 122 ns | 1.2 |
-| `encode` | 65 ns | 1.0 |
-| `validate` | 244 ns | 3.2 |
-| `to_tree` | 15.9 µs | 256 |
-| `from_tree` | 24.0 µs | 350 |
-| `with_tree` | 35.2 µs | 530 |
-| `protect`, `unprotect` (128-NIA2, 128-NEA2) | 204 ns, 408 ns | 2.0, 2.3 |
+| `decode` | 235 ns | 1.2 |
+| `encode` | 97 ns | 1.0 |
+| `validate` | 616 ns | 3.2 |
+| `to_tree` | 5.1 µs | 28 |
+| `from_tree` | 9.9 µs | 31 |
+| `with_tree` | 7.3 µs | 29 |
+| `protect`, `unprotect` (128-NIA2, 128-NEA2) | 589 ns, 817 ns | 1.0, 2.3 |
 
 [`benches/`](benches/README.md) has how to run them and the profilers.
 
 ### Against other implementations
 
 The plain messages of the fixtures, decoded and encoded by this crate and
-four other implementations, at c4fdffc on the same machine. A ratio is the
-time of the other implementation over this crate's. free5GC's library has
-no EPS, and packet-dissector only decodes.
+four other implementations, at 626037a on the same machine, ten rounds in
+turns. A ratio is the median time of the other implementation over this
+crate's, given where the ten times of the two do not overlap. free5GC's
+library has no EPS, and packet-dissector only decodes.
 
 | Operation | oxirush-nas | free5GC nas v1.2.3 | Open5GS v2.8.0 | packet-dissector 0.6.1 | pycrate 0.8.1 |
 |---|---|---|---|---|---|
-| Decode, 5GS, 76 messages | 108.4 ns | 3.8x | 12x | 1.4x | 2,400x |
-| Decode, EPS, 95 messages | 98.1 ns | | 10x | 1.2x | 1,900x |
-| Encode, 5GS, 61 messages | 33.7 ns | 4.6x | 34x | | 560x |
-| Encode, EPS, 82 messages | 36.5 ns | | 39x | | 620x |
+| Decode, 5GS, 87 messages | 224.6 ns | 3.9x | 14x | 1.1x | 2,600x |
+| Decode, EPS, 95 messages | 196.1 ns | | 10x | about the same | 2,000x |
+| Encode, 5GS, 72 messages | 75.5 ns | 4.5x | 44x | | 650x |
+| Encode, EPS, 82 messages | 74.5 ns | | 44x | | 600x |
 
 [`benches/`](benches/README.md#against-other-implementations) has every
 figure, with cycles, instructions, allocations and peak memory, and the
