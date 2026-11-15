@@ -60,7 +60,7 @@ hex = "0.4" # for the examples of this page
 | Feature | Adds | Needs |
 |---------|------|-------|
 | `security` | `SecurityContext`, which protects and unprotects messages | `oxirush-security` |
-| `tree` | A message as a JSON tree, its paths, and serde through the tree | `std` |
+| `tree` | A message as a JSON tree, its paths, and serde through the tree | `std` (default) |
 | `idna` | The NAI of a SUCI checked as an internationalized name | The Unicode tables of `idna` |
 
 Without default features the crate is `no_std` with `alloc`. With `tree`, a
@@ -608,9 +608,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 Medians of ten rounds in turns on one core of an Intel Xeon E5-2680 v4 (a
 KVM guest, Linux 7.0, Rust 1.100.0), at 626037a on 2026-11-15. A cell of
-another implementation says how much slower it is than this crate, and
-"about the same" where the ten times of the two overlap; free5GC has no EPS,
-and packet-dissector only decodes. `to_tree` of a 5GS message takes 5.1 µs,
+another implementation says how much slower it is than this crate: "about
+the same" when the medians are within 10 % or the ten times overlap.
+free5GC has no EPS, and packet-dissector only decodes. `to_tree` of a 5GS message takes 5.1 µs,
 `from_tree` 9.9 µs, and `protect` and `unprotect` 589 and 817 ns.
 [`benches/README.md`](benches/README.md) has every figure, the allocations,
 pycrate, the method and the commands.
