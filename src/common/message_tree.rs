@@ -3210,14 +3210,6 @@ mod shared_types {
         |ie| ie.codec_bitmaps(),
         |_, bitmaps| SupportedCodecList::from_codec_bitmaps(&bitmaps)
     );
-    fields_ie!(ExtendedDrxParameters {
-        "paging-time-window": |ie| ie.paging_time_window(), |ie, window: u8| {
-            ie.set_paging_time_window(window).map(|_| ())
-        };
-        "edrx-value": |ie| ie.edrx_value(), |ie, value: u8| {
-            ie.set_edrx_value(value).map(|_| ())
-        };
-    });
     built_ie!(UnavailabilityInformation, Self::from_fields, {
         due_to_discontinuous_coverage: bool = |ie| ie.due_to_discontinuous_coverage(),
         period_duration: Option<u32> = |ie| Some(ie.period_duration()),

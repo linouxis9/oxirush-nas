@@ -1435,47 +1435,18 @@ crate::common::readable::readable!(
 #[cfg(feature = "tree")]
 crate::common::readable::serde_by_readable!(EutraMode);
 
-/// Extended DRX parameters (TS 24.008 §10.5.5.32): Paging Time Window and
-/// eDRX value in octet 3, and the NR Extended Paging Time Window in octet 4.
+// Extended DRX parameters (TS 24.008 §10.5.5.32): Paging Time Window and
+// eDRX value in octet 3, and the NR Extended Paging Time Window in octet 4.
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl ExtendedDrxParameters (value) "10.5.5.32" octets 1 {
+        paging_time_window "Paging Time Window": 0 5 4,
+        edrx_value "eDRX value": 0 1 4,
+    }
+}
+crate::common::field_table::table_ie!(ExtendedDrxParameters, octets, 1..=1, receives 1);
+
 impl ExtendedDrxParameters {
-    /// Paging Time Window code (octet 3, bits 8-5).
-    pub fn paging_time_window(&self) -> u8 {
-        self.value.first().map_or(0, |octet| octet >> 4)
-    }
-
-    /// Set the Paging Time Window code of 0 to 15, keeping the eDRX
-    /// value.
-    pub fn set_paging_time_window(
-        &mut self,
-        ptw: u8,
-    ) -> core::result::Result<&mut Self, crate::common::ValueError> {
-        crate::common::within("paging-time-window", ptw, 0, 15)?;
-        if self.value.is_empty() {
-            self.value.push(0);
-        }
-        self.value[0] = (self.value[0] & 0x0f) | (ptw << 4);
-        Ok(self)
-    }
-
-    /// eDRX value code (octet 3, bits 4-1).
-    pub fn edrx_value(&self) -> u8 {
-        self.value.first().map_or(0, |octet| octet & 0x0f)
-    }
-
-    /// Set the eDRX value code of 0 to 15, keeping the Paging Time
-    /// Window.
-    pub fn set_edrx_value(
-        &mut self,
-        value: u8,
-    ) -> core::result::Result<&mut Self, crate::common::ValueError> {
-        crate::common::within("edrx-value", value, 0, 15)?;
-        if self.value.is_empty() {
-            self.value.push(0);
-        }
-        self.value[0] = (self.value[0] & 0xf0) | value;
-        Ok(self)
-    }
-
     /// Extended Paging Time Window (octet 4), used in NR.
     pub fn extended_paging_time_window(&self) -> Option<u8> {
         self.value.get(1).copied()
@@ -1996,10 +1967,7 @@ mod tests {
         use crate::common::types::{ExtendedDrxParameters, SupportedCodecList};
 
         let mut edrx = ExtendedDrxParameters::new(vec![]);
-        edrx.set_paging_time_window(3)
-            .unwrap()
-            .set_edrx_value(0x05)
-            .unwrap();
+        edrx.set_paging_time_window(3).set_edrx_value(0x05);
         assert_eq!(
             (edrx.value.len(), edrx.value.as_slice()),
             (1, [0x35].as_slice())

@@ -6937,8 +6937,8 @@ mod tests {
     #[test]
     fn extended_drx_retry_and_eps_rate_helpers() {
         let mut drx = ExtendedDrxParameters::new(vec![]);
-        drx.set_paging_time_window(0xa).unwrap();
-        drx.set_edrx_value(3).unwrap();
+        drx.set_paging_time_window(0xa);
+        drx.set_edrx_value(3);
         assert_eq!(drx.value, [0xa3]);
         assert_eq!(drx.value.len(), 1);
         assert_eq!((drx.paging_time_window(), drx.edrx_value()), (10, 3));

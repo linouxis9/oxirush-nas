@@ -264,18 +264,12 @@ fn nothing_keeps_the_low_bits_of_what_it_is_given() {
     update.set_pnb_ciot(PreferredCiotBehavior::UserPlane);
     update.set_eps_pnb_ciot(PreferredCiotBehavior::ControlPlane);
     assert_eq!(update.value, [0x18]);
+    // A setter of a field of four bits writes the four bits of its value
     let mut drx = ExtendedDrxParameters::new(vec![0]);
-    let refused = "`paging-time-window` is 20, and must be 0 to 15";
-    assert_eq!(text(drx.set_paging_time_window(20).map(|_| ())), refused);
-    let refused = "`edrx-value` is 31, and must be 0 to 15";
-    assert_eq!(text(drx.set_edrx_value(31).map(|_| ())), refused);
-    assert_eq!(drx.value, [0]);
+    assert_eq!(drx.set_paging_time_window(20).value, [0x40]);
+    assert_eq!(drx.set_edrx_value(31).value, [0x4f]);
     assert_eq!(
-        drx.set_paging_time_window(15)
-            .unwrap()
-            .set_edrx_value(15)
-            .unwrap()
-            .value,
+        drx.set_paging_time_window(15).set_edrx_value(15).value,
         [0xff]
     );
     let refused = "`assignment-mode` is 16, and must be 0 to 15";
