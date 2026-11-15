@@ -76,12 +76,12 @@ nas_ie_v!(
     /// use oxirush_nas::nas_5gs::{GmmCauseValue, GmmCause};
     ///
     /// let cause = GmmCause::from_cause(GmmCauseValue::Congestion);
-    /// assert_eq!((cause.value, cause.cause()), (22, Some(GmmCauseValue::Congestion)));
+    /// assert_eq!((cause.value, cause.cause()), (22, GmmCauseValue::Congestion));
     /// assert_eq!(cause.to_string(), "#22 (Congestion)");
     ///
     /// // A receiver reads a value that the table does not have as #111
     /// let unknown = GmmCause::new(4);
-    /// assert_eq!(unknown.cause(), None);
+    /// assert_eq!(unknown.cause().name(), None);
     /// assert_eq!(unknown.cause_received(), GmmCauseValue::ProtocolErrorUnspecified);
     /// ```
     GmmCause

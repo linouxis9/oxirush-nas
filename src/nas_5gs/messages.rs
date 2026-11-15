@@ -1437,7 +1437,7 @@ crate::common::nas_messages! {
     /// let Message::Gmm(_, GmmMessage::FiveGmmStatus(status)) = &message else {
     ///     unreachable!()
     /// };
-    /// assert_eq!(status.fgmm_cause.cause(), Some(GmmCauseValue::Congestion));
+    /// assert_eq!(status.fgmm_cause.cause(), GmmCauseValue::Congestion);
     /// ```
     pub enum GmmMessage;
     /// 5G Mobility Management (5GMM) message types per TS 24.501 §9.7.

@@ -1417,31 +1417,18 @@ oxirush_utils::named_values! {
 }
 crate::common::enums::values_readable!(AttachType);
 
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl EpsAttachType (value) "" octets 1 {
+        attach_type "ATTACH-TYPE": 0 1 3 as AttachType,
+    }
+}
+crate::common::field_table::table_ie!(EpsAttachType, octet, 1..=1, receives 1, code);
+
 impl EpsAttachType {
     /// Build the raw IE from a typed attach type.
     pub fn from_attach_type(value: AttachType) -> Self {
         Self::new(u8::from(value))
-    }
-
-    /// Read the EPS attach type from the lower three bits.
-    pub fn attach_type(&self) -> AttachType {
-        AttachType::from_value(self.value & 0x07).effective()
-    }
-
-    /// Read only a defined attach type.
-    pub fn attach_type_strict(&self) -> Option<AttachType> {
-        AttachType::named(self.value & 0x07)
-    }
-
-    /// Raw attach type (bits 3-1).
-    pub fn attach_type_raw(&self) -> u8 {
-        self.value & 0x07
-    }
-
-    /// Set the attach type and clear the spare bit.
-    pub fn set_attach_type(&mut self, value: AttachType) -> &mut Self {
-        self.value = u8::from(value);
-        self
     }
 }
 
@@ -1456,34 +1443,18 @@ oxirush_utils::named_values! {
 }
 crate::common::enums::values_readable!(ServiceTypeValue);
 
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl ServiceType (value) "" octets 1 {
+        service_type "SERVICE-TYPE": 0 1 4 as ServiceTypeValue,
+    }
+}
+crate::common::field_table::table_ie!(ServiceType, octet, 1..=1, receives 1, code);
+
 impl ServiceType {
     /// Build from a typed service type.
     pub fn from_service_type(value: ServiceTypeValue) -> Self {
         Self::new(u8::from(value))
-    }
-
-    /// Service type with the network receive fallbacks.
-    ///
-    /// The value as the IE has it: `effective()` is the value as a receiver
-    /// reads it.
-    pub fn service_type(&self) -> ServiceTypeValue {
-        ServiceTypeValue::from_value(self.value & 0x0f)
-    }
-
-    /// Service type, only for a defined value.
-    pub fn service_type_strict(&self) -> Option<ServiceTypeValue> {
-        ServiceTypeValue::named(self.value & 0x0f)
-    }
-
-    /// Raw service type (bits 4-1).
-    pub fn service_type_raw(&self) -> u8 {
-        self.value & 0x0f
-    }
-
-    /// Set the service type.
-    pub fn set_service_type(&mut self, value: ServiceTypeValue) -> &mut Self {
-        self.value = u8::from(value);
-        self
     }
 }
 
@@ -1524,34 +1495,18 @@ oxirush_utils::named_values! {
 }
 crate::common::enums::values_readable!(PdnTypeValue);
 
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl PdnType (value) "" octets 1 {
+        pdn_type "PDN-TYPE": 0 1 3 as PdnTypeValue,
+    }
+}
+crate::common::field_table::table_ie!(PdnType, octet, 1..=1, receives 1, code);
+
 impl PdnType {
     /// Build the raw IE from a typed PDN type.
     pub fn from_pdn_type(value: PdnTypeValue) -> Self {
         Self::new(u8::from(value))
-    }
-
-    /// Read the PDN type from the lower three bits.
-    ///
-    /// The value as the IE has it: `effective()` is the value as a receiver
-    /// reads it.
-    pub fn pdn_type(&self) -> PdnTypeValue {
-        PdnTypeValue::from_value(self.value & 0x07)
-    }
-
-    /// Read only a defined PDN type code.
-    pub fn pdn_type_strict(&self) -> Option<PdnTypeValue> {
-        PdnTypeValue::named(self.value & 0x07)
-    }
-
-    /// Raw PDN type (bits 3-1).
-    pub fn pdn_type_raw(&self) -> u8 {
-        self.value & 0x07
-    }
-
-    /// Set the PDN type and clear the spare bit.
-    pub fn set_pdn_type(&mut self, value: PdnTypeValue) -> &mut Self {
-        self.value = u8::from(value);
-        self
     }
 }
 
@@ -1566,26 +1521,18 @@ oxirush_utils::named_values! {
 }
 crate::common::enums::values_readable!(AttachResult);
 
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl EpsAttachResult (value) "" octets 1 {
+        attach_result "ATTACH-RESULT": 0 1 3 as AttachResult,
+    }
+}
+crate::common::field_table::table_ie!(EpsAttachResult, octet, 1..=1, receives 1, code);
+
 impl EpsAttachResult {
     /// Build from a typed attach result.
     pub fn from_attach_result(value: AttachResult) -> Self {
         Self::new(u8::from(value))
-    }
-
-    /// Typed attach result; reserved values return `None`.
-    pub fn attach_result(&self) -> Option<AttachResult> {
-        AttachResult::named(self.value & 0x07)
-    }
-
-    /// Raw attach result (bits 3-1).
-    pub fn attach_result_raw(&self) -> u8 {
-        self.value & 0x07
-    }
-
-    /// Set the attach result and clear the spare bit.
-    pub fn set_attach_result(&mut self, value: AttachResult) -> &mut Self {
-        self.value = u8::from(value);
-        self
     }
 }
 
@@ -1628,26 +1575,18 @@ oxirush_utils::named_values! {
 }
 crate::common::enums::values_readable!(UpdateResult);
 
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl EpsUpdateResult (value) "" octets 1 {
+        update_result "UPDATE-RESULT": 0 1 3 as UpdateResult,
+    }
+}
+crate::common::field_table::table_ie!(EpsUpdateResult, octet, 1..=1, receives 1, code);
+
 impl EpsUpdateResult {
     /// Build from a typed update result.
     pub fn from_update_result(value: UpdateResult) -> Self {
         Self::new(u8::from(value))
-    }
-
-    /// Typed update result; reserved values return `None`.
-    pub fn update_result(&self) -> Option<UpdateResult> {
-        UpdateResult::named(self.value & 0x07)
-    }
-
-    /// Raw update result (bits 3-1).
-    pub fn update_result_raw(&self) -> u8 {
-        self.value & 0x07
-    }
-
-    /// Set the update result and clear the spare bit.
-    pub fn set_update_result(&mut self, value: UpdateResult) -> &mut Self {
-        self.value = u8::from(value);
-        self
     }
 }
 
@@ -4172,19 +4111,15 @@ oxirush_utils::named_values! {
 }
 crate::common::enums::values_readable!(RequestTypeValue);
 
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl RequestType (value) "" octets 1 {
+        request_type "REQUEST-TYPE": 0 1 3 as RequestTypeValue,
+    }
+}
+crate::common::field_table::table_ie!(RequestType, octet, 1..=1, receives 1, code);
+
 impl RequestType {
-    /// Decode a defined request type, leaving reserved values untyped.
-    ///
-    /// The value as the IE has it: `name()` says whether the table names it.
-    pub fn request_type(&self) -> RequestTypeValue {
-        RequestTypeValue::from_value(self.value & 0x07)
-    }
-
-    /// Raw request type (bits 3-1).
-    pub fn request_type_raw(&self) -> u8 {
-        self.value & 0x07
-    }
-
     /// Whether the request is for emergency bearer services.
     pub fn is_emergency(&self) -> bool {
         matches!(
@@ -4196,12 +4131,6 @@ impl RequestType {
     /// Construct a sender value with the spare bit cleared.
     pub fn from_request_type(request_type: RequestTypeValue) -> Self {
         Self::new(u8::from(request_type))
-    }
-
-    /// Set the request type and clear the spare bit.
-    pub fn set_request_type(&mut self, request_type: RequestTypeValue) -> &mut Self {
-        self.value = u8::from(request_type);
-        self
     }
 }
 
@@ -4368,17 +4297,15 @@ oxirush_utils::named_values! {
 }
 crate::common::enums::values_readable!(AdditionalUpdateResultValue);
 
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl AdditionalUpdateResult (value) "" octets 1 {
+        result "RESULT": 0 1 2 as AdditionalUpdateResultValue,
+    }
+}
+crate::common::field_table::table_ie!(AdditionalUpdateResult, octet, 1..=1, receives 1, code);
+
 impl AdditionalUpdateResult {
-    /// Typed additional update result (bits 1–2).
-    pub fn result(&self) -> Option<AdditionalUpdateResultValue> {
-        AdditionalUpdateResultValue::named(self.value & 0x03)
-    }
-
-    /// Raw result bits, including the reserved value.
-    pub fn result_raw(&self) -> u8 {
-        self.value & 0x03
-    }
-
     /// Build with spare bits clear.
     pub fn from_result(result: AdditionalUpdateResultValue) -> Self {
         Self::new(u8::from(result))
@@ -4411,26 +4338,18 @@ oxirush_utils::named_values! {
 }
 crate::common::enums::values_readable!(RadioPriorityLevel);
 
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl RadioPriority (value) "" octets 1 {
+        priority_level "PRIORITY-LEVEL": 0 1 3 as RadioPriorityLevel,
+    }
+}
+crate::common::field_table::table_ie!(RadioPriority, octet, 1..=1, receives 1, code);
+
 impl RadioPriority {
-    /// Effective priority level, including the specified receive fallback.
-    pub fn priority_level(&self) -> RadioPriorityLevel {
-        RadioPriorityLevel::from_value(self.value & 0x07).effective()
-    }
-
-    /// Raw three-bit priority value.
-    pub fn priority_level_raw(&self) -> u8 {
-        self.value & 0x07
-    }
-
     /// Build with spare bit clear.
     pub fn from_priority_level(level: RadioPriorityLevel) -> Self {
         Self::new(u8::from(level))
-    }
-
-    /// Set the priority level and clear the spare bit.
-    pub fn set_priority_level(&mut self, level: RadioPriorityLevel) -> &mut Self {
-        self.value = u8::from(level);
-        self
     }
 }
 
@@ -4689,20 +4608,16 @@ oxirush_utils::named_values! {
 }
 crate::common::enums::values_readable!(NbS1DrxValue);
 
-/// NB-S1 DRX parameter (TS 24.301 §9.9.3.63).
+// NB-S1 DRX parameter (TS 24.301 §9.9.3.63).
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl NbS1DrxParameter (value) "" octets 1 {
+        drx_value "DRX-VALUE": 0 1 4 as NbS1DrxValue,
+    }
+}
+crate::common::field_table::table_ie!(NbS1DrxParameter, octets, 1..=1, receives 1, name);
+
 impl NbS1DrxParameter {
-    /// DRX value with the receive fallback; spare bits are ignored.
-    pub fn drx_value(&self) -> Option<NbS1DrxValue> {
-        self.value
-            .first()
-            .map(|&octet| NbS1DrxValue::from_value(octet & 0x0f).effective())
-    }
-
-    /// Raw DRX value (bits 4-1).
-    pub fn drx_value_raw(&self) -> Option<u8> {
-        self.value.first().map(|octet| octet & 0x0f)
-    }
-
     /// Build from a DRX value with the spare bits clear.
     pub fn from_drx_value(value: NbS1DrxValue) -> Self {
         Self::new(vec![u8::from(value)])
@@ -5378,12 +5293,15 @@ oxirush_utils::named_values! {
 }
 crate::common::enums::values_readable!(GenericMessageContainerTypeValue);
 
-impl GenericMessageContainerType {
-    /// Typed container type; reserved and unused values return `None`.
-    pub fn container_type(&self) -> Option<GenericMessageContainerTypeValue> {
-        GenericMessageContainerTypeValue::named(self.value)
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl GenericMessageContainerType (value) "" octets 1 {
+        container_type "CONTAINER-TYPE": 0 1 8 as GenericMessageContainerTypeValue,
     }
+}
+crate::common::field_table::table_ie!(GenericMessageContainerType, octet, 1..=1, receives 1, code);
 
+impl GenericMessageContainerType {
     /// Whether the value is reserved (0 or 128 to 255) rather than unused.
     pub fn is_reserved(&self) -> bool {
         self.value == 0 || self.value >= 128
@@ -5392,11 +5310,6 @@ impl GenericMessageContainerType {
     /// Build a defined container type.
     pub fn from_container_type(kind: GenericMessageContainerTypeValue) -> Self {
         Self::new(u8::from(kind))
-    }
-
-    /// Replace the container type.
-    pub fn set_container_type(&mut self, kind: GenericMessageContainerTypeValue) {
-        self.value = u8::from(kind);
     }
 }
 
@@ -5452,16 +5365,15 @@ oxirush_utils::named_values! {
 }
 crate::common::enums::values_readable!(PagingIdentityValue);
 
-impl PagingIdentity {
-    /// The paging identity value of bit 1 (§9.9.3.25A).
-    pub fn paging_identity(&self) -> PagingIdentityValue {
-        if self.value & 0x01 != 0 {
-            PagingIdentityValue::Tmsi
-        } else {
-            PagingIdentityValue::Imsi
-        }
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl PagingIdentity (value) "" octets 1 {
+        paging_identity "PAGING-IDENTITY": 0 1 1 as PagingIdentityValue,
     }
+}
+crate::common::field_table::table_ie!(PagingIdentity, octet, 1..=1, receives 1, name);
 
+impl PagingIdentity {
     /// The IE of a paging identity, with the spare bits zero.
     pub fn from_paging_identity(identity: PagingIdentityValue) -> Self {
         Self::new(u8::from(identity))
@@ -5479,17 +5391,15 @@ oxirush_utils::named_values! {
 }
 crate::common::enums::values_readable!(SmsServicesStatusValue);
 
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl SmsServicesStatus (value) "" octets 1 {
+        status "STATUS": 0 1 3 as SmsServicesStatusValue,
+    }
+}
+crate::common::field_table::table_ie!(SmsServicesStatus, octet, 1..=1, receives 1, code);
+
 impl SmsServicesStatus {
-    /// Typed status; values 4–7 are abnormal on reception.
-    pub fn status(&self) -> Option<SmsServicesStatusValue> {
-        SmsServicesStatusValue::named(self.value & 0x07)
-    }
-
-    /// Raw status (bits 3-1).
-    pub fn status_raw(&self) -> u8 {
-        self.value & 0x07
-    }
-
     /// Build a defined status with spare bit clear.
     pub fn from_status(status: SmsServicesStatusValue) -> Self {
         Self::new(u8::from(status))
@@ -6263,17 +6173,19 @@ mod tests {
         let mut pdn_type = PdnType::new(0x0c);
         assert_eq!(pdn_type.pdn_type().effective(), PdnTypeValue::Ipv6);
         assert_eq!(
-            (pdn_type.pdn_type_strict(), pdn_type.pdn_type_raw()),
+            (pdn_type.pdn_type().name(), pdn_type.pdn_type_raw()),
             (None, 4)
         );
+        // A setter keeps the spare bit 4
         pdn_type.set_pdn_type(PdnTypeValue::Ipv4v6);
-        assert_eq!(pdn_type.value, 3);
+        assert_eq!(pdn_type.value, 0x0b);
 
         let mut request = RequestType::new(0x0e);
+        // A setter keeps the spare bit 4
         request.set_request_type(RequestTypeValue::Emergency);
-        assert!(request.is_emergency() && request.value == 4);
+        assert!(request.is_emergency() && request.value == 0x0c);
         assert_eq!(RequestType::new(0x0d).request_type_raw(), 5);
-        assert_eq!(RequestType::new(5).request_type().effective().name(), None);
+        assert_eq!(RequestType::new(5).request_type().name(), None);
 
         let mut lbi = LinkedEpsBearerIdentity::new(0);
         assert_eq!(lbi.ebi(), None);
@@ -6288,11 +6200,12 @@ mod tests {
         assert!(LlcServiceAccessPointIdentifier::from_sapi(0x13).is_err());
 
         let radio = RadioPriority::new(0x0f);
-        assert_eq!(radio.priority_level(), RadioPriorityLevel::Four);
+        assert_eq!(radio.priority_level().effective(), RadioPriorityLevel::Four);
         assert_eq!(RadioPriorityLevel::named(radio.value & 0x07), None);
         let mut radio = radio;
+        // A setter keeps the spare bit 4
         radio.set_priority_level(RadioPriorityLevel::One);
-        assert_eq!(radio.value, 1);
+        assert_eq!(radio.value, 0x09);
 
         assert!(ConnectivityType::new(0x01).is_lipa());
         assert!(!ConnectivityType::new(0x02).is_lipa());
@@ -6365,14 +6278,14 @@ mod tests {
     fn emm_value_ies_apply_receive_fallbacks() {
         // Unused attach type 0 is read as EPS attach by the network.
         let attach = EpsAttachType::new(0x08);
-        assert_eq!(attach.attach_type(), AttachType::EpsAttach);
+        assert_eq!(attach.attach_type().effective(), AttachType::EpsAttach);
         assert_eq!(
-            (attach.attach_type_strict(), attach.attach_type_raw()),
+            (attach.attach_type().name(), attach.attach_type_raw()),
             (None, 0)
         );
         let mut attach = attach;
         attach.set_attach_type(AttachType::EpsEmergencyAttach);
-        assert_eq!(attach.value, 6);
+        assert_eq!(attach.value, 0x0e);
 
         let mut update = EpsUpdateType::new(0x0c);
         assert_eq!(update.update_type().effective(), UpdateType::TaUpdating);
@@ -6389,7 +6302,7 @@ mod tests {
             ServiceTypeValue::PacketServicesViaS1
         );
         assert_eq!(
-            (service.service_type_strict(), service.service_type_raw()),
+            (service.service_type().name(), service.service_type_raw()),
             (None, 10)
         );
         assert_eq!(
@@ -6398,10 +6311,13 @@ mod tests {
         );
 
         assert_eq!(
-            EpsUpdateResult::new(0x0c).update_result(),
-            Some(UpdateResult::TaUpdatedAndIsrActivated)
+            EpsUpdateResult::new(0x0c).update_result().effective(),
+            UpdateResult::TaUpdatedAndIsrActivated
         );
-        assert_eq!(EpsAttachResult::new(3).attach_result(), None);
+        assert_eq!(
+            EpsAttachResult::new(3).attach_result().effective().name(),
+            None
+        );
 
         // Table 9.9.3.7.1: fallbacks differ by direction, and bit 4 is
         // spare from the network.
@@ -6512,7 +6428,10 @@ mod tests {
             NetworkResourceIdentifierContainer::new(vec![0x01, 0x7f]).nri(),
             Some(0x05)
         );
-        assert_eq!(SmsServicesStatus::new(0x0d).status(), None);
+        assert_eq!(
+            SmsServicesStatus::new(0x0d).status().effective().name(),
+            None
+        );
         assert_eq!(SmsServicesStatus::new(0x0d).status_raw(), 5);
     }
 
@@ -6531,8 +6450,8 @@ mod tests {
         assert!(built.is_well_formed() && !drx.is_well_formed());
 
         let nb = NbS1DrxParameter::new(vec![0xf7]);
-        assert_eq!(nb.drx_value(), Some(NbS1DrxValue::NotSpecified));
-        assert_eq!(nb.drx_value_raw(), Some(7));
+        assert_eq!(nb.drx_value().effective(), NbS1DrxValue::NotSpecified);
+        assert_eq!(nb.drx_value_raw(), 7);
         assert!(!nb.is_well_formed());
         assert!(NbS1DrxParameter::from_drx_value(NbS1DrxValue::T1024).is_well_formed());
         assert_eq!(
@@ -6797,7 +6716,7 @@ mod tests {
         let requested = AdditionalInformationRequested::from_cipher_key_data_requested(true);
         assert!(requested.cipher_key_data_requested() && requested.is_well_formed());
         let container = GenericMessageContainerType::new(0x80);
-        assert!(container.is_reserved() && container.container_type().is_none());
+        assert!(container.is_reserved() && container.container_type().name().is_none());
         let mut lcs = container;
         lcs.set_container_type(GenericMessageContainerTypeValue::Lcs);
         assert_eq!((lcs.value, lcs.is_reserved()), (2, false));
@@ -6806,9 +6725,15 @@ mod tests {
     #[test]
     fn release_assistance_and_ue_status_match_5gs_helpers() {
         let release = ReleaseAssistanceIndication::from_ddx(DownlinkDataExpected::SingleDlThenNone);
-        assert_eq!(release.ddx(), Some(DownlinkDataExpected::SingleDlThenNone));
+        assert_eq!(
+            release.ddx().effective(),
+            DownlinkDataExpected::SingleDlThenNone
+        );
         assert_eq!(release.ddx_raw(), 2);
-        assert_eq!(ReleaseAssistanceIndication::new(3).ddx(), None);
+        assert_eq!(
+            ReleaseAssistanceIndication::new(3).ddx().effective().name(),
+            None
+        );
 
         let status = UeStatus::from_status(true, false);
         assert!(status.n1_mode_reg());
@@ -6819,8 +6744,14 @@ mod tests {
     #[test]
     fn additional_result_tmsi_priority_and_musim_request_helpers() {
         let result = AdditionalUpdateResult::from_result(AdditionalUpdateResultValue::SmsOnly);
-        assert_eq!(result.result(), Some(AdditionalUpdateResultValue::SmsOnly));
-        assert_eq!(AdditionalUpdateResult::new(3).result(), None);
+        assert_eq!(
+            result.result().effective(),
+            AdditionalUpdateResultValue::SmsOnly
+        );
+        assert_eq!(
+            AdditionalUpdateResult::new(3).result().effective().name(),
+            None
+        );
 
         let tmsi = TmsiStatus::from_valid_tmsi(true);
         assert!(tmsi.has_valid_tmsi());
@@ -6829,17 +6760,23 @@ mod tests {
         let priority = RadioPriority::from_priority_level(RadioPriorityLevel::Two);
         assert_eq!(priority.priority_level(), RadioPriorityLevel::Two);
         assert_eq!(
-            RadioPriority::new(0).priority_level(),
+            RadioPriority::new(0).priority_level().effective(),
             RadioPriorityLevel::Four
         );
 
         let request = UeRequestType::from_request_type(UeRequestTypeValue::RejectionOfPaging);
         assert_eq!(
-            request.request_type(),
-            Some(UeRequestTypeValue::RejectionOfPaging)
+            request.request_type().effective(),
+            UeRequestTypeValue::RejectionOfPaging
         );
-        assert_eq!(request.request_type_raw(), Some(2));
-        assert_eq!(UeRequestType::new(vec![3]).request_type(), None);
+        assert_eq!(request.request_type_raw(), 2);
+        assert_eq!(
+            UeRequestType::new(vec![3])
+                .request_type()
+                .effective()
+                .name(),
+            None
+        );
     }
 
     #[test]
@@ -6886,7 +6823,7 @@ mod tests {
 
         // A half octet in an octet of its own keeps the other half.
         let status = SmsServicesStatus::decode(&[0xe5]).unwrap();
-        assert_eq!(status.status(), None);
+        assert_eq!(status.status().effective().name(), None);
         assert_eq!(status.encode().unwrap(), [0xe5]);
         assert_eq!(
             SmsServicesStatus::from_status(SmsServicesStatusValue::Congestion).value,
@@ -6894,7 +6831,10 @@ mod tests {
         );
 
         assert_eq!(
-            GenericMessageContainerType::new(0x80).container_type(),
+            GenericMessageContainerType::new(0x80)
+                .container_type()
+                .effective()
+                .name(),
             None
         );
         assert_eq!(
@@ -6903,8 +6843,10 @@ mod tests {
             1
         );
         assert_eq!(
-            UeRadioCapabilityIdDeletionIndication::new(7).deletion_request(),
-            Some(RadioCapabilityIdDeletionRequest::NotRequested)
+            UeRadioCapabilityIdDeletionIndication::new(7)
+                .deletion_request()
+                .effective(),
+            RadioCapabilityIdDeletionRequest::NotRequested
         );
         assert_eq!(
             UeRadioCapabilityIdDeletionIndication::new(7).deletion_request_raw(),
@@ -6963,7 +6905,7 @@ mod tests {
                 .effective(),
             RequestTypeValue::EmergencyHandover
         );
-        assert_eq!(RequestType::new(5).request_type().effective().name(), None);
+        assert_eq!(RequestType::new(5).request_type().name(), None);
         assert!(EsmInformationTransferFlag::from_required(true).is_required());
 
         let feature = EpsNetworkFeatureSupport::new(vec![0x83, 0x09, 0x01]);
@@ -7407,7 +7349,10 @@ mod tests {
 
     #[test]
     fn typed_eps_ie_accessors_follow_spec_fallbacks() {
-        assert_eq!(EpsAttachType::new(0).attach_type(), AttachType::EpsAttach);
+        assert_eq!(
+            EpsAttachType::new(0).attach_type().effective(),
+            AttachType::EpsAttach
+        );
         assert_eq!(PdnType::new(4).pdn_type().effective(), PdnTypeValue::Ipv6);
         assert_eq!(PdnType::from_pdn_type(PdnTypeValue::Ethernet).value, 6);
     }
@@ -7474,8 +7419,8 @@ mod tests {
         update.set_active(true);
         assert!(update.active());
         assert_eq!(
-            EpsUpdateResult::new(5).update_result(),
-            Some(UpdateResult::CombinedTaLaUpdatedAndIsrActivated)
+            EpsUpdateResult::new(5).update_result().effective(),
+            UpdateResult::CombinedTaLaUpdatedAndIsrActivated
         );
         assert_eq!(
             EpsMobileIdentity::new(vec![0xF6]).identity_type(),

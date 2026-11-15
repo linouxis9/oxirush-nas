@@ -471,8 +471,7 @@ impl Validate for ExtendedServiceRequest {
             && self
                 .ue_request_type
                 .as_ref()
-                .and_then(|ie| ie.request_type())
-                .is_none()
+                .is_none_or(|ie| ie.request_type().name().is_none())
         {
             errors.push(ValidationError {
                 severity: Severity::Error,
@@ -656,7 +655,7 @@ impl Validate for TrackingAreaUpdateRequest {
             });
         }
         if self.ue_request_type.as_ref().is_some_and(|ie| {
-            ie.request_type() != Some(UeRequestTypeValue::NasSignallingConnectionRelease)
+            ie.request_type() != UeRequestTypeValue::NasSignallingConnectionRelease
         }) {
             errors.push(ValidationError {
                 severity: Severity::Error,
@@ -666,10 +665,7 @@ impl Validate for TrackingAreaUpdateRequest {
             });
         }
         if self.paging_restriction.is_some()
-            && self
-                .ue_request_type
-                .as_ref()
-                .and_then(|ie| ie.request_type())
+            && self.ue_request_type.as_ref().map(|ie| ie.request_type())
                 != Some(UeRequestTypeValue::NasSignallingConnectionRelease)
         {
             errors.push(ValidationError {
@@ -699,8 +695,7 @@ impl Validate for ControlPlaneServiceRequest {
             && self
                 .ue_request_type
                 .as_ref()
-                .and_then(|ie| ie.request_type())
-                .is_none()
+                .is_none_or(|ie| ie.request_type().name().is_none())
         {
             errors.push(ValidationError {
                 severity: Severity::Error,

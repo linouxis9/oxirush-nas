@@ -49,11 +49,14 @@ pub(crate) enum Form {
     Flag,
     Number,
     /// Its name, or the number of a value that the table does not name:
-    /// `show` writes the tree of the number, `read` the number of a tree.
+    /// `show` writes the tree of the number, `read` the number of a tree,
+    /// and `name` the number of a name alone.
     Named {
         show: fn(u16) -> oxirush_utils::tree::Value,
         read: fn(&oxirush_utils::tree::Value) -> Result<u16, alloc::string::String>,
+        name: fn(&oxirush_utils::tree::Value) -> Result<u16, alloc::string::String>,
         takes: &'static oxirush_utils::tree::Takes,
+        names: &'static oxirush_utils::tree::Takes,
     },
 }
 
@@ -150,6 +153,20 @@ pub(crate) struct Table {
     /// say the same, as they do of flags that a later release adds: none of
     /// their fields is set.
     pub(crate) trailing: bool,
+    /// The tree of an IE that is one coded value, its one row: the value
+    /// alone, not an object of it.
+    pub(crate) bare: Option<Bare>,
+}
+
+/// The tree of an IE of one coded value.
+#[cfg(feature = "tree")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Bare {
+    /// Its name, or the number of the whole octet, spare bits and all: a
+    /// number always writes the octet back.
+    Code,
+    /// Its name; octets that are not those of a name have no value.
+    Name,
 }
 
 #[cfg(feature = "tree")]
@@ -170,7 +187,7 @@ impl Table {
 
 #[cfg(feature = "tree")]
 mod tree {
-    use super::{Form, Row, Table};
+    use super::{Bare, Form, Row, Table};
     use crate::common::Octets;
     use crate::common::readable;
     use crate::prelude::*;
@@ -215,6 +232,15 @@ mod tree {
                 Form::Named { takes, .. } => takes,
             }
         }
+
+        /// The names of the values of the field, which a bare table of one
+        /// coded value takes.
+        pub(crate) const fn names(&self) -> &'static Takes {
+            match self.form {
+                Form::Named { names, .. } => names,
+                _ => &Takes::Named(&[]),
+            }
+        }
     }
 
     /// What a number of 1 to 16 bits takes.
@@ -239,18 +265,32 @@ mod tree {
 
     impl Table {
         /// The tree of `octets`: each field by its name, in the order of the
-        /// table.
-        pub(crate) fn tree(&self, octets: &[u8]) -> Value {
-            let mut members = Map::new();
-            for row in self.rows {
-                members.push(row.member.into(), row.tree(octets));
+        /// table, or the one coded value of a bare table; `None` where the
+        /// octets have no value.
+        pub(crate) fn tree(&self, octets: &[u8]) -> Option<Value> {
+            let Some(bare) = self.bare else {
+                let mut members = Map::new();
+                for row in self.rows {
+                    members.push(row.member.into(), row.tree(octets));
+                }
+                return Some(members.into());
+            };
+            let named = (self.exact(octets))
+                .then(|| self.rows[0].tree(octets))
+                .filter(Value::is_string);
+            match (named, bare) {
+                (Some(name), _) => Some(name),
+                (None, Bare::Code) => Some(octets.first().copied().unwrap_or(0).into()),
+                (None, Bare::Name) => None,
             }
-            members.into()
         }
 
         /// The tree of `octets` where it gives them back, else `None`.
         pub(crate) fn shown(&self, octets: &[u8]) -> Option<Value> {
-            self.exact(octets).then(|| self.tree(octets))
+            match self.bare {
+                Some(_) => self.tree(octets),
+                None => self.exact(octets).then(|| self.tree(octets)).flatten(),
+            }
         }
 
         /// Write the members of `value` in `octets`, which keep every bit
@@ -258,6 +298,9 @@ mod tree {
         /// the value: the shortest of a sender that carries the members that
         /// are written, and every member written has its octet.
         pub(crate) fn write(&self, octets: &mut Octets, value: &Value) -> Result<(), String> {
+            if let Some(bare) = self.bare {
+                return self.write_bare(bare, octets, value);
+            }
             let members = (value.as_object())
                 .ok_or_else(|| format!("{value} is not an object of the members of the IE"))?;
             let built = octets.is_empty();
@@ -289,6 +332,28 @@ mod tree {
             Ok(())
         }
 
+        /// Write the one coded value of a bare table, which is the whole
+        /// value of the IE: a name in octets of zeros, a number as the octet.
+        fn write_bare(&self, bare: Bare, octets: &mut Octets, value: &Value) -> Result<(), String> {
+            let row = &self.rows[0];
+            let Form::Named { read, name, .. } = row.form else {
+                return Err(format!("{value} is no value of the IE"));
+            };
+            let is_number = value.is_number()
+                || value
+                    .as_str()
+                    .is_some_and(|text| text.starts_with("0x") || text.starts_with("0X"));
+            let mut written = Octets::new();
+            written.resize(self.least.max(1), 0);
+            match (bare, is_number) {
+                (Bare::Code, true) => written[0] = readable::from_value::<u8>(value)?,
+                (Bare::Code, false) => row.put(&mut written, read(value)?),
+                (Bare::Name, _) => row.put(&mut written, name(value)?),
+            }
+            *octets = written;
+            Ok(())
+        }
+
         /// What the tree of the value takes: its members.
         pub(crate) const fn takes<const N: usize>(&self) -> [(&'static str, &'static Takes); N] {
             let mut members = [("", &Takes::Flag); N];
@@ -305,8 +370,7 @@ mod tree {
 /// A row of `FIELDS` of an IE type, which `bits!` of oxirush-utils writes
 /// once for each field of the table of the type, in the order of its
 /// figure: a flag of one bit, a number, a number of two parts, or a value
-/// of the table `Kind`. The tree
-/// names the field as the code does.
+/// of the table `Kind`. The tree names the field as the code does.
 macro_rules! field_row {
     ($field:ident, $name:literal, $octet:literal, $low:literal, 1, [], []) => {
         $crate::common::field_table::Row {
@@ -355,10 +419,12 @@ macro_rules! field_row {
                         },
                     )
                 },
+                name: |value| Ok($crate::common::readable::from_value::<$kind>(value)?.value().into()),
                 takes: &oxirush_utils::tree::Takes::OneOf(&[
                     <$kind as $crate::common::readable::Readable>::TAKES,
                     &oxirush_utils::tree::Takes::Number((1 << $width) - 1),
                 ]),
+                names: <$kind as $crate::common::readable::Readable>::TAKES,
             },
         }
     };
@@ -370,7 +436,8 @@ macro_rules! field_row {
 /// over its `value`, an octet (`octet`) or octets (`octets`): the least and
 /// the most octets of its value from a sender, the least that a receiver
 /// takes, and after them `trailing` for octets of flags whose absent and zero
-/// octets at the end say the same. The tree of the IE comes from the table.
+/// octets at the end say the same, or `code` or `name` for an IE that is one
+/// coded value ([`Bare`]). The tree of the IE comes from the table.
 macro_rules! table_ie {
     ($ie:ty, $storage:ident, $least:literal ..= $most:literal, receives $receives:literal $(, $option:ident)?) => {
         #[cfg(feature = "tree")]
@@ -382,6 +449,7 @@ macro_rules! table_ie {
                 most: $most,
                 receives: $receives,
                 trailing: $crate::common::field_table::table_ie!(@trailing $($option)?),
+                bare: $crate::common::field_table::table_ie!(@bare $($option)?),
             };
 
             /// The octets of the value.
@@ -405,7 +473,7 @@ macro_rules! table_ie {
             }
 
             fn decoded(&self, _: $crate::common::message_tree::Scope) -> Option<oxirush_utils::tree::Value> {
-                Some(Self::TABLE.tree(self.table_octets()))
+                Self::TABLE.tree(self.table_octets())
             }
 
             fn with_decoded(
@@ -440,6 +508,9 @@ macro_rules! table_ie {
             }
         }
     };
+    (@bare code) => { Some($crate::common::field_table::Bare::Code) };
+    (@bare name) => { Some($crate::common::field_table::Bare::Name) };
+    (@bare $($option:ident)?) => { None };
     (@trailing trailing) => { true };
     (@trailing $($option:ident)?) => { false };
     (@octets octet $value:expr) => { core::slice::from_ref(&$value) };
@@ -459,6 +530,13 @@ macro_rules! table_ie {
         meant
     }};
     (@meant $ie:ident $(, $option:ident)?) => { $ie.clone() };
+    // A code is its name or the number of its octet; a name is a name.
+    (@takes $ie:ty, code) => {{
+        const CODE: [&oxirush_utils::tree::Takes; 2] =
+            [<$ie>::FIELDS[0].names(), &oxirush_utils::tree::Takes::Number(255)];
+        &oxirush_utils::tree::Takes::OneOf(&CODE)
+    }};
+    (@takes $ie:ty, name) => { <$ie>::FIELDS[0].names() };
     (@takes $ie:ty $(, $option:ident)?) => {
         &oxirush_utils::tree::Takes::Members(None, &<$ie>::TABLE.takes::<{ <$ie>::FIELDS.len() }>())
     };

@@ -368,7 +368,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     if let Message::Gmm(_, GmmMessage::RegistrationReject(reject)) = &mut msg {
         // Read a mandatory IE, an optional IE that is there and one that is not
-        assert_eq!(reject.fgmm_cause.cause(), Some(GmmCauseValue::Congestion));
+        assert_eq!(reject.fgmm_cause.cause(), GmmCauseValue::Congestion);
         let t3346 = reject.t3346_value.as_ref().map(GprsTimer2::to_seconds);
         assert_eq!(t3346, Some(Some(600)));
         assert!(reject.t3502_value.is_none());
@@ -422,7 +422,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         unreachable!()
     };
     let kind = transport.payload_container_type.kind();
-    assert_eq!(kind, Some(PayloadContainerKind::N1SmInformation));
+    assert_eq!(kind, PayloadContainerKind::N1SmInformation);
     assert_eq!(transport.pdu_session_id.map(|id| id.pdu_session_id()), Some(5));
     assert_eq!(transport.payload_container.decode_as_n1_sm_message()?, request);
     Ok(())

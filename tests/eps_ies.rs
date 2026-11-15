@@ -660,10 +660,7 @@ fn an_eps_attach_type_is_one_of_table_9_9_3_11_1() {
     // Bit 4 is spare
     let ie = EpsAttachType::new(0x0a);
     assert_eq!(ie.attach_type_raw(), 2);
-    assert_eq!(
-        ie.attach_type_strict(),
-        Some(AttachType::CombinedEpsImsiAttach)
-    );
+    assert_eq!(ie.attach_type(), AttachType::CombinedEpsImsiAttach);
 }
 
 #[test]
@@ -689,10 +686,7 @@ fn a_service_type_is_one_of_table_9_9_3_27_1() {
             ServiceTypeValue::from_value(value & 0x0f).effective(),
             service_type
         );
-        assert_eq!(
-            ServiceType::new(value).service_type_strict(),
-            Some(service_type)
-        );
+        assert_eq!(ServiceType::new(value).service_type(), service_type);
     }
     // 3 and 4 are read as mobile originating CS fallback, 9 to 11 as packet
     // services via S1, by the network
@@ -754,10 +748,7 @@ fn an_eps_attach_result_is_eps_only_or_combined() {
     assert_eq!(AttachResult::named(3), None);
     let ie = EpsAttachResult::new(0x0a);
     assert_eq!(ie.attach_result_raw(), 2);
-    assert_eq!(
-        ie.attach_result(),
-        Some(AttachResult::CombinedEpsImsiAttach)
-    );
+    assert_eq!(ie.attach_result(), AttachResult::CombinedEpsImsiAttach);
 }
 
 #[test]
@@ -806,7 +797,7 @@ fn an_eps_update_result_is_one_of_table_9_9_3_13_1() {
     assert_eq!(ie.update_result_raw(), 5);
     assert_eq!(
         ie.update_result(),
-        Some(UpdateResult::CombinedTaLaUpdatedAndIsrActivated)
+        UpdateResult::CombinedTaLaUpdatedAndIsrActivated
     );
 }
 
@@ -1329,7 +1320,7 @@ fn an_additional_update_result_is_one_of_table_9_9_3_0a_1() {
     assert_eq!(AdditionalUpdateResultValue::named(3), None);
     let ie = AdditionalUpdateResult::new(0x06);
     assert_eq!(ie.result_raw(), 2);
-    assert_eq!(ie.result(), Some(AdditionalUpdateResultValue::SmsOnly));
+    assert_eq!(ie.result(), AdditionalUpdateResultValue::SmsOnly);
 }
 
 #[test]
@@ -1640,7 +1631,7 @@ fn the_values_of_a_generic_container_type_lcs_and_sms_services_are_those_of_thei
             SmsServicesStatusValue::named((0x08 | value as u8) & 0x07),
             Some(status)
         );
-        assert_eq!(SmsServicesStatus::new(value as u8).status(), Some(status));
+        assert_eq!(SmsServicesStatus::new(value as u8).status(), status);
     }
     assert_eq!(SmsServicesStatusValue::named(4), None);
 }

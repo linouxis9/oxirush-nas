@@ -54,11 +54,11 @@ fn transported(
 ) {
     use crate::nas_5gs::PayloadContainerKind as Kind;
     match kind.kind() {
-        Some(Kind::N1SmInformation) => {
+        Kind::N1SmInformation => {
             let container = N1SmContainer(container);
             with_ie(body, "payload_container", &container, scope, visit);
         }
-        Some(Kind::MultiplePayloads) => {
+        Kind::MultiplePayloads => {
             let container = MultiplePayloads(container);
             with_ie(body, "payload_container", &container, scope, visit);
         }
@@ -1082,24 +1082,6 @@ container_ie!(
 );
 
 // One coded value.
-code_ie!(
-    ServiceType,
-    ServiceTypeValue,
-    |ie| ie.service_type_strict(),
-    ServiceType::from_service_type
-);
-code_ie!(
-    GmmCause,
-    GmmCauseValue,
-    |ie| ie.cause(),
-    GmmCause::from_cause
-);
-code_ie!(
-    GsmCause,
-    GsmCauseValue,
-    |ie| ie.cause(),
-    GsmCause::from_cause
-);
 // A type that no identity is asked for by is written as the code that it is
 // read as, so that the refusal says what the IE would be.
 /// The identity that an IDENTITY REQUEST asks for (TS 24.501 §9.11.3.3), by
@@ -1162,42 +1144,6 @@ code_ie!(
             .unwrap_or(IdentityType::new(MobileIdentityType5gs::Suci as u8))
     }
 );
-code_ie!(
-    PduSessionType,
-    PduSessionTypeValue,
-    |ie| Some(ie.session_type()),
-    PduSessionType::from_session_type
-);
-code_ie!(
-    SscMode,
-    SscModeValue,
-    |ie| Some(ie.mode()),
-    SscMode::from_mode
-);
-code_ie!(
-    AccessType,
-    AccessTypeValue,
-    |ie| ie.access_type(),
-    AccessType::from_access_type
-);
-code_ie!(
-    PayloadContainerType,
-    PayloadContainerKind,
-    |ie| ie.kind(),
-    PayloadContainerType::from_kind
-);
-code_ie!(
-    NssaiInclusionMode,
-    NssaiInclusionModeValue,
-    |ie| Some(ie.mode()),
-    NssaiInclusionMode::from_mode
-);
-code_ie!(
-    MaPduSessionInformation,
-    MaPduSessionInfoValue,
-    |ie| ie.info(),
-    MaPduSessionInformation::from_info
-);
 // An identity that is assigned with the number of one that is not is written
 // as that number, so that the refusal says what the IE would be.
 code_ie!(
@@ -1210,30 +1156,12 @@ code_ie!(
         ProseRelayTransactionIdentityValue::Reserved => 0xff,
     })
 );
-named_ie!(
-    DrxParameters,
-    DrxValue,
-    |ie| ie.drx_value(),
-    DrxParameters::from_drx_value
-);
-named_ie!(
-    NbN1ModeDrxParameters,
-    NbN1DrxValue,
-    |ie| ie.drx_value(),
-    NbN1ModeDrxParameters::from_drx_value
-);
 named_ie!(Rsn, RsnValue, |ie| ie.rsn(), Rsn::from_rsn);
 named_ie!(
     AdditionalRequestResult,
     PagingRestrictionDecision,
     |ie| ie.paging_restriction_decision(),
     AdditionalRequestResult::from_paging_restriction_decision
-);
-named_ie!(
-    EthernetHeaderCompressionConfiguration,
-    EthHdrCompCidLen,
-    |ie| ie.cid_length(),
-    EthernetHeaderCompressionConfiguration::from_cid_length
 );
 
 // The fields of an octet.

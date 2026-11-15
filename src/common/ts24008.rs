@@ -522,35 +522,19 @@ oxirush_utils::named_values! {
 }
 crate::common::enums::values_readable!(ImeisvRequestValue);
 
-/// IMEISV request (TS 24.008 §10.5.5.10), a type 1 IE.
+// IMEISV request (TS 24.008 §10.5.5.10), a type 1 IE.
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl ImeisvRequest (value) "" octets 1 {
+        request "REQUEST": 0 1 3 as ImeisvRequestValue,
+    }
+}
+crate::common::field_table::table_ie!(ImeisvRequest, octet, 1..=1, receives 1, code);
+
 impl ImeisvRequest {
-    /// Request value with the receiver rule applied.
-    pub fn request(&self) -> Option<crate::common::ts24008::ImeisvRequestValue> {
-        Some(crate::common::ts24008::ImeisvRequestValue::from_value(self.value & 0x07).effective())
-    }
-
-    /// Request value restricted to the defined codes.
-    pub fn request_strict(&self) -> Option<crate::common::ts24008::ImeisvRequestValue> {
-        crate::common::ts24008::ImeisvRequestValue::named(self.value & 0x07)
-    }
-
-    /// Raw request value (bits 1-3).
-    pub fn request_raw(&self) -> u8 {
-        self.value & 0x07
-    }
-
     /// Whether the IMEISV is requested.
     pub fn is_requested(&self) -> bool {
         self.request_raw() == 1
-    }
-
-    /// Set the request value, clearing the spare bit.
-    pub fn set_request(
-        &mut self,
-        request: crate::common::ts24008::ImeisvRequestValue,
-    ) -> &mut Self {
-        self.value = u8::from(request);
-        self
     }
 
     /// Build from a request value.
@@ -1278,18 +1262,16 @@ oxirush_utils::named_values! {
 }
 crate::common::enums::values_readable!(DaylightSavingAdjustment);
 
-/// Daylight saving time (TS 24.008 §10.5.3.12).
+// Daylight saving time (TS 24.008 §10.5.3.12).
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl DaylightSavingTime (value) "" octets 1 {
+        adjustment "ADJUSTMENT": 0 1 2 as DaylightSavingAdjustment,
+    }
+}
+crate::common::field_table::table_ie!(DaylightSavingTime, octets, 1..=1, receives 1, name);
+
 impl DaylightSavingTime {
-    /// Adjustment; spare bits are ignored and the reserved value is `None`.
-    pub fn adjustment(&self) -> Option<DaylightSavingAdjustment> {
-        DaylightSavingAdjustment::named((*self.value.first()?) & 0x03)
-    }
-
-    /// Raw adjustment (bits 2-1), or 0 if the value is empty.
-    pub fn adjustment_raw(&self) -> u8 {
-        self.value.first().map_or(0, |octet| octet & 0x03)
-    }
-
     /// Build from an adjustment with the spare bits clear.
     pub fn from_adjustment(adjustment: DaylightSavingAdjustment) -> Self {
         Self::new(vec![u8::from(adjustment)])
@@ -1690,16 +1672,17 @@ mod tests {
     fn imeisv_request_applies_table_10_5_143_fallback() {
         for value in 2..=7 {
             assert_eq!(
-                ImeisvRequest::new(value).request(),
-                Some(ImeisvRequestValue::NotRequested)
+                ImeisvRequest::new(value).request().effective(),
+                ImeisvRequestValue::NotRequested
             );
-            assert_eq!(ImeisvRequest::new(value).request_strict(), None);
+            assert_eq!(ImeisvRequest::new(value).request().name(), None);
         }
         let request = ImeisvRequest::new(0x09);
         assert!(request.is_requested());
         let mut request = request;
+        // A setter keeps the spare bit 4
         request.set_request(ImeisvRequestValue::NotRequested);
-        assert_eq!(request.value, 0);
+        assert_eq!(request.value, 0x08);
     }
 
     #[test]

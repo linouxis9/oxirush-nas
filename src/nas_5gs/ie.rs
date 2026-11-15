@@ -618,12 +618,15 @@ oxirush_utils::named_values! {
 }
 crate::common::enums::values_readable!(GmmCauseValue);
 
-impl GmmCause {
-    /// The cause, if its value is one of the table.
-    pub fn cause(&self) -> Option<GmmCauseValue> {
-        GmmCauseValue::named(self.value)
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl GmmCause (value) "" octets 1 {
+        cause "CAUSE": 0 1 8 as GmmCauseValue,
     }
+}
+crate::common::field_table::table_ie!(GmmCause, octet, 1..=1, receives 1, code);
 
+impl GmmCause {
     /// Cause with the receiver rule of TS 24.501 Table 9.11.3.2.1 applied.
     pub fn cause_received(&self) -> GmmCauseValue {
         GmmCauseValue::from_value(self.value).effective()
@@ -631,8 +634,8 @@ impl GmmCause {
 
     /// Human-readable description (returns hex for unknown values).
     pub fn description(&self) -> String {
-        match self.cause() {
-            Some(c) => c.name().unwrap_or_default().to_string(),
+        match self.cause().name() {
+            Some(name) => name.to_string(),
             None => format!("Unknown 5GMM cause 0x{:02x}", self.value),
         }
     }
@@ -640,12 +643,6 @@ impl GmmCause {
     /// Construct from typed cause.
     pub fn from_cause(cause: GmmCauseValue) -> Self {
         Self::new(u8::from(cause))
-    }
-
-    /// Set the cause value.
-    pub fn set_cause(&mut self, cause: GmmCauseValue) -> &mut Self {
-        self.value = u8::from(cause);
-        self
     }
 }
 
@@ -718,12 +715,15 @@ impl GsmCauseValue {
     }
 }
 
-impl GsmCause {
-    /// The cause, if its value is one of the table.
-    pub fn cause(&self) -> Option<GsmCauseValue> {
-        GsmCauseValue::named(self.value)
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl GsmCause (value) "" octets 1 {
+        cause "CAUSE": 0 1 8 as GsmCauseValue,
     }
+}
+crate::common::field_table::table_ie!(GsmCause, octet, 1..=1, receives 1, code);
 
+impl GsmCause {
     /// Cause as received by the UE (TS 24.501 §9.11.4.2).
     pub fn cause_for_ue(&self) -> GsmCauseValue {
         GsmCauseValue::from_u8_for_ue(self.value)
@@ -736,8 +736,8 @@ impl GsmCause {
 
     /// Human-readable description.
     pub fn description(&self) -> String {
-        match self.cause() {
-            Some(c) => c.name().unwrap_or_default().to_string(),
+        match self.cause().name() {
+            Some(name) => name.to_string(),
             None => format!("Unknown 5GSM cause 0x{:02x}", self.value),
         }
     }
@@ -745,12 +745,6 @@ impl GsmCause {
     /// Construct from typed cause.
     pub fn from_cause(cause: GsmCauseValue) -> Self {
         Self::new(u8::from(cause))
-    }
-
-    /// Set the cause value.
-    pub fn set_cause(&mut self, cause: GsmCauseValue) -> &mut Self {
-        self.value = u8::from(cause);
-        self
     }
 }
 
@@ -895,21 +889,18 @@ oxirush_utils::named_values! {
 }
 crate::common::enums::values_readable!(PayloadContainerKind);
 
-impl PayloadContainerType {
-    /// Typed payload container kind.
-    pub fn kind(&self) -> Option<PayloadContainerKind> {
-        PayloadContainerKind::named(self.value & 0x0F)
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl PayloadContainerType (value) "" octets 1 {
+        kind "KIND": 0 1 4 as PayloadContainerKind,
     }
+}
+crate::common::field_table::table_ie!(PayloadContainerType, octet, 1..=1, receives 1, code);
 
+impl PayloadContainerType {
     /// Whether this is N1 SM information (most common case).
     pub fn is_n1_sm(&self) -> bool {
         (self.value & 0x0F) == 0x01
-    }
-
-    /// Mutating setter for the payload container kind.
-    pub fn set_kind(&mut self, kind: PayloadContainerKind) -> &mut Self {
-        self.value = (self.value & !0x0F) | (u8::from(kind) & 0x0F);
-        self
     }
 
     /// Build from a typed payload container kind.
@@ -922,7 +913,7 @@ impl PayloadContainerType {
         "a defined payload container type, bits 8 to 5 clear";
     /// Whether this value is valid for transmission.
     pub fn is_well_formed(&self) -> bool {
-        self.value & 0xF0 == 0 && self.kind().is_some()
+        self.value & 0xF0 == 0 && self.kind().name().is_some()
     }
 }
 
@@ -957,26 +948,15 @@ impl PduSessionTypeValue {
     }
 }
 
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl PduSessionType (value) "" octets 1 {
+        session_type "SESSION-TYPE": 0 1 3 as PduSessionTypeValue,
+    }
+}
+crate::common::field_table::table_ie!(PduSessionType, octet, 1..=1, receives 1, code);
+
 impl PduSessionType {
-    /// Typed PDU session type.
-    ///
-    /// The value as the IE has it: `effective()` is the value as a receiver
-    /// reads it.
-    pub fn session_type(&self) -> PduSessionTypeValue {
-        PduSessionTypeValue::from_value(self.value & 0x07)
-    }
-
-    /// Raw session type value (lower 3 bits).
-    pub fn session_type_raw(&self) -> u8 {
-        self.value & 0x07
-    }
-
-    /// Mutating setter for the typed PDU session type.
-    pub fn set_session_type(&mut self, session_type: PduSessionTypeValue) -> &mut Self {
-        self.value = u8::from(session_type) & 0x07;
-        self
-    }
-
     /// Build from a typed session type.
     pub fn from_session_type(st: PduSessionTypeValue) -> Self {
         Self::new(u8::from(st))
@@ -1003,24 +983,15 @@ oxirush_utils::named_values! {
 }
 crate::common::enums::values_readable!(AccessTypeValue);
 
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl AccessType (value) "" octets 1 {
+        access_type "ACCESS-TYPE": 0 1 2 as AccessTypeValue,
+    }
+}
+crate::common::field_table::table_ie!(AccessType, octet, 1..=1, receives 1, code);
+
 impl AccessType {
-    /// Typed access type value, of the half octet of the IE: a mandatory
-    /// octet has a spare half octet beside it.
-    pub fn access_type(&self) -> Option<AccessTypeValue> {
-        AccessTypeValue::named((self.value & 0x0f) & 0x03)
-    }
-
-    /// Raw access type value (lower 2 bits).
-    pub fn access_type_raw(&self) -> u8 {
-        self.value & 0x03
-    }
-
-    /// Mutating setter for the typed access type.
-    pub fn set_access_type(&mut self, access_type: AccessTypeValue) -> &mut Self {
-        self.value = u8::from(access_type) & 0x03;
-        self
-    }
-
     /// Build from a typed access type.
     pub fn from_access_type(at: AccessTypeValue) -> Self {
         Self::new(u8::from(at))
@@ -1031,7 +1002,7 @@ impl AccessType {
         "3GPP access or non-3GPP access, bits 4 and 3 clear";
     /// Whether the value nibble is valid for transmission.
     pub fn is_well_formed(&self) -> bool {
-        self.value & !0x03 == 0 && self.access_type().is_some()
+        self.value & !0x03 == 0 && self.access_type().name().is_some()
     }
 }
 
@@ -1479,34 +1450,18 @@ oxirush_utils::named_values! {
 }
 crate::common::enums::values_readable!(ServiceTypeValue);
 
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl ServiceType (value) "" octets 1 {
+        service_type "SERVICE-TYPE": 0 1 4 as ServiceTypeValue,
+    }
+}
+crate::common::field_table::table_ie!(ServiceType, octet, 1..=1, receives 1, code);
+
 impl ServiceType {
     /// Build from a typed service type.
     pub fn from_service_type(value: ServiceTypeValue) -> Self {
         Self::new(u8::from(value))
-    }
-
-    /// Service type with the receive fallbacks of the network (§9.11.3.50).
-    ///
-    /// The value as the IE has it: `effective()` is the value as a receiver
-    /// reads it.
-    pub fn service_type(&self) -> ServiceTypeValue {
-        ServiceTypeValue::from_value(self.value & 0x0F)
-    }
-
-    /// Service type, only for a defined value.
-    pub fn service_type_strict(&self) -> Option<ServiceTypeValue> {
-        ServiceTypeValue::named(self.value & 0x0F)
-    }
-
-    /// Raw service type (bits 4-1).
-    pub fn service_type_raw(&self) -> u8 {
-        self.value & 0x0f
-    }
-
-    /// Set the service type.
-    pub fn set_service_type(&mut self, value: ServiceTypeValue) -> &mut Self {
-        self.value = u8::from(value);
-        self
     }
 }
 
@@ -2755,23 +2710,15 @@ oxirush_utils::named_values! {
 }
 crate::common::enums::values_readable!(MaPduSessionInfoValue);
 
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl MaPduSessionInformation (value) "" octets 1 {
+        info "INFO": 0 1 4 as MaPduSessionInfoValue,
+    }
+}
+crate::common::field_table::table_ie!(MaPduSessionInformation, octet, 1..=1, receives 1, code);
+
 impl MaPduSessionInformation {
-    /// Typed MA PDU session information value (bits 1-4).
-    pub fn info(&self) -> Option<MaPduSessionInfoValue> {
-        MaPduSessionInfoValue::named(self.value & 0x0F)
-    }
-
-    /// Raw MA PDU session information value (bits 1-4).
-    pub fn info_raw(&self) -> u8 {
-        self.value & 0x0F
-    }
-
-    /// Mutating setter for the typed MA PDU session information.
-    pub fn set_info(&mut self, info: MaPduSessionInfoValue) -> &mut Self {
-        self.value = (self.value & !0x0F) | (u8::from(info) & 0x0F);
-        self
-    }
-
     /// Construct a value from info.
     pub fn from_info(info: MaPduSessionInfoValue) -> Self {
         Self::new(u8::from(info))
@@ -2839,18 +2786,15 @@ impl NetworkSlicingIndication {
     }
 }
 
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl NssaiInclusionMode (value) "" octets 1 {
+        mode "MODE": 0 1 2 as NssaiInclusionModeValue,
+    }
+}
+crate::common::field_table::table_ie!(NssaiInclusionMode, octet, 1..=1, receives 1, code);
+
 impl NssaiInclusionMode {
-    /// NSSAI inclusion mode (bits 1-2).
-    pub fn mode(&self) -> NssaiInclusionModeValue {
-        NssaiInclusionModeValue::from_value(self.value & 0x03).effective()
-    }
-
-    /// Mutating setter for the typed NSSAI inclusion mode.
-    pub fn set_mode(&mut self, mode: NssaiInclusionModeValue) -> &mut Self {
-        self.value = (self.value & !0x03) | (u8::from(mode) & 0x03);
-        self
-    }
-
     /// Construct a value from mode.
     pub fn from_mode(mode: NssaiInclusionModeValue) -> Self {
         Self::new(u8::from(mode))
@@ -2883,20 +2827,15 @@ impl PriorityIndicator {
     }
 }
 
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl RequestType (value) "" octets 1 {
+        request_type "REQUEST-TYPE": 0 1 3 as RequestTypeValue,
+    }
+}
+crate::common::field_table::table_ie!(RequestType, octet, 1..=1, receives 1, code);
+
 impl RequestType {
-    /// Request type value (bits 1-3).
-    ///
-    /// The value as the IE has it: `effective()` is the value as a receiver
-    /// reads it.
-    pub fn request_type(&self) -> RequestTypeValue {
-        RequestTypeValue::from_value(self.value & 0x07)
-    }
-
-    /// Raw request type value (bits 1-3).
-    pub fn request_type_raw(&self) -> u8 {
-        self.value & 0x07
-    }
-
     /// Whether this is an initial request (value = 1).
     pub fn is_initial(&self) -> bool {
         self.request_type().effective() == RequestTypeValue::InitialRequest
@@ -2914,12 +2853,6 @@ impl RequestType {
             RequestTypeValue::InitialEmergencyRequest
                 | RequestTypeValue::ExistingEmergencyPduSession
         )
-    }
-
-    /// Mutating setter for the typed request type.
-    pub fn set_request_type(&mut self, request_type: RequestTypeValue) -> &mut Self {
-        self.value = u8::from(request_type) & 0x07;
-        self
     }
 
     /// Construct a value from request type.
@@ -2950,26 +2883,15 @@ impl SmsIndication {
     }
 }
 
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl SscMode (value) "" octets 1 {
+        mode "MODE": 0 1 3 as SscModeValue,
+    }
+}
+crate::common::field_table::table_ie!(SscMode, octet, 1..=1, receives 1, code);
+
 impl SscMode {
-    /// SSC mode value (bits 1-3).
-    ///
-    /// The value as the IE has it: `effective()` is the value as a receiver
-    /// reads it.
-    pub fn mode(&self) -> SscModeValue {
-        SscModeValue::from_value(self.value & 0x07)
-    }
-
-    /// Raw SSC mode value (bits 1-3).
-    pub fn mode_raw(&self) -> u8 {
-        self.value & 0x07
-    }
-
-    /// Mutating setter for the typed SSC mode.
-    pub fn set_mode(&mut self, mode: SscModeValue) -> &mut Self {
-        self.value = u8::from(mode) & 0x07;
-        self
-    }
-
     /// Construct a value from mode.
     pub fn from_mode(mode: SscModeValue) -> Self {
         Self::new(u8::from(mode))
@@ -3573,17 +3495,15 @@ oxirush_utils::named_values! {
 }
 crate::common::enums::values_readable!(DrxValue);
 
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl DrxParameters (value) "" octets 1 {
+        drx_value "DRX-VALUE": 0 1 4 as DrxValue,
+    }
+}
+crate::common::field_table::table_ie!(DrxParameters, octets, 1..=1, receives 1, name);
+
 impl DrxParameters {
-    /// Typed DRX value (bits 1-4 of octet 1).
-    pub fn drx_value(&self) -> Option<DrxValue> {
-        Some(DrxValue::from_value(self.value.first().copied().unwrap_or(0) & 0x0F).effective())
-    }
-
-    /// Raw DRX value (bits 1-4 of octet 1).
-    pub fn drx_value_raw(&self) -> Option<u8> {
-        self.value.first().map(|b| b & 0x0F)
-    }
-
     /// Construct a value from drx value.
     pub fn from_drx_value(drx: DrxValue) -> Self {
         Self::new(vec![u8::from(drx)])
@@ -10221,19 +10141,15 @@ oxirush_utils::named_values! {
 }
 crate::common::enums::values_readable!(EthHdrCompCidLen);
 
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl EthernetHeaderCompressionConfiguration (value) "" octets 1 {
+        cid_length "CID-LENGTH": 0 1 2 as EthHdrCompCidLen,
+    }
+}
+crate::common::field_table::table_ie!(EthernetHeaderCompressionConfiguration, octets, 1..=1, receives 1, name);
+
 impl EthernetHeaderCompressionConfiguration {
-    /// Typed CID length value (octet 1 bits 1–2, mask 0x03).
-    pub fn cid_length(&self) -> Option<EthHdrCompCidLen> {
-        self.value
-            .first()
-            .map(|b| EthHdrCompCidLen::from_value(*b & 0x03).effective())
-    }
-
-    /// Raw CID length value.
-    pub fn cid_length_raw(&self) -> u8 {
-        self.value.first().map(|b| b & 0x03).unwrap_or(0)
-    }
-
     /// Build from a typed CID length value.
     pub fn from_cid_length(cid: EthHdrCompCidLen) -> Self {
         Self::new(vec![u8::from(cid)])
@@ -10699,19 +10615,15 @@ oxirush_utils::named_values! {
 }
 crate::common::enums::values_readable!(NbN1DrxValue);
 
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl NbN1ModeDrxParameters (value) "" octets 1 {
+        drx_value "DRX-VALUE": 0 1 4 as NbN1DrxValue,
+    }
+}
+crate::common::field_table::table_ie!(NbN1ModeDrxParameters, octets, 1..=1, receives 1, name);
+
 impl NbN1ModeDrxParameters {
-    /// Typed NB-N1 mode DRX value (bits 0-3 of first byte).
-    pub fn drx_value(&self) -> Option<NbN1DrxValue> {
-        self.value
-            .first()
-            .map(|b| NbN1DrxValue::from_value(b & 0x0F).effective())
-    }
-
-    /// Raw NB-N1 mode DRX value (bits 0-3 of first byte).
-    pub fn drx_value_raw(&self) -> Option<u8> {
-        self.value.first().map(|b| b & 0x0F)
-    }
-
     /// Build from typed DRX value.
     pub fn from_drx_value(drx: NbN1DrxValue) -> Self {
         Self::new(vec![u8::from(drx)])
@@ -16076,7 +15988,7 @@ mod shown {
     /// A 5GMM cause by its number and its name: `#22 (Congestion)`.
     impl fmt::Display for GmmCause {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            let name = self.cause().and_then(GmmCauseValue::name);
+            let name = self.cause().name();
             display::cause(f, self.value, name)
         }
     }
@@ -16084,7 +15996,7 @@ mod shown {
     /// A 5GSM cause by its number and its name: `#26 (Insufficient resources)`.
     impl fmt::Display for GsmCause {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            let name = self.cause().and_then(GsmCauseValue::name);
+            let name = self.cause().name();
             display::cause(f, self.value, name)
         }
     }
@@ -16606,7 +16518,7 @@ mod tests {
     fn test_gmm_cause() {
         let cause = GmmCause::from_cause(GmmCauseValue::IllegalUe);
         assert_eq!(cause.value, 0x03);
-        assert_eq!(cause.cause(), Some(GmmCauseValue::IllegalUe));
+        assert_eq!(cause.cause().effective(), GmmCauseValue::IllegalUe);
         assert_eq!(cause.description(), "Illegal UE");
     }
 
@@ -16614,7 +16526,10 @@ mod tests {
     fn test_gsm_cause() {
         let cause = GsmCause::from_cause(GsmCauseValue::RegularDeactivation);
         assert_eq!(cause.value, 0x24);
-        assert_eq!(cause.cause(), Some(GsmCauseValue::RegularDeactivation));
+        assert_eq!(
+            cause.cause().effective(),
+            GsmCauseValue::RegularDeactivation
+        );
         assert_eq!(
             GsmCauseValue::from_u8_for_ue(0x01),
             GsmCauseValue::RequestRejectedUnspecified
@@ -16679,7 +16594,7 @@ mod tests {
     fn unknown_causes_stay_visible_like_eps() {
         // The receiver fallback is explicit, as in EPS.
         let gmm = GmmCause::new(0x01);
-        assert_eq!(gmm.cause(), None);
+        assert_eq!(gmm.cause().name(), None);
         assert_eq!(gmm.value, 0x01);
         assert_eq!(
             gmm.cause_received(),
@@ -16687,7 +16602,7 @@ mod tests {
         );
         assert_eq!(gmm.description(), "Unknown 5GMM cause 0x01");
         let gsm = GsmCause::new(0x01);
-        assert_eq!(gsm.cause(), None);
+        assert_eq!(gsm.cause().effective().name(), None);
         assert_eq!(
             gsm.cause_for_ue(),
             GsmCauseValue::RequestRejectedUnspecified
@@ -16899,7 +16814,10 @@ mod tests {
     fn test_payload_container_type() {
         let pct = PayloadContainerType::new(0x01);
         assert!(pct.is_n1_sm());
-        assert_eq!(pct.kind(), Some(PayloadContainerKind::N1SmInformation));
+        assert_eq!(
+            pct.kind().effective(),
+            PayloadContainerKind::N1SmInformation
+        );
     }
 
     #[test]
@@ -17355,10 +17273,10 @@ mod tests {
     #[test]
     fn test_ue_request_type_ignores_spare_bits() {
         let ie = UeRequestType::new(vec![0x12]);
-        assert_eq!(ie.request_type_raw(), Some(0x02));
+        assert_eq!(ie.request_type_raw(), 0x02);
         assert_eq!(
-            ie.request_type(),
-            Some(UeRequestTypeValue::RejectionOfPaging)
+            ie.request_type().effective(),
+            UeRequestTypeValue::RejectionOfPaging
         );
         assert!(!ie.is_well_formed());
         let ie =
@@ -17367,24 +17285,26 @@ mod tests {
     }
 
     #[test]
-    fn test_tv1_setters_clear_spare_bits() {
+    fn test_tv1_setters_keep_spare_bits() {
+        // A setter writes the bits of its field and keeps the others, spare
+        // ones too.
         let mut access = AccessType::new(0x0F);
         access.set_access_type(AccessTypeValue::Non3GppAccess);
-        assert_eq!(access.value, 0x02);
+        assert_eq!(access.value, 0x0E);
 
         let mut pdu = PduSessionType::new(0x0F);
         pdu.set_session_type(PduSessionTypeValue::Ethernet);
-        assert_eq!(pdu.value, 0x05);
+        assert_eq!(pdu.value, 0x0D);
 
         let mut ssc = SscMode::new(0x0F);
         ssc.set_mode(SscModeValue::Ssc3);
-        assert_eq!(ssc.value, 0x03);
+        assert_eq!(ssc.value, 0x0B);
 
         let mut request = RequestType::new(0x0F);
         assert_eq!(request.request_type_raw(), 0x07);
-        assert_eq!(request.request_type().effective().name(), None);
+        assert_eq!(request.request_type().name(), None);
         request.set_request_type(RequestTypeValue::ExistingPduSession);
-        assert_eq!(request.value, 0x02);
+        assert_eq!(request.value, 0x0A);
     }
 
     #[test]
@@ -20493,7 +20413,7 @@ mod tests {
 
         let drx = DrxParameters::from_drx_value(DrxValue::Cycle128);
         assert_eq!(drx.value, [0x03]);
-        assert_eq!(drx.drx_value(), Some(DrxValue::Cycle128));
+        assert_eq!(drx.drx_value().effective(), DrxValue::Cycle128);
 
         let identity = IdentityType::new(0x00);
         assert_eq!(identity.identity_type_strict(), None);
@@ -20514,8 +20434,8 @@ mod tests {
         let daylight = DaylightSavingTime::from_adjustment(DaylightSavingAdjustment::PlusOneHour);
         assert_eq!(daylight.value, [0x01]);
         assert_eq!(
-            daylight.adjustment(),
-            Some(DaylightSavingAdjustment::PlusOneHour)
+            daylight.adjustment().effective(),
+            DaylightSavingAdjustment::PlusOneHour
         );
 
         let mico = MicoIndication::from_flags(true, true);
@@ -20524,8 +20444,8 @@ mod tests {
         let ma = MaPduSessionInformation::from_info(MaPduSessionInfoValue::NetworkUpgradeAllowed);
         assert_eq!(ma.value, 0x01);
         assert_eq!(
-            ma.info(),
-            Some(MaPduSessionInfoValue::NetworkUpgradeAllowed)
+            ma.info().effective(),
+            MaPduSessionInfoValue::NetworkUpgradeAllowed
         );
         let slicing = NetworkSlicingIndication::from_flags(true, true);
         assert_eq!(slicing.value, 0x03);
@@ -20558,7 +20478,7 @@ mod tests {
         assert!(n5gc.n5gc());
         let nb_drx = NbN1ModeDrxParameters::from_drx_value(NbN1DrxValue::T1024);
         assert_eq!(nb_drx.value, [0x07]);
-        assert_eq!(nb_drx.drx_value(), Some(NbN1DrxValue::T1024));
+        assert_eq!(nb_drx.drx_value().effective(), NbN1DrxValue::T1024);
         let config = AdditionalConfigurationIndication::from_scmr(true);
         assert_eq!(config.value, 0x01);
         assert!(config.scmr());
@@ -20595,7 +20515,10 @@ mod tests {
         let ethernet =
             EthernetHeaderCompressionConfiguration::from_cid_length(EthHdrCompCidLen::FifteenBits);
         assert_eq!(ethernet.value, [0x02]);
-        assert_eq!(ethernet.cid_length(), Some(EthHdrCompCidLen::FifteenBits));
+        assert_eq!(
+            ethernet.cid_length().effective(),
+            EthHdrCompCidLen::FifteenBits
+        );
         let rsn = Rsn::from_rsn(RsnValue::V2);
         assert_eq!(rsn.value, [0x01]);
         assert_eq!(rsn.rsn(), Some(RsnValue::V2));

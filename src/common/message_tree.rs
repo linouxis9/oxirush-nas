@@ -3118,12 +3118,6 @@ macro_rules! container_ie {
 /// the protocol whose module calls it.
 macro_rules! shared_ies {
     () => {
-        code_ie!(
-            RequestType,
-            RequestTypeValue,
-            |ie| Some(ie.request_type()),
-            RequestType::from_request_type
-        );
         decoded_ie!(
             KeySetIdentifier: KeySetIdentifierValue,
             |ie| Some(ie.key_set_identifier()),
@@ -3147,7 +3141,6 @@ mod shared_types {
     use crate::common::message_tree;
     use crate::common::ts24008::*;
     use crate::common::ts24301::*;
-    use crate::common::ts24501::*;
     use crate::common::types::*;
 
     /// A network name and whether the country initials are to be added to it.
@@ -3161,12 +3154,6 @@ mod shared_types {
     crate::common::readable::readable!(struct NetworkNameForm { name, add_ci });
 
     configuration_options_ie!(ExtendedProtocolConfigurationOptions);
-    named_ie!(
-        DaylightSavingTime,
-        DaylightSavingAdjustment,
-        |ie| ie.adjustment(),
-        DaylightSavingTime::from_adjustment
-    );
     named_ie!(
         WusAssistanceInformation,
         UePagingProbability,
@@ -3222,30 +3209,6 @@ mod shared_types {
         SupportedCodecList: Vec<(u8, Vec<u8>)>,
         |ie| ie.codec_bitmaps(),
         |_, bitmaps| SupportedCodecList::from_codec_bitmaps(&bitmaps)
-    );
-    code_ie!(
-        ImeisvRequest,
-        ImeisvRequestValue,
-        |ie| ie.request_strict(),
-        ImeisvRequest::from_request
-    );
-    code_ie!(
-        UeRadioCapabilityIdDeletionIndication,
-        RadioCapabilityIdDeletionRequest,
-        |ie| ie.deletion_request(),
-        UeRadioCapabilityIdDeletionIndication::from_deletion_request
-    );
-    code_ie!(
-        ReleaseAssistanceIndication,
-        DownlinkDataExpected,
-        |ie| ie.ddx(),
-        ReleaseAssistanceIndication::from_ddx
-    );
-    named_ie!(
-        UeRequestType,
-        UeRequestTypeValue,
-        |ie| ie.request_type(),
-        UeRequestType::from_request_type
     );
     fields_ie!(ExtendedDrxParameters {
         "paging-time-window": |ie| ie.paging_time_window(), |ie, window: u8| {

@@ -122,19 +122,17 @@ oxirush_utils::named_values! {
 }
 crate::common::enums::values_readable!(RadioCapabilityIdDeletionRequest);
 
-/// UE radio capability ID deletion indication (TS 24.501 §9.11.3.69; TS
-/// 24.301 §9.9.3.61), a type 1 IE.
+// UE radio capability ID deletion indication (TS 24.501 §9.11.3.69; TS
+// 24.301 §9.9.3.61), a type 1 IE.
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl UeRadioCapabilityIdDeletionIndication (value) "" octets 1 {
+        deletion_request "DELETION-REQUEST": 0 1 3 as RadioCapabilityIdDeletionRequest,
+    }
+}
+crate::common::field_table::table_ie!(UeRadioCapabilityIdDeletionIndication, octet, 1..=1, receives 1, code);
+
 impl UeRadioCapabilityIdDeletionIndication {
-    /// Deletion request with the UE receive fallback.
-    pub fn deletion_request(&self) -> Option<RadioCapabilityIdDeletionRequest> {
-        Some(RadioCapabilityIdDeletionRequest::from_value(self.value & 0x07).effective())
-    }
-
-    /// Raw deletion request (bits 3-1).
-    pub fn deletion_request_raw(&self) -> u8 {
-        self.value & 0x07
-    }
-
     /// Build from a deletion request with the spare bit clear.
     pub fn from_deletion_request(request: RadioCapabilityIdDeletionRequest) -> Self {
         Self::new(u8::from(request))
@@ -233,8 +231,8 @@ mod tests {
 
         let deletion = nas_eps::UeRadioCapabilityIdDeletionIndication::new(0x0e);
         assert_eq!(
-            deletion.deletion_request(),
-            Some(RadioCapabilityIdDeletionRequest::NotRequested)
+            deletion.deletion_request().effective(),
+            RadioCapabilityIdDeletionRequest::NotRequested
         );
         assert_eq!(
             RadioCapabilityIdDeletionRequest::named(deletion.value & 0x07),

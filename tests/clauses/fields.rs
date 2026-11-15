@@ -110,7 +110,7 @@ fn a_field_of_a_few_bits_is_read_from_its_bits() {
             NssaiInclusionModeValue::from_value(octet & 0x03).effective()
         );
         let drx = DrxParameters::new(vec![octet]);
-        assert_eq!(drx.drx_value_raw(), Some(octet & 0x0f));
+        assert_eq!(drx.drx_value_raw(), octet & 0x0f);
         assert_eq!(Rsn::new(vec![octet]).rsn_raw(), octet);
         assert_eq!(GmmCause::new(octet).value, octet);
         assert_eq!(GsmCause::new(octet).value, octet);
@@ -133,7 +133,7 @@ fn a_field_of_a_few_bits_is_read_from_its_bits() {
         let container = PayloadContainerType::new(octet);
         assert_eq!(container.is_well_formed(), defined, "{octet}");
     }
-    assert_eq!(DrxParameters::new(vec![]).drx_value_raw(), None);
+    assert_eq!(DrxParameters::new(vec![]).drx_value_raw(), 0);
     assert_eq!(Rsn::new(vec![]).rsn_raw(), 0);
     let abba = Abba::new(vec![0x00, 0x00, 0x01]);
     assert_eq!(abba.abba(), [0x00, 0x00, 0x01]);

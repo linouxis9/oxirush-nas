@@ -37,6 +37,12 @@ All notable changes to `oxirush-nas` are recorded here.
 
 - The tree of a message holds the names of its members and of the variants
   of its values without copying them, with oxirush-utils at 8f0b227.
+- Thirty IEs of one coded value (the 5GMM and 5GSM causes, the service,
+  PDU session, SSC mode, access, payload container, request, attach, update
+  and PDN types, the DRX values and the others) come from tables. Their getters
+  return the value as the IE has it, not an `Option` (`name()` says whether the
+  table names it, `effective()` reads it as a receiver does); the `_strict`
+  getters go; setters keep the bits that they do not write.
 - The EPS additional update type, voice domain preference and UE's usage
   setting, T3412 extended value, DRX parameter, UE radio capability ID request
   and the truncated 5G-S-TMSI configuration come from tables. Their getters

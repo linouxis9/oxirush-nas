@@ -949,28 +949,20 @@ oxirush_utils::named_values! {
 }
 crate::common::enums::values_readable!(DownlinkDataExpected);
 
-/// Release assistance indication (TS 24.301 §9.9.4.25, TS 24.501
-/// §9.11.3.46A), a type 1 IE.
+// Release assistance indication (TS 24.301 §9.9.4.25, TS 24.501
+// §9.11.3.46A), a type 1 IE.
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl ReleaseAssistanceIndication (value) "" octets 1 {
+        ddx "DDX": 0 1 2 as DownlinkDataExpected,
+    }
+}
+crate::common::field_table::table_ie!(ReleaseAssistanceIndication, octet, 1..=1, receives 1, code);
+
 impl ReleaseAssistanceIndication {
-    /// Downlink data expected (bits 2-1); `None` for the reserved value.
-    pub fn ddx(&self) -> Option<DownlinkDataExpected> {
-        DownlinkDataExpected::named(self.value & 0x03)
-    }
-
-    /// Raw downlink data expected value (bits 2-1).
-    pub fn ddx_raw(&self) -> u8 {
-        self.value & 0x03
-    }
-
     /// Build with the spare bits clear.
     pub fn from_ddx(ddx: DownlinkDataExpected) -> Self {
         Self::new(u8::from(ddx))
-    }
-
-    /// Set the downlink data expected value and clear the spare bits.
-    pub fn set_ddx(&mut self, ddx: DownlinkDataExpected) -> &mut Self {
-        self.value = u8::from(ddx);
-        self
     }
 }
 
@@ -1346,18 +1338,16 @@ oxirush_utils::named_values! {
 }
 crate::common::enums::values_readable!(UeRequestTypeValue);
 
-/// UE request type (TS 24.301 §9.9.3.65, TS 24.501 §9.11.3.76).
+// UE request type (TS 24.301 §9.9.3.65, TS 24.501 §9.11.3.76).
+oxirush_utils::bits! {
+    over [crate::common::field_table::Row, field_row]
+    impl UeRequestType (value) "" octets 1 {
+        request_type "REQUEST-TYPE": 0 1 4 as UeRequestTypeValue,
+    }
+}
+crate::common::field_table::table_ie!(UeRequestType, octets, 1..=1, receives 1, name);
+
 impl UeRequestType {
-    /// Typed request type; reserved values return `None`.
-    pub fn request_type(&self) -> Option<UeRequestTypeValue> {
-        UeRequestTypeValue::named((*self.value.first()?) & 0x0f)
-    }
-
-    /// Raw request type (bits 4-1).
-    pub fn request_type_raw(&self) -> Option<u8> {
-        self.value.first().map(|octet| octet & 0x0f)
-    }
-
     /// Build with the spare bits clear.
     pub fn from_request_type(request_type: UeRequestTypeValue) -> Self {
         Self::new(vec![u8::from(request_type)])
@@ -2374,11 +2364,15 @@ mod tests {
         assert_eq!(status.active_bearers(), [1, 15]);
 
         let mut release = nas_eps::ReleaseAssistanceIndication::new(0x0f);
-        assert_eq!((release.ddx(), release.ddx_raw()), (None, 3));
+        assert_eq!((release.ddx().name(), release.ddx_raw()), (None, 3));
+        // A setter keeps the spare bits 4 and 3
         release.set_ddx(DownlinkDataExpected::NoFurtherData);
-        assert_eq!(release.value, 1);
+        assert_eq!(release.value, 0x0d);
         let release = nas_5gs::ReleaseAssistanceIndication::new(0x0e);
-        assert_eq!(release.ddx(), Some(DownlinkDataExpected::SingleDlThenNone));
+        assert_eq!(
+            release.ddx().effective(),
+            DownlinkDataExpected::SingleDlThenNone
+        );
 
         let profiles = IpHdrCompProfiles {
             p0002: true,
@@ -2430,8 +2424,10 @@ mod tests {
             nas_eps::UeRequestType::from_request_type(UeRequestTypeValue::RejectionOfPaging);
         assert!(request.is_well_formed());
         assert_eq!(
-            nas_5gs::UeRequestType::new(vec![0x31]).request_type(),
-            Some(UeRequestTypeValue::NasSignallingConnectionRelease)
+            nas_5gs::UeRequestType::new(vec![0x31])
+                .request_type()
+                .effective(),
+            UeRequestTypeValue::NasSignallingConnectionRelease
         );
 
         let info =

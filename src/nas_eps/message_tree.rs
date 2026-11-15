@@ -1013,30 +1013,6 @@ code_ie!(
     |ie| EsmCauseValue::named(ie.value),
     EsmCause::from_cause
 );
-code_ie!(
-    EpsAttachType,
-    AttachType,
-    |ie| ie.attach_type_strict(),
-    EpsAttachType::from_attach_type
-);
-code_ie!(
-    EpsAttachResult,
-    AttachResult,
-    |ie| ie.attach_result(),
-    EpsAttachResult::from_attach_result
-);
-code_ie!(
-    EpsUpdateResult,
-    UpdateResult,
-    |ie| ie.update_result(),
-    EpsUpdateResult::from_update_result
-);
-code_ie!(
-    ServiceType,
-    ServiceTypeValue,
-    |ie| ie.service_type_strict(),
-    ServiceType::from_service_type
-);
 /// The identity that an IDENTITY REQUEST asks for (TS 24.008 Table
 /// 10.5.142), by its name.
 #[derive(Clone, Copy)]
@@ -1073,42 +1049,6 @@ code_ie!(
         IdentityTypeName::Imeisv => IdentityType::Imeisv,
         IdentityTypeName::Tmsi => IdentityType::Tmsi,
     } as u8)
-);
-code_ie!(
-    PdnType,
-    PdnTypeValue,
-    |ie| ie.pdn_type_strict(),
-    PdnType::from_pdn_type
-);
-code_ie!(
-    AdditionalUpdateResult,
-    AdditionalUpdateResultValue,
-    |ie| ie.result(),
-    AdditionalUpdateResult::from_result
-);
-code_ie!(
-    SmsServicesStatus,
-    SmsServicesStatusValue,
-    |ie| ie.status(),
-    SmsServicesStatus::from_status
-);
-code_ie!(
-    GenericMessageContainerType,
-    GenericMessageContainerTypeValue,
-    |ie| ie.container_type(),
-    GenericMessageContainerType::from_container_type
-);
-code_ie!(
-    RadioPriority,
-    RadioPriorityLevel,
-    |ie| RadioPriorityLevel::named(ie.priority_level_raw() & 0x07),
-    RadioPriority::from_priority_level
-);
-named_ie!(
-    NbS1DrxParameter,
-    NbS1DrxValue,
-    |ie| ie.drx_value(),
-    NbS1DrxParameter::from_drx_value
 );
 named_ie!(
     EpsAdditionalRequestResult,
@@ -1160,12 +1100,6 @@ built_ie!(
         mt_lr.then(Self::mt_lr).ok_or(ValueError::combination("is-mt-lr", rule))
     },
     { is_mt_lr: bool }
-);
-named_ie!(
-    PagingIdentity,
-    PagingIdentityValue,
-    |ie| Some(ie.paging_identity()),
-    PagingIdentity::from_paging_identity
 );
 built_ie!(
     UeRadioCapabilityIdAvailability,

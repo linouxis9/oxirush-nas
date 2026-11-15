@@ -162,11 +162,8 @@ fn a_flag_or_a_short_field_of_a_later_ie_is_its_bits() {
         EthernetHeaderCompressionConfiguration::new(vec![]).cid_length_raw(),
         0
     );
-    assert_eq!(
-        NbN1ModeDrxParameters::new(vec![0xf5]).drx_value_raw(),
-        Some(5)
-    );
-    assert_eq!(NbN1ModeDrxParameters::new(vec![]).drx_value_raw(), None);
+    assert_eq!(NbN1ModeDrxParameters::new(vec![0xf5]).drx_value_raw(), 5);
+    assert_eq!(NbN1ModeDrxParameters::new(vec![]).drx_value_raw(), 0);
     assert_eq!(ProseRelayTransactionIdentity::new(5).value, 5);
     // The UE paging probability information of PEIPS: type 001 in bits 8 to 6
     let entry = PeipsAssistanceInformationEntry::UePagingProbabilityInformation(20);

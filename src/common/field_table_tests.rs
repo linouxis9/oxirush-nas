@@ -52,7 +52,9 @@ macro_rules! row {
                         Code::Number(number) => number.into(),
                     })
                 },
+                name: |value| Ok(u8::from(readable::from_value::<$kind>(value)?).into()),
                 takes: <Code<$kind> as Readable>::TAKES,
+                names: <$kind as Readable>::TAKES,
             },
         }
     };
@@ -111,7 +113,7 @@ where
     for (octets, ie) in &ies {
         let tree = match shown_only {
             true => table.shown(octets),
-            false => Some(table.tree(octets)),
+            false => table.tree(octets),
         };
         // Where neither shows a value, the IE is its octets in a tree, whatever
         // value it decodes to.
@@ -241,6 +243,7 @@ fn a_table_writes_the_tree_of_the_fields_of_security_algorithms() {
         most: 1,
         receives: 1,
         trailing: false,
+        bare: None,
     };
     let differences = compare(
         &TABLE,
@@ -306,6 +309,36 @@ fn each_value_that_a_table_shows_writes_its_ie_back() {
         crate::nas_eps::DrxParameter::new(crate::common::Octets::from([octet, octet]))
     });
     writes_back(|octet| crate::nas_eps::UeRadioCapabilityIdRequest::new(octets(octet)));
+    writes_back(nas_5gs::ServiceType::new);
+    writes_back(nas_5gs::GmmCause::new);
+    writes_back(nas_5gs::GsmCause::new);
+    writes_back(nas_5gs::PduSessionType::new);
+    writes_back(nas_5gs::SscMode::new);
+    writes_back(nas_5gs::AccessType::new);
+    writes_back(nas_5gs::PayloadContainerType::new);
+    writes_back(nas_5gs::NssaiInclusionMode::new);
+    writes_back(nas_5gs::MaPduSessionInformation::new);
+    writes_back(|octet| nas_5gs::DrxParameters::new(octets(octet)));
+    writes_back(|octet| nas_5gs::NbN1ModeDrxParameters::new(octets(octet)));
+    writes_back(|octet| nas_5gs::EthernetHeaderCompressionConfiguration::new(octets(octet)));
+    writes_back(crate::nas_eps::EpsAttachType::new);
+    writes_back(crate::nas_eps::EpsAttachResult::new);
+    writes_back(crate::nas_eps::EpsUpdateResult::new);
+    writes_back(crate::nas_eps::ServiceType::new);
+    writes_back(crate::nas_eps::PdnType::new);
+    writes_back(crate::nas_eps::AdditionalUpdateResult::new);
+    writes_back(crate::nas_eps::SmsServicesStatus::new);
+    writes_back(crate::nas_eps::GenericMessageContainerType::new);
+    writes_back(crate::nas_eps::RadioPriority::new);
+    writes_back(|octet| crate::nas_eps::NbS1DrxParameter::new(octets(octet)));
+    writes_back(crate::nas_eps::PagingIdentity::new);
+    writes_back(nas_5gs::RequestType::new);
+    writes_back(|octet| crate::common::types::DaylightSavingTime::new(octets(octet)));
+    writes_back(crate::common::types::ImeisvRequest::new);
+    writes_back(crate::common::types::UeRadioCapabilityIdDeletionIndication::new);
+    writes_back(crate::common::types::ReleaseAssistanceIndication::new);
+    writes_back(|octet| crate::common::types::UeRequestType::new(octets(octet)));
+    writes_back(crate::nas_eps::RequestType::new);
     writes_back(|octet| nas_5gs::Additional5gSecurityInformation::new(octets(octet)));
     writes_back(nas_5gs::AdditionalConfigurationIndication::new);
     writes_back(|octet| nas_5gs::AdditionalInformationRequested::new(octets(octet)));

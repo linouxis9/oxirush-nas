@@ -713,7 +713,7 @@ fn push_payload_container_type(
     if let Some(container_type) = container_type {
         let message = if container_type.value & 0xF0 != 0 {
             Some("Spare half octet must be zero")
-        } else if container_type.kind().is_none() {
+        } else if container_type.kind().name().is_none() {
             Some("Payload container type is reserved")
         } else {
             None
@@ -749,16 +749,16 @@ fn push_payload_sor_direction(
     direction: SorTransparentContainerDirection,
 ) {
     match container_type.kind() {
-        Some(PayloadContainerKind::SorTransparentContainer) => {
+        PayloadContainerKind::SorTransparentContainer => {
             let container = SorTransparentContainer::new(payload.value.clone());
             push_sor_direction(errors, &container, direction);
         }
-        Some(PayloadContainerKind::MultiplePayloads) => {
+        PayloadContainerKind::MultiplePayloads => {
             match payload.decode_as_multiple_payload_container() {
                 Ok(multiple) => {
                     for entry in multiple.entries {
                         if entry.payload_container_type.kind()
-                            == Some(PayloadContainerKind::SorTransparentContainer)
+                            == PayloadContainerKind::SorTransparentContainer
                         {
                             let container = SorTransparentContainer::new(entry.contents);
                             push_sor_direction(errors, &container, direction);
@@ -863,7 +863,7 @@ impl Validate for RegistrationRequest {
         match (&self.payload_container_type, &self.payload_container) {
             (None, None) => {}
             (Some(container_type), Some(_))
-                if container_type.kind() == Some(PayloadContainerKind::UePolicy) => {}
+                if container_type.kind() == PayloadContainerKind::UePolicy => {}
             (Some(_), Some(_)) => errs.push(ValidationError {
                 severity: Severity::Error,
                 field: "payload_container_type",
@@ -925,7 +925,11 @@ impl Validate for RegistrationReject {
     fn validate(&self) -> Vec<ValidationError> {
         let mut errs = self.sender_check_findings();
         push_optional_eap(&mut errs, self.eap_message.as_ref());
-        if GmmCause::new(self.fgmm_cause.value).cause().is_none() {
+        if GmmCause::new(self.fgmm_cause.value)
+            .cause()
+            .name()
+            .is_none()
+        {
             errs.push(ValidationError {
                 severity: Severity::Warning,
                 field: "fgmm_cause",
@@ -1162,7 +1166,7 @@ impl Validate for UlNasTransport {
         }
         if matches!(
             kind,
-            Some(PayloadContainerKind::N1SmInformation | PayloadContainerKind::CIoT)
+            PayloadContainerKind::N1SmInformation | PayloadContainerKind::CIoT
         ) && self.pdu_session_id.is_none()
         {
             errs.push(ValidationError {
@@ -1174,7 +1178,7 @@ impl Validate for UlNasTransport {
 
         if matches!(
             kind,
-            Some(PayloadContainerKind::LtePp | PayloadContainerKind::SlppMessageContainer)
+            PayloadContainerKind::LtePp | PayloadContainerKind::SlppMessageContainer
         ) && self.additional_information.is_none()
         {
             errs.push(ValidationError {
@@ -1211,7 +1215,7 @@ impl Validate for DlNasTransport {
         );
         if matches!(
             kind,
-            Some(PayloadContainerKind::N1SmInformation | PayloadContainerKind::CIoT)
+            PayloadContainerKind::N1SmInformation | PayloadContainerKind::CIoT
         ) && self.pdu_session_id.is_none()
         {
             errs.push(ValidationError {
@@ -1223,12 +1227,10 @@ impl Validate for DlNasTransport {
 
         if matches!(
             kind,
-            Some(
-                PayloadContainerKind::LtePp
-                    | PayloadContainerKind::LocationServices
-                    | PayloadContainerKind::UppCmiContainer
-                    | PayloadContainerKind::SlppMessageContainer
-            )
+            PayloadContainerKind::LtePp
+                | PayloadContainerKind::LocationServices
+                | PayloadContainerKind::UppCmiContainer
+                | PayloadContainerKind::SlppMessageContainer
         ) && self.additional_information.is_none()
         {
             errs.push(ValidationError {
@@ -1292,9 +1294,7 @@ impl Validate for ControlPlaneServiceRequest {
         }
 
         if matches!(
-            self.payload_container_type
-                .as_ref()
-                .and_then(|kind| kind.kind()),
+            self.payload_container_type.as_ref().map(|kind| kind.kind()),
             Some(PayloadContainerKind::CIoT)
         ) && self.pdu_session_id.is_none()
         {
@@ -1444,7 +1444,7 @@ impl Validate for PduSessionEstablishmentReject {
             self.extended_protocol_configuration_options.as_ref(),
         );
         push_optional_eap(&mut errs, self.eap_message.as_ref());
-        if self.fgsm_cause.cause().is_none() {
+        if self.fgsm_cause.cause().name().is_none() {
             errs.push(ValidationError {
                 severity: Severity::Warning,
                 field: "fgsm_cause",
