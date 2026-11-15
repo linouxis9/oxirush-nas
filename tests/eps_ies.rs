@@ -709,10 +709,12 @@ fn a_control_plane_service_type_has_its_type_and_the_active_flag() {
     assert_eq!(active.service_type_raw(), 1);
     assert!(active.active());
     let mut ie = ControlPlaneServiceType::new(0x08);
-    ie.set_service_type(ControlPlaneServiceTypeValue::MobileTerminatingRequest);
+    ie.set_service_type(ControlPlaneServiceTypeValue::MobileTerminatingRequest)
+        .unwrap();
     assert_eq!(ie.value, 0x09);
     let mut idle = ControlPlaneServiceType::new(0x00);
-    idle.set_service_type(ControlPlaneServiceTypeValue::MobileTerminatingRequest);
+    idle.set_service_type(ControlPlaneServiceTypeValue::MobileTerminatingRequest)
+        .unwrap();
     assert_eq!(idle.value, 0x01);
     idle.set_active(true);
     assert_eq!(idle.value, 0x09);
@@ -1269,7 +1271,7 @@ fn a_packet_filter_of_no_contents_shows_none() {
 fn the_cs_lcs_field_is_bits_5_and_4_of_octet_3() {
     // §9.9.3.12A: setting CS-LCS keeps the other flags
     let mut support = EpsNetworkFeatureSupport::new(vec![0x11]);
-    support.set_cs_lcs(CsLcsSupport::Supported);
+    support.set_cs_lcs(CsLcsSupport::Supported).unwrap();
     assert_eq!(support.value.as_slice(), [0x09]);
     assert_eq!(support.cs_lcs(), CsLcsSupport::Supported);
 }

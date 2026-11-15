@@ -1652,7 +1652,9 @@ mod tests {
         assert!(request.is_requested());
         let mut request = request;
         // A setter keeps the spare bit 4
-        request.set_request(ImeisvRequestValue::NotRequested);
+        request
+            .set_request(ImeisvRequestValue::NotRequested)
+            .unwrap();
         assert_eq!(request.value, 0x08);
     }
 
@@ -1967,7 +1969,12 @@ mod tests {
         use crate::common::types::{ExtendedDrxParameters, SupportedCodecList};
 
         let mut edrx = ExtendedDrxParameters::new(vec![]);
-        edrx.set_paging_time_window(3).set_edrx_value(0x05);
+        edrx.set_paging_time_window(3)
+            .unwrap()
+            .set_edrx_value(0x05)
+            .unwrap();
+        // A value that the bits do not hold is refused
+        assert!(edrx.set_edrx_value(16).is_err());
         assert_eq!(
             (edrx.value.len(), edrx.value.as_slice()),
             (1, [0x35].as_slice())

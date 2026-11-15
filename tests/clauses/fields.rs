@@ -147,7 +147,7 @@ fn a_setter_writes_the_bits_of_its_field_and_leaves_the_others() {
             PayloadContainerKind::Sms,
         ] {
             let mut container = PayloadContainerType::new(octet);
-            container.set_kind(kind);
+            container.set_kind(kind).unwrap();
             assert_eq!(container.value, octet & 0xf0 | u8::from(kind), "{octet}");
         }
         for info in [
@@ -155,12 +155,12 @@ fn a_setter_writes_the_bits_of_its_field_and_leaves_the_others() {
             MaPduSessionInfoValue::NetworkUpgradeAllowed,
         ] {
             let mut information = MaPduSessionInformation::new(octet);
-            information.set_info(info);
+            information.set_info(info).unwrap();
             assert_eq!(information.value, octet & 0xf0 | u8::from(info), "{octet}");
         }
         for mode in [NssaiInclusionModeValue::A, NssaiInclusionModeValue::D] {
             let mut inclusion = NssaiInclusionMode::new(octet);
-            inclusion.set_mode(mode);
+            inclusion.set_mode(mode).unwrap();
             assert_eq!(inclusion.value, octet & 0xfc | u8::from(mode), "{octet}");
         }
         for service in [
@@ -168,7 +168,7 @@ fn a_setter_writes_the_bits_of_its_field_and_leaves_the_others() {
             ControlPlaneServiceTypeValue::EmergencyServicesFallback,
         ] {
             let mut written = ControlPlaneServiceType::new(octet);
-            written.set_service_type(service);
+            written.set_service_type(service).unwrap();
             assert_eq!(written.value, octet & 0xf8 | u8::from(service), "{octet}");
         }
         for asked in [MobileIdentityType5gs::Suci, MobileIdentityType5gs::Imeisv] {
@@ -339,7 +339,9 @@ fn a_registration_type_and_a_de_registration_type_write_their_bits() {
     for octet in 0..=u8::MAX {
         let registration = RegistrationType::new(octet);
         let mut written = registration;
-        written.set_registration_type(RegistrationTypeValue::EmergencyRegistration);
+        written
+            .set_registration_type(RegistrationTypeValue::EmergencyRegistration)
+            .unwrap();
         assert_eq!(written.value, octet & 0xf8 | 0x04, "{octet}");
         let mut follow_on = registration;
         follow_on.set_follow_on_request(true);

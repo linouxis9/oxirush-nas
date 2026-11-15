@@ -35,6 +35,11 @@ All notable changes to `oxirush-nas` are recorded here.
 
 ### Changed
 
+- The setter of a field of more than one bit that a table writes refuses a
+  value that the bits of the field do not hold, and writes nothing: it returns
+  `Result<&mut Self, OutOfRange>` ("Paging Time Window: 20 is more than 15, the
+  most that its bits hold"). The setter of bits (`_raw`) writes those of the
+  value that the field has, as before.
 - The tree of a message holds the names of its members and of the variants
   of its values without copying them, with oxirush-utils at 8f0b227.
 - The EMM and ESM causes come from their tables: `cause()` returns the value

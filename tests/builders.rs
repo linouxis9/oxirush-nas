@@ -261,17 +261,26 @@ fn nothing_keeps_the_low_bits_of_what_it_is_given() {
         (update.pnb_ciot().name(), update.eps_pnb_ciot().name()),
         (None, None)
     );
-    update.set_pnb_ciot(PreferredCiotBehavior::UserPlane);
-    update.set_eps_pnb_ciot(PreferredCiotBehavior::ControlPlane);
+    update
+        .set_pnb_ciot(PreferredCiotBehavior::UserPlane)
+        .unwrap();
+    update
+        .set_eps_pnb_ciot(PreferredCiotBehavior::ControlPlane)
+        .unwrap();
     assert_eq!(update.value, [0x18]);
-    // A setter of a field of four bits writes the four bits of its value
+    // A setter of a field of four bits refuses a value that they do not hold, and
+    // writes nothing; its setter of bits writes the four bits of its value
     let mut drx = ExtendedDrxParameters::new(vec![0]);
-    assert_eq!(drx.set_paging_time_window(20).value, [0x40]);
-    assert_eq!(drx.set_edrx_value(31).value, [0x4f]);
     assert_eq!(
-        drx.set_paging_time_window(15).set_edrx_value(15).value,
-        [0xff]
+        drx.set_paging_time_window(20).unwrap_err().to_string(),
+        "Paging Time Window: 20 is more than 15, the most that its bits hold"
     );
+    assert!(drx.set_edrx_value(16).is_err());
+    assert_eq!(drx.value, [0x00]);
+    assert_eq!(drx.set_paging_time_window_raw(20).value, [0x40]);
+    assert_eq!(drx.set_edrx_value_raw(31).value, [0x4f]);
+    let set = drx.set_paging_time_window(15).unwrap();
+    assert_eq!(set.set_edrx_value(15).unwrap().value, [0xff]);
     let refused = "`assignment-mode` is 16, and must be 0 to 15";
     assert_eq!(
         text(Nid::new(vec![0; 6]).set_assignment_mode_raw(16).map(|_| ())),

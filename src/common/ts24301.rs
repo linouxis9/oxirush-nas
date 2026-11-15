@@ -2366,7 +2366,9 @@ mod tests {
         let mut release = nas_eps::ReleaseAssistanceIndication::new(0x0f);
         assert_eq!((release.ddx().name(), release.ddx_raw()), (None, 3));
         // A setter keeps the spare bits 4 and 3
-        release.set_ddx(DownlinkDataExpected::NoFurtherData);
+        release
+            .set_ddx(DownlinkDataExpected::NoFurtherData)
+            .unwrap();
         assert_eq!(release.value, 0x0d);
         let release = nas_5gs::ReleaseAssistanceIndication::new(0x0e);
         assert_eq!(

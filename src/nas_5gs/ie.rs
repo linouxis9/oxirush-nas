@@ -16340,10 +16340,14 @@ mod tests {
         ambr.set_uplink(6, 100);
         encodes(&ambr);
         let mut capability = GsmCapability::new(vec![]);
-        capability.set_atsss_st(AtsssSteeringFunctionality::named(0x3).unwrap());
+        capability
+            .set_atsss_st(AtsssSteeringFunctionality::named(0x3).unwrap())
+            .unwrap();
         encodes(&capability);
         let mut capability = GsmCapability::new(vec![0]);
-        capability.set_atsss_ll(AtsssLowLayerFunctionality::named(0x1).unwrap());
+        capability
+            .set_atsss_ll(AtsssLowLayerFunctionality::named(0x1).unwrap())
+            .unwrap();
         encodes(&capability);
         encodes(&AtsssContainer::new(vec![1, 2, 3]));
         encodes(&PortManagementInformationContainer::new(vec![1, 2, 3]));
@@ -16375,7 +16379,9 @@ mod tests {
         tnan.set_ssid(Some(b"ssid")).unwrap();
         encodes(&tnan);
         let mut result = RegistrationResult::new(vec![]);
-        result.set_result(RegistrationResultValue::ThreeGppAccess);
+        result
+            .set_result(RegistrationResultValue::ThreeGppAccess)
+            .unwrap();
         encodes(&result);
         let mut update = UpdateType::new(vec![]);
         update.set_sms_requested(true);
@@ -16472,7 +16478,8 @@ mod tests {
     #[test]
     fn test_registration_type() {
         let mut rt = RegistrationType::default();
-        rt.set_registration_type(RegistrationTypeValue::InitialRegistration);
+        rt.set_registration_type(RegistrationTypeValue::InitialRegistration)
+            .unwrap();
         rt.set_follow_on_request(true);
         assert_eq!(rt.value, 0x09);
         assert_eq!(
@@ -16770,7 +16777,8 @@ mod tests {
 
         let mut dt3 = DeRegistrationType::default();
         dt3.set_switch_off(true);
-        dt3.set_access_type(DeregistrationAccessType::ThreeGppAccess);
+        dt3.set_access_type(DeregistrationAccessType::ThreeGppAccess)
+            .unwrap();
         assert!(dt3.switch_off());
         assert_eq!(dt3.value, 0x09);
 
@@ -16780,7 +16788,8 @@ mod tests {
         assert_eq!(dt4.value, 0x05);
 
         let mut dt5 = DeRegistrationType::default();
-        dt5.set_access_type(DeregistrationAccessType::ThreeGppAccessAndNon3GppAccess);
+        dt5.set_access_type(DeregistrationAccessType::ThreeGppAccessAndNon3GppAccess)
+            .unwrap();
         assert_eq!(
             dt5.access_type(),
             DeregistrationAccessType::ThreeGppAccessAndNon3GppAccess
@@ -17289,21 +17298,25 @@ mod tests {
         // A setter writes the bits of its field and keeps the others, spare
         // ones too.
         let mut access = AccessType::new(0x0F);
-        access.set_access_type(AccessTypeValue::Non3GppAccess);
+        access
+            .set_access_type(AccessTypeValue::Non3GppAccess)
+            .unwrap();
         assert_eq!(access.value, 0x0E);
 
         let mut pdu = PduSessionType::new(0x0F);
-        pdu.set_session_type(PduSessionTypeValue::Ethernet);
+        pdu.set_session_type(PduSessionTypeValue::Ethernet).unwrap();
         assert_eq!(pdu.value, 0x0D);
 
         let mut ssc = SscMode::new(0x0F);
-        ssc.set_mode(SscModeValue::Ssc3);
+        ssc.set_mode(SscModeValue::Ssc3).unwrap();
         assert_eq!(ssc.value, 0x0B);
 
         let mut request = RequestType::new(0x0F);
         assert_eq!(request.request_type_raw(), 0x07);
         assert_eq!(request.request_type().name(), None);
-        request.set_request_type(RequestTypeValue::ExistingPduSession);
+        request
+            .set_request_type(RequestTypeValue::ExistingPduSession)
+            .unwrap();
         assert_eq!(request.value, 0x0A);
     }
 
@@ -19926,8 +19939,10 @@ mod tests {
     fn test_fgsm_capability_typed_atsss_values() {
         let mut cap = GsmCapability::default();
         cap.set_tpmic(true);
-        cap.set_atsss_st(AtsssSteeringFunctionality::MptcpAnyAndLowLayerAny);
-        cap.set_atsss_ll(AtsssLowLayerFunctionality::AnySteering);
+        cap.set_atsss_st(AtsssSteeringFunctionality::MptcpAnyAndLowLayerAny)
+            .unwrap();
+        cap.set_atsss_ll(AtsssLowLayerFunctionality::AnySteering)
+            .unwrap();
         assert!(cap.tpmic());
         assert_eq!(
             cap.atsss_st(),
@@ -19963,7 +19978,7 @@ mod tests {
             );
             if let Some(value) = value {
                 let mut capability = GsmCapability::new(vec![0]);
-                capability.set_atsss_st(value);
+                capability.set_atsss_st(value).unwrap();
                 assert_eq!(capability.value, [octet]);
                 assert_eq!(
                     GsmCapability::from_flags(false, value, false, false, false).value,
@@ -19979,7 +19994,8 @@ mod tests {
         let mut cap = GsmCapability::new(vec![0, 0]);
         cap.set_mpquic_ip(true);
         cap.set_mptcp(true);
-        cap.set_atsss_ll(AtsssLowLayerFunctionality::named(2).unwrap());
+        cap.set_atsss_ll(AtsssLowLayerFunctionality::named(2).unwrap())
+            .unwrap();
         assert!(cap.mpquic_ip());
         assert!(cap.mptcp());
         assert_eq!(cap.atsss_ll_raw(), 2);
@@ -19998,7 +20014,9 @@ mod tests {
         assert_eq!(standalone.value, 0x02);
 
         let mut service = ControlPlaneServiceType::default();
-        service.set_service_type(ControlPlaneServiceTypeValue::MobileTerminatingRequest);
+        service
+            .set_service_type(ControlPlaneServiceTypeValue::MobileTerminatingRequest)
+            .unwrap();
         let msg = ControlPlaneServiceRequest::new(
             service,
             KeySetIdentifier::from_key_set_identifier(KeySetIdentifierValue::Mapped(3)).unwrap(),

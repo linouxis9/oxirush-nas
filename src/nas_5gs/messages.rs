@@ -2752,7 +2752,8 @@ mod envelope_tests {
 
         request
             .service_type
-            .set_service_type(crate::nas_5gs::ServiceTypeValue::Data);
+            .set_service_type(crate::nas_5gs::ServiceTypeValue::Data)
+            .unwrap();
         assert_eq!(request.service_type.value, 0x01);
         let mut canonical = wire;
         canonical[3] = 0x11;

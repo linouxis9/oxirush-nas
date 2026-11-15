@@ -302,8 +302,12 @@ fn the_steering_functionalities_of_the_5gsm_capability_are_in_their_bits() {
     // ATSSS-ST in the bits 7 to 4 of octet 3, ATSSS-LL in the bits 5 and 4
     // of octet 4
     let mut capability = Capability::new(vec![0xff, 0xff]);
-    capability.set_atsss_st(AtsssSteeringFunctionality::MptcpAnyAndLowLayerActiveStandby);
-    capability.set_atsss_ll(AtsssLowLayerFunctionality::AnySteering);
+    capability
+        .set_atsss_st(AtsssSteeringFunctionality::MptcpAnyAndLowLayerActiveStandby)
+        .unwrap();
+    capability
+        .set_atsss_ll(AtsssLowLayerFunctionality::AnySteering)
+        .unwrap();
     assert_eq!(capability.value, [0x87 | 0x02 << 3, 0xe7 | 0x02 << 3]);
     assert_eq!(capability.atsss_st_raw(), 2);
     assert_eq!(capability.atsss_ll_raw(), 2);
@@ -374,10 +378,14 @@ fn the_registration_result_has_its_value_and_four_indications() {
     changed.set_nssaa_performed(false);
     changed.set_emergency_registered(false);
     changed.set_disaster_roaming(false);
-    changed.set_result(RegistrationResultValue::ThreeGppAccessAndNon3GppAccess);
+    changed
+        .set_result(RegistrationResultValue::ThreeGppAccessAndNon3GppAccess)
+        .unwrap();
     assert_eq!(changed.value, [0x03]);
     let mut changed = all;
-    changed.set_result(RegistrationResultValue::ThreeGppAccess);
+    changed
+        .set_result(RegistrationResultValue::ThreeGppAccess)
+        .unwrap();
     assert_eq!(changed.value, [0x79]);
     assert_eq!(changed.result(), RegistrationResultValue::ThreeGppAccess);
     assert_eq!(changed.result_raw(), 1);
@@ -396,7 +404,9 @@ fn the_deregistration_type_has_switch_off_re_registration_and_the_access_type() 
     // access type in the bits 2 and 1
     let mut deregistration = DeRegistrationType::new(0);
     deregistration.set_switch_off(true);
-    deregistration.set_access_type(DeregistrationAccessType::Non3GppAccess);
+    deregistration
+        .set_access_type(DeregistrationAccessType::Non3GppAccess)
+        .unwrap();
     assert_eq!(deregistration.value, 0x0a);
     assert!(deregistration.switch_off());
     assert!(!deregistration.re_registration_required());
@@ -407,17 +417,23 @@ fn the_deregistration_type_has_switch_off_re_registration_and_the_access_type() 
     let mut required = DeRegistrationType::new(0x0f);
     required.set_switch_off(false);
     required.set_re_registration_required(true);
-    required.set_access_type(DeregistrationAccessType::ThreeGppAccess);
+    required
+        .set_access_type(DeregistrationAccessType::ThreeGppAccess)
+        .unwrap();
     assert_eq!(required.value, 0x05);
     assert!(required.re_registration_required());
     assert_eq!(required.access_type_raw(), 1);
     let mut changed = required;
     changed.set_re_registration_required(false);
     changed.set_switch_off(true);
-    changed.set_access_type(DeregistrationAccessType::Non3GppAccess);
+    changed
+        .set_access_type(DeregistrationAccessType::Non3GppAccess)
+        .unwrap();
     assert_eq!(changed.value, 0x0a);
     changed.set_switch_off(false);
-    changed.set_access_type(DeregistrationAccessType::ThreeGppAccessAndNon3GppAccess);
+    changed
+        .set_access_type(DeregistrationAccessType::ThreeGppAccessAndNon3GppAccess)
+        .unwrap();
     assert_eq!(changed.value, 0x03);
     assert_eq!(
         changed.access_type(),
@@ -435,8 +451,12 @@ fn the_update_type_has_its_requests_and_the_preferred_behaviours() {
     let mut update = UpdateType::new(vec![0]);
     update.set_sms_requested(true);
     update.set_ng_ran_rcu(true);
-    update.set_pnb_ciot(PreferredCiotBehavior::UserPlane);
-    update.set_eps_pnb_ciot(PreferredCiotBehavior::ControlPlane);
+    update
+        .set_pnb_ciot(PreferredCiotBehavior::UserPlane)
+        .unwrap();
+    update
+        .set_eps_pnb_ciot(PreferredCiotBehavior::ControlPlane)
+        .unwrap();
     let pnb = u8::from(PreferredCiotBehavior::UserPlane);
     let eps = u8::from(PreferredCiotBehavior::ControlPlane);
     assert_eq!(update.value, [0x03 | pnb << 2 | eps << 4]);

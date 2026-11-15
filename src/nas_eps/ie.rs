@@ -6175,12 +6175,14 @@ mod tests {
             (None, 4)
         );
         // A setter keeps the spare bit 4
-        pdn_type.set_pdn_type(PdnTypeValue::Ipv4v6);
+        pdn_type.set_pdn_type(PdnTypeValue::Ipv4v6).unwrap();
         assert_eq!(pdn_type.value, 0x0b);
 
         let mut request = RequestType::new(0x0e);
         // A setter keeps the spare bit 4
-        request.set_request_type(RequestTypeValue::Emergency);
+        request
+            .set_request_type(RequestTypeValue::Emergency)
+            .unwrap();
         assert!(request.is_emergency() && request.value == 0x0c);
         assert_eq!(RequestType::new(0x0d).request_type_raw(), 5);
         assert_eq!(RequestType::new(5).request_type().name(), None);
@@ -6202,7 +6204,7 @@ mod tests {
         assert_eq!(RadioPriorityLevel::named(radio.value & 0x07), None);
         let mut radio = radio;
         // A setter keeps the spare bit 4
-        radio.set_priority_level(RadioPriorityLevel::One);
+        radio.set_priority_level(RadioPriorityLevel::One).unwrap();
         assert_eq!(radio.value, 0x09);
 
         assert!(ConnectivityType::new(0x01).is_lipa());
@@ -6282,7 +6284,9 @@ mod tests {
             (None, 0)
         );
         let mut attach = attach;
-        attach.set_attach_type(AttachType::EpsEmergencyAttach);
+        attach
+            .set_attach_type(AttachType::EpsEmergencyAttach)
+            .unwrap();
         assert_eq!(attach.value, 0x0e);
 
         let mut update = EpsUpdateType::new(0x0c);
@@ -6290,6 +6294,7 @@ mod tests {
         assert_eq!(update.update_type().name(), None);
         update
             .set_update_type(UpdateType::PeriodicUpdating)
+            .unwrap()
             .set_active(false);
         assert_eq!(update.value, 3);
         assert_eq!(EpsUpdateType::new(7).update_type().effective().name(), None);
@@ -6515,7 +6520,7 @@ mod tests {
         assert_eq!(emm.description(), "Unknown EMM cause 0x04");
         assert_eq!(EmmCauseValue::named(0x04), None);
         let mut emm = EmmCause::new(0);
-        emm.set_cause(EmmCauseValue::IllegalUe);
+        emm.set_cause(EmmCauseValue::IllegalUe).unwrap();
         assert_eq!((emm.value, emm.description()), (3, "Illegal UE".into()));
 
         // Table 9.9.4.4.1: the UE uses #34 and the network #111, including
@@ -6641,7 +6646,7 @@ mod tests {
     fn n1_and_ms_network_capabilities_decode_their_bits() {
         let mut n1 = N1UeNetworkCapability::default();
         n1.set_cp_ciot(true);
-        n1.set_pnb_ciot(PreferredCiotBehavior::UserPlane);
+        n1.set_pnb_ciot(PreferredCiotBehavior::UserPlane).unwrap();
         assert_eq!(n1.value, [0x21]);
         assert!(n1.n3_data_transfer_supported());
         assert_eq!(n1.pnb_ciot(), PreferredCiotBehavior::UserPlane);
@@ -6716,7 +6721,8 @@ mod tests {
         let container = GenericMessageContainerType::new(0x80);
         assert!(container.is_reserved() && container.container_type().name().is_none());
         let mut lcs = container;
-        lcs.set_container_type(GenericMessageContainerTypeValue::Lcs);
+        lcs.set_container_type(GenericMessageContainerTypeValue::Lcs)
+            .unwrap();
         assert_eq!((lcs.value, lcs.is_reserved()), (2, false));
     }
 
@@ -6919,7 +6925,7 @@ mod tests {
         assert_eq!((reserved.cs_lcs().name(), reserved.cs_lcs_raw()), (None, 3));
         assert!(!reserved.is_well_formed());
         let mut built = EpsNetworkFeatureSupport::default();
-        built.set_cs_lcs(CsLcsSupport::Supported);
+        built.set_cs_lcs(CsLcsSupport::Supported).unwrap();
         built.set_iwk_n26(true);
         built.set_ptcc(true);
         assert_eq!(built.value, [0x08, 0x40, 0x10]);
@@ -6935,8 +6941,8 @@ mod tests {
     #[test]
     fn extended_drx_retry_and_eps_rate_helpers() {
         let mut drx = ExtendedDrxParameters::new(vec![]);
-        drx.set_paging_time_window(0xa);
-        drx.set_edrx_value(3);
+        drx.set_paging_time_window(0xa).unwrap();
+        drx.set_edrx_value(3).unwrap();
         assert_eq!(drx.value, [0xa3]);
         assert_eq!(drx.value.len(), 1);
         assert_eq!((drx.paging_time_window(), drx.edrx_value()), (10, 3));
